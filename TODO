@@ -219,3 +219,5 @@ Always disable prime run/dri prime and list all monitors to record from from all
 
 Allow flv av1 if recent ffmpeg version and streaming to youtube (and twitch?) and for custom services.
 Use explicit sync in pipewire video code: https://docs.pipewire.org/page_dma_buf.html.
+
+Support vaapi rotation. Support for it is added in mesa here: https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/32919.
