@@ -2154,6 +2154,7 @@ static void info_command() {
         puts("is_steam_deck|yes");
     else
         puts("is_steam_deck|no");
+    printf("gsr_version|%s\n", GSR_VERSION);
     puts("section=gpu_info");
     list_gpu_info(&egl);
     puts("section=video_codecs");
