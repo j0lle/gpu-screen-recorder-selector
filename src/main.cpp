@@ -1069,7 +1069,7 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
 static void usage_header() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal> [-c <container_format>] [-s WxH] -f <fps> [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+    printf("usage: %s -w <window_id|monitor|focused|portal> [-c <container_format>] [-s WxH] -f <fps> [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-overlapping-replay yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -1129,6 +1129,12 @@ static void usage_full() {
     printf("        and the video will only be saved when the gpu-screen-recorder is closed. This feature is similar to Nvidia's instant replay feature This option has be between 5 and 1200.\n");
     printf("        Note that the video data is stored in RAM, so don't use too long replay buffer time and use constant bitrate option (-bm cbr) to prevent RAM usage from going too high in busy scenes.\n");
     printf("        Optional, disabled by default.\n");
+    printf("\n");
+    printf("  -overlapping-replay\n");
+    printf("        Should replays overlap. For example if this is set to 'yes' and replay time (-r) is set to 60 seconds and a replay is saved once then the first replay video is 60 seconds long\n");
+    printf("        and if a replay is saved 10 seconds later then the second replay video will also be 60 seconds long and contain 50 seconds of the previous video as well.\n");
+    printf("        If this is set to 'no' then after a replay is saved the replay buffer data is cleared and the second replay will start from that point onward.\n");
+    printf("        Optional, set to 'yes' by default.\n");
     printf("\n");
     printf("  -k    Video codec to use. Should be either 'auto', 'h264', 'hevc', 'av1', 'vp8', 'vp9', 'hevc_hdr', 'av1_hdr', 'hevc_10bit' or 'av1_10bit'.\n");
     printf("        Optional, set to 'auto' by default which defaults to 'h264'. Forcefully set to 'h264' if the file container type is 'flv'.\n");
@@ -3055,6 +3061,7 @@ int main(int argc, char **argv) {
         { "-q", Arg { {}, true, false } },
         { "-o", Arg { {}, true, false } },
         { "-r", Arg { {}, true, false } },
+        { "-overlapping-replay", Arg { {}, true, false } },
         { "-k", Arg { {}, true, false } },
         { "-ac", Arg { {}, true, false } },
         { "-ab", Arg { {}, true, false } },
@@ -3379,6 +3386,20 @@ int main(int argc, char **argv) {
             _exit(1);
         }
         replay_buffer_size_secs += std::ceil(keyint); // Add a few seconds to account of lost packets because of non-keyframe packets skipped
+    }
+
+    bool overlapping_replay = true;
+    const char *overlapping_replay_str = args["-overlapping-replay"].value();
+    if(!overlapping_replay_str)
+        overlapping_replay_str = "yes";
+
+    if(strcmp(overlapping_replay_str, "yes") == 0) {
+        overlapping_replay = true;
+    } else if(strcmp(overlapping_replay_str, "no") == 0) {
+        overlapping_replay = false;
+    } else {
+        fprintf(stderr, "Error: -overlapping-replay should either be either 'yes' or 'no', got: '%s'\n", overlapping_replay_str);
+        usage();
     }
 
     std::string window_str = args["-w"].value();
@@ -3866,6 +3887,7 @@ int main(int argc, char **argv) {
     std::mutex audio_filter_mutex;
 
     const double record_start_time = clock_get_monotonic_seconds();
+    std::atomic<double> replay_start_time(record_start_time);
     std::deque<std::shared_ptr<PacketData>> frame_data_queue;
     bool frames_erased = false;
 
@@ -3984,7 +4006,7 @@ int main(int argc, char **argv) {
                                 ret = avcodec_send_frame(audio_track.codec_context, audio_device.frame);
                                 if(ret >= 0) {
                                     // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                                    receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, audio_device.frame->pts, av_format_context, record_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
+                                    receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, audio_device.frame->pts, av_format_context, replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
                                 } else {
                                     fprintf(stderr, "Failed to encode audio!\n");
                                 }
@@ -4016,7 +4038,7 @@ int main(int argc, char **argv) {
                             ret = avcodec_send_frame(audio_track.codec_context, audio_device.frame);
                             if(ret >= 0) {
                                 // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                                receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, audio_device.frame->pts, av_format_context, record_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
+                                receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, audio_device.frame->pts, av_format_context, replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
                             } else {
                                 fprintf(stderr, "Failed to encode audio!\n");
                             }
@@ -4050,7 +4072,7 @@ int main(int argc, char **argv) {
                             err = avcodec_send_frame(audio_track.codec_context, aframe);
                             if(err >= 0){
                                 // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                                receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, aframe->pts, av_format_context, record_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
+                                receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, aframe->pts, av_format_context, replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
                             } else {
                                 fprintf(stderr, "Failed to encode audio!\n");
                             }
@@ -4196,7 +4218,7 @@ int main(int argc, char **argv) {
                 if(ret == 0) {
                     // TODO: Move to separate thread because this could write to network (for example when livestreaming)
                     receive_frames(video_codec_context, VIDEO_STREAM_INDEX, video_stream, video_frame->pts, av_format_context,
-                        record_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
+                        replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
                 } else {
                     fprintf(stderr, "Error: avcodec_send_frame failed, error: %s\n", av_error_to_string(ret));
                 }
@@ -4225,8 +4247,14 @@ int main(int argc, char **argv) {
             fflush(stdout);
             if(recording_saved_script)
                 run_recording_saved_script_async(recording_saved_script, save_replay_output_filepath.c_str(), "replay");
+
             std::lock_guard<std::mutex> lock(write_output_mutex);
             save_replay_packets.clear();
+            if(!overlapping_replay) {
+                frame_data_queue.clear();
+                frames_erased = true;
+                replay_start_time = clock_get_monotonic_seconds() - paused_time_offset;
+            }
         }
 
         if(save_replay == 1 && !save_replay_thread.valid() && replay_buffer_size_secs != -1) {
