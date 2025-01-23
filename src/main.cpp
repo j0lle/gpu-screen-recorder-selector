@@ -1069,7 +1069,7 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
 static void usage_header() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal> [-c <container_format>] [-s WxH] -f <fps> [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-overlapping-replay yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+    printf("usage: %s -w <window_id|monitor|focused|portal> [-c <container_format>] [-s WxH] -f <fps> [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-overlap-replay yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -1130,7 +1130,7 @@ static void usage_full() {
     printf("        Note that the video data is stored in RAM, so don't use too long replay buffer time and use constant bitrate option (-bm cbr) to prevent RAM usage from going too high in busy scenes.\n");
     printf("        Optional, disabled by default.\n");
     printf("\n");
-    printf("  -overlapping-replay\n");
+    printf("  -overlap-replay\n");
     printf("        Should replays overlap. For example if this is set to 'yes' and replay time (-r) is set to 60 seconds and a replay is saved once then the first replay video is 60 seconds long\n");
     printf("        and if a replay is saved 10 seconds later then the second replay video will also be 60 seconds long and contain 50 seconds of the previous video as well.\n");
     printf("        If this is set to 'no' then after a replay is saved the replay buffer data is cleared and the second replay will start from that point onward.\n");
@@ -3062,7 +3062,7 @@ int main(int argc, char **argv) {
         { "-q", Arg { {}, true, false } },
         { "-o", Arg { {}, true, false } },
         { "-r", Arg { {}, true, false } },
-        { "-overlapping-replay", Arg { {}, true, false } },
+        { "-overlap-replay", Arg { {}, true, false } },
         { "-k", Arg { {}, true, false } },
         { "-ac", Arg { {}, true, false } },
         { "-ab", Arg { {}, true, false } },
@@ -3389,17 +3389,17 @@ int main(int argc, char **argv) {
         replay_buffer_size_secs += std::ceil(keyint); // Add a few seconds to account of lost packets because of non-keyframe packets skipped
     }
 
-    bool overlapping_replay = true;
-    const char *overlapping_replay_str = args["-overlapping-replay"].value();
-    if(!overlapping_replay_str)
-        overlapping_replay_str = "yes";
+    bool overlap_replay = true;
+    const char *overlap_replay_str = args["-overlap-replay"].value();
+    if(!overlap_replay_str)
+        overlap_replay_str = "yes";
 
-    if(strcmp(overlapping_replay_str, "yes") == 0) {
-        overlapping_replay = true;
-    } else if(strcmp(overlapping_replay_str, "no") == 0) {
-        overlapping_replay = false;
+    if(strcmp(overlap_replay_str, "yes") == 0) {
+        overlap_replay = true;
+    } else if(strcmp(overlap_replay_str, "no") == 0) {
+        overlap_replay = false;
     } else {
-        fprintf(stderr, "Error: -overlapping-replay should either be either 'yes' or 'no', got: '%s'\n", overlapping_replay_str);
+        fprintf(stderr, "Error: -overlap-replap should either be either 'yes' or 'no', got: '%s'\n", overlap_replay_str);
         usage();
     }
 
@@ -4251,7 +4251,7 @@ int main(int argc, char **argv) {
 
             std::lock_guard<std::mutex> lock(write_output_mutex);
             save_replay_packets.clear();
-            if(!overlapping_replay) {
+            if(!overlap_replay) {
                 frame_data_queue.clear();
                 frames_erased = true;
                 replay_start_time = clock_get_monotonic_seconds() - paused_time_offset;
