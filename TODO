@@ -2,7 +2,6 @@ Check for reparent.
 Quickly changing workspace and back while recording under i3 breaks the screen recorder. i3 probably unmaps windows in other workspaces.
 See https://trac.ffmpeg.org/wiki/EncodingForStreamingSites for optimizing streaming.
 Look at VK_EXT_external_memory_dma_buf.
-Allow setting a different output resolution than the input resolution.
 Use mov+faststart.
 Allow recording all monitors/selected monitor without nvfbc by recording the compositor proxy window and only recording the part that matches the monitor(s).
 Allow recording a region by recording the compositor proxy window / nvfbc window and copying part of it.
