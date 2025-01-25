@@ -1315,7 +1315,7 @@ static std::string get_date_str() {
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
     strftime(str, sizeof(str)-1, "%Y-%m-%d_%H-%M-%S", t);
-    return str; 
+    return str;
 }
 
 static std::string get_date_only_str() {
@@ -1487,7 +1487,7 @@ static std::string save_replay_output_filepath;
 static void save_replay_async(AVCodecContext *video_codec_context, int video_stream_index, std::vector<AudioTrack> &audio_tracks, std::deque<std::shared_ptr<PacketData>> &frame_data_queue, bool frames_erased, std::string output_dir, const char *container_format, const std::string &file_extension, std::mutex &write_output_mutex, bool date_folders, bool hdr, gsr_capture *capture) {
     if(save_replay_thread.valid())
         return;
-    
+
     size_t start_index = (size_t)-1;
     int64_t video_pts_offset = 0;
     int64_t audio_pts_offset = 0;
@@ -1508,7 +1508,7 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
 
         if(frames_erased) {
             video_pts_offset = frame_data_queue[start_index]->data.pts;
-            
+
             // Find the next audio packet to use as audio pts offset
             for(size_t i = start_index; i < frame_data_queue.size(); ++i) {
                 const AVPacket &av_packet = frame_data_queue[i]->data;
@@ -1721,26 +1721,26 @@ static int init_filter_graph(AVCodecContext *audio_codec_context, AVFilterGraph 
     char ch_layout[64];
     int err = 0;
     ch_layout[0] = '\0';
- 
+
     AVFilterGraph *filter_graph = avfilter_graph_alloc();
     if (!filter_graph) {
         fprintf(stderr, "Unable to create filter graph.\n");
         return AVERROR(ENOMEM);
     }
- 
+
     for(size_t i = 0; i < num_sources; ++i) {
         const AVFilter *abuffer = avfilter_get_by_name("abuffer");
         if (!abuffer) {
             fprintf(stderr, "Could not find the abuffer filter.\n");
             return AVERROR_FILTER_NOT_FOUND;
         }
-    
+
         AVFilterContext *abuffer_ctx = avfilter_graph_alloc_filter(filter_graph, abuffer, NULL);
         if (!abuffer_ctx) {
             fprintf(stderr, "Could not allocate the abuffer instance.\n");
             return AVERROR(ENOMEM);
         }
-    
+
         #if LIBAVCODEC_VERSION_MAJOR < 60
         av_get_channel_layout_string(ch_layout, sizeof(ch_layout), 0, AV_CH_LAYOUT_STEREO);
         #else
@@ -1751,7 +1751,7 @@ static int init_filter_graph(AVCodecContext *audio_codec_context, AVFilterGraph 
         av_opt_set_q  (abuffer_ctx, "time_base",      audio_codec_context->time_base,                          AV_OPT_SEARCH_CHILDREN);
         av_opt_set_int(abuffer_ctx, "sample_rate",    audio_codec_context->sample_rate,                        AV_OPT_SEARCH_CHILDREN);
         av_opt_set_int(abuffer_ctx, "bit_rate",       audio_codec_context->bit_rate,                           AV_OPT_SEARCH_CHILDREN);
-    
+
         err = avfilter_init_str(abuffer_ctx, NULL);
         if (err < 0) {
             fprintf(stderr, "Could not initialize the abuffer filter.\n");
@@ -1766,35 +1766,42 @@ static int init_filter_graph(AVCodecContext *audio_codec_context, AVFilterGraph 
         av_log(NULL, AV_LOG_ERROR, "Could not find the mix filter.\n");
         return AVERROR_FILTER_NOT_FOUND;
     }
-    
+
+#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(7, 107, 100)
+    bool normalize = false;
+    char args[512];
+    snprintf(args, sizeof(args), "inputs=%d:normalize=%s", (int)num_sources, normalize ? "true" : "false");
+#else
     char args[512];
     snprintf(args, sizeof(args), "inputs=%d", (int)num_sources);
-    
+    fprintf(stderr, "Warning: your ffmpeg version doesn't support disabling normalizing of mixed audio. Volume might be lower than expected\n");
+#endif
+
     AVFilterContext *mix_ctx;
     err = avfilter_graph_create_filter(&mix_ctx, mix_filter, "amix", args, NULL, filter_graph);
     if (err < 0) {
         av_log(NULL, AV_LOG_ERROR, "Cannot create audio amix filter\n");
         return err;
     }
- 
+
     const AVFilter *abuffersink = avfilter_get_by_name("abuffersink");
     if (!abuffersink) {
         fprintf(stderr, "Could not find the abuffersink filter.\n");
         return AVERROR_FILTER_NOT_FOUND;
     }
- 
+
     AVFilterContext *abuffersink_ctx = avfilter_graph_alloc_filter(filter_graph, abuffersink, "sink");
     if (!abuffersink_ctx) {
         fprintf(stderr, "Could not allocate the abuffersink instance.\n");
         return AVERROR(ENOMEM);
     }
- 
+
     err = avfilter_init_str(abuffersink_ctx, NULL);
     if (err < 0) {
         fprintf(stderr, "Could not initialize the abuffersink instance.\n");
         return err;
     }
- 
+
     err = 0;
     for(size_t i = 0; i < src_filter_ctx.size(); ++i) {
         AVFilterContext *src_ctx = src_filter_ctx[i];
@@ -1807,16 +1814,16 @@ static int init_filter_graph(AVCodecContext *audio_codec_context, AVFilterGraph 
         av_log(NULL, AV_LOG_ERROR, "Error connecting filters\n");
         return err;
     }
- 
+
     err = avfilter_graph_config(filter_graph, NULL);
     if (err < 0) {
         av_log(NULL, AV_LOG_ERROR, "Error configuring the filter graph\n");
         return err;
     }
- 
+
     *graph = filter_graph;
     *sink  = abuffersink_ctx;
- 
+
     return 0;
 }
 
@@ -2633,7 +2640,7 @@ static AudioCodec select_audio_codec_with_fallback(AudioCodec audio_codec, const
 }
 
 static const char* video_codec_to_string(VideoCodec video_codec) {
-    switch(video_codec) { 
+    switch(video_codec) {
         case VideoCodec::H264:        return "h264";
         case VideoCodec::HEVC:        return "hevc";
         case VideoCodec::HEVC_HDR:    return "hevc_hdr";
@@ -2650,7 +2657,7 @@ static const char* video_codec_to_string(VideoCodec video_codec) {
 }
 
 static bool video_codec_only_supports_low_power_mode(const gsr_supported_video_codecs &supported_video_codecs, VideoCodec video_codec) {
-    switch(video_codec) { 
+    switch(video_codec) {
         case VideoCodec::H264:        return supported_video_codecs.h264.low_power;
         case VideoCodec::HEVC:        return supported_video_codecs.hevc.low_power;
         case VideoCodec::HEVC_HDR:    return supported_video_codecs.hevc_hdr.low_power;
