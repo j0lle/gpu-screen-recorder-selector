@@ -98,7 +98,7 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, AVCodecContext *video_
     /* Disable vsync */
     self->params.egl->eglSwapInterval(self->params.egl->egl_display, 0);
     if(window_texture_init(&self->window_texture, self->display, self->window, self->params.egl) != 0 && !self->params.follow_focused) {
-        fprintf(stderr, "gsr error: gsr_capture_xcomposite_start: failed to get window texture for window %ld\n", self->window);
+        fprintf(stderr, "gsr error: gsr_capture_xcomposite_start: failed to get window texture for window %ld\n", (long)self->window);
         return -1;
     }
 

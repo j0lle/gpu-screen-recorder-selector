@@ -65,14 +65,20 @@ static void on_core_done_cb(void *user_data, uint32_t id, int seq) {
 
 static bool is_cursor_format_supported(const enum spa_video_format format) {
     switch(format) {
-        case SPA_VIDEO_FORMAT_RGBx: return true;
-        case SPA_VIDEO_FORMAT_BGRx: return true;
-        case SPA_VIDEO_FORMAT_xRGB: return true;
-        case SPA_VIDEO_FORMAT_xBGR: return true;
-        case SPA_VIDEO_FORMAT_RGBA: return true;
-        case SPA_VIDEO_FORMAT_BGRA: return true;
-        case SPA_VIDEO_FORMAT_ARGB: return true;
-        case SPA_VIDEO_FORMAT_ABGR: return true;
+        case SPA_VIDEO_FORMAT_RGBx:       return true;
+        case SPA_VIDEO_FORMAT_BGRx:       return true;
+        case SPA_VIDEO_FORMAT_RGBA:       return true;
+        case SPA_VIDEO_FORMAT_BGRA:       return true;
+        case SPA_VIDEO_FORMAT_RGB:        return true;
+        case SPA_VIDEO_FORMAT_BGR:        return true;
+        case SPA_VIDEO_FORMAT_ARGB:       return true;
+        case SPA_VIDEO_FORMAT_ABGR:       return true;
+#if PW_CHECK_VERSION(0, 3, 41)
+        case SPA_VIDEO_FORMAT_xRGB_210LE: return true;
+        case SPA_VIDEO_FORMAT_xBGR_210LE: return true;
+        case SPA_VIDEO_FORMAT_ARGB_210LE: return true;
+        case SPA_VIDEO_FORMAT_ABGR_210LE: return true;
+#endif
         default:                    break;
     }
     return false;
@@ -338,24 +344,46 @@ static inline struct spa_pod *build_format(struct spa_pod_builder *b,
 /* For some reason gstreamer formats are in opposite order to drm formats */
 static int64_t spa_video_format_to_drm_format(const enum spa_video_format format) {
     switch(format) {
-        case SPA_VIDEO_FORMAT_RGBx: return DRM_FORMAT_XBGR8888;
-        case SPA_VIDEO_FORMAT_BGRx: return DRM_FORMAT_XRGB8888;
-        case SPA_VIDEO_FORMAT_RGBA: return DRM_FORMAT_ABGR8888;
-        case SPA_VIDEO_FORMAT_BGRA: return DRM_FORMAT_ARGB8888;
-        case SPA_VIDEO_FORMAT_RGB:  return DRM_FORMAT_XBGR8888;
-        case SPA_VIDEO_FORMAT_BGR:  return DRM_FORMAT_XRGB8888;
+        case SPA_VIDEO_FORMAT_RGBx:       return DRM_FORMAT_XBGR8888;
+        case SPA_VIDEO_FORMAT_BGRx:       return DRM_FORMAT_XRGB8888;
+        case SPA_VIDEO_FORMAT_RGBA:       return DRM_FORMAT_ABGR8888;
+        case SPA_VIDEO_FORMAT_BGRA:       return DRM_FORMAT_ARGB8888;
+        case SPA_VIDEO_FORMAT_RGB:        return DRM_FORMAT_XBGR8888;
+        case SPA_VIDEO_FORMAT_BGR:        return DRM_FORMAT_XRGB8888;
+        case SPA_VIDEO_FORMAT_ARGB:       return DRM_FORMAT_XRGB8888;
+        case SPA_VIDEO_FORMAT_ABGR:       return DRM_FORMAT_XRGB8888;
+#if PW_CHECK_VERSION(0, 3, 41)
+        case SPA_VIDEO_FORMAT_xRGB_210LE: return DRM_FORMAT_XRGB2101010;
+        case SPA_VIDEO_FORMAT_xBGR_210LE: return DRM_FORMAT_XBGR2101010;
+        case SPA_VIDEO_FORMAT_ARGB_210LE: return DRM_FORMAT_ARGB2101010;
+        case SPA_VIDEO_FORMAT_ABGR_210LE: return DRM_FORMAT_ABGR2101010;
+#endif
         default:                    break;
     }
     return DRM_FORMAT_INVALID;
 }
 
-static const enum spa_video_format video_formats[] = {
+#if PW_CHECK_VERSION(0, 3, 41)
+#define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS
+#else
+#define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS 8
+#endif
+
+static const enum spa_video_format video_formats[GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS] = {
     SPA_VIDEO_FORMAT_BGRA,
     SPA_VIDEO_FORMAT_BGRx,
     SPA_VIDEO_FORMAT_BGR,
     SPA_VIDEO_FORMAT_RGBx,
     SPA_VIDEO_FORMAT_RGBA,
     SPA_VIDEO_FORMAT_RGB,
+    SPA_VIDEO_FORMAT_ARGB,
+    SPA_VIDEO_FORMAT_ABGR,
+#if PW_CHECK_VERSION(0, 3, 41)
+    SPA_VIDEO_FORMAT_xRGB_210LE,
+    SPA_VIDEO_FORMAT_xBGR_210LE,
+    SPA_VIDEO_FORMAT_ARGB_210LE,
+    SPA_VIDEO_FORMAT_ABGR_210LE
+#endif
 };
 
 static bool gsr_pipewire_video_build_format_params(gsr_pipewire_video *self, struct spa_pod_builder *pod_builder, struct spa_pod **params, uint32_t *num_params) {
@@ -367,7 +395,7 @@ static bool gsr_pipewire_video_build_format_params(gsr_pipewire_video *self, str
     for(size_t i = 0; i < GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS; i++) {
         if(self->supported_video_formats[i].modifiers_size == 0)
             continue;
-        params[i] = build_format(pod_builder, &self->video_info, self->supported_video_formats[i].format, self->modifiers + self->supported_video_formats[i].modifiers_index, self->supported_video_formats[i].modifiers_size);
+        params[*num_params] = build_format(pod_builder, &self->video_info, self->supported_video_formats[i].format, self->modifiers + self->supported_video_formats[i].modifiers_index, self->supported_video_formats[i].modifiers_size);
         ++(*num_params);
     }
 
@@ -382,7 +410,7 @@ static void renegotiate_format(void *data, uint64_t expirations) {
 
     struct spa_pod *params[GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS];
     uint32_t num_video_formats = 0;
-    uint8_t params_buffer[2048];
+    uint8_t params_buffer[4096];
     struct spa_pod_builder pod_builder = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
     if (!gsr_pipewire_video_build_format_params(self, &pod_builder, params, &num_video_formats)) {
         pw_thread_loop_unlock(self->thread_loop);
@@ -413,6 +441,11 @@ static bool spa_video_format_get_modifiers(gsr_pipewire_video *self, const enum 
     }
 
     const int64_t drm_format = spa_video_format_to_drm_format(format);
+    if(drm_format == DRM_FORMAT_INVALID) {
+        fprintf(stderr, "gsr error: spa_video_format_get_modifiers: unsupported format: %d\n", (int)format);
+        return false;
+    }
+
     if(!self->egl->eglQueryDmaBufModifiersEXT(self->egl->egl_display, drm_format, max_modifiers, modifiers, NULL, num_modifiers)) {
         fprintf(stderr, "gsr error: spa_video_format_get_modifiers: eglQueryDmaBufModifiersEXT failed with drm format %d, %" PRIi64 "\n", (int)format, drm_format);
         //modifiers[0] = DRM_FORMAT_MOD_LINEAR;
@@ -443,7 +476,7 @@ static void gsr_pipewire_video_init_modifiers(gsr_pipewire_video *self) {
 static bool gsr_pipewire_video_setup_stream(gsr_pipewire_video *self) {
     struct spa_pod *params[GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS];
     uint32_t num_video_formats = 0;
-    uint8_t params_buffer[2048];
+    uint8_t params_buffer[4096];
     struct spa_pod_builder pod_builder = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
 
     self->thread_loop = pw_thread_loop_new("gsr screen capture", NULL);
