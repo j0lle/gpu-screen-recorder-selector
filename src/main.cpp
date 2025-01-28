@@ -1716,29 +1716,44 @@ static bool is_livestream_path(const char *str) {
         return false;
 }
 
-// TODO: Proper cleanup
-static int init_filter_graph(AVCodecContext *audio_codec_context, AVFilterGraph **graph, AVFilterContext **sink, std::vector<AVFilterContext*> &src_filter_ctx, size_t num_sources) {
+static int init_filter_graph(AVCodecContext* audio_codec_context, AVFilterGraph** graph, AVFilterContext** sink, std::vector<AVFilterContext*>& src_filter_ctx, size_t num_sources) {
     char ch_layout[64];
     int err = 0;
     ch_layout[0] = '\0';
 
-    AVFilterGraph *filter_graph = avfilter_graph_alloc();
+    // C89-style variable declaration to
+    // avoid problems because of goto
+    AVFilterGraph* filter_graph = nullptr;
+    AVFilterContext* mix_ctx = nullptr;
+
+    const AVFilter* mix_filter = nullptr;
+    const AVFilter* abuffersink = nullptr;
+    AVFilterContext* abuffersink_ctx = nullptr;
+    char args[512] = { 0 };
+#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(7, 107, 100)
+    bool normalize = false;
+#endif
+
+    filter_graph = avfilter_graph_alloc();
     if (!filter_graph) {
         fprintf(stderr, "Unable to create filter graph.\n");
-        return AVERROR(ENOMEM);
+        err = AVERROR(ENOMEM);
+        goto fail;
     }
 
     for(size_t i = 0; i < num_sources; ++i) {
         const AVFilter *abuffer = avfilter_get_by_name("abuffer");
         if (!abuffer) {
             fprintf(stderr, "Could not find the abuffer filter.\n");
-            return AVERROR_FILTER_NOT_FOUND;
+            err = AVERROR_FILTER_NOT_FOUND;
+            goto fail;
         }
 
         AVFilterContext *abuffer_ctx = avfilter_graph_alloc_filter(filter_graph, abuffer, NULL);
         if (!abuffer_ctx) {
             fprintf(stderr, "Could not allocate the abuffer instance.\n");
-            return AVERROR(ENOMEM);
+            err = AVERROR(ENOMEM);
+            goto fail;
         }
 
         #if LIBAVCODEC_VERSION_MAJOR < 60
@@ -1755,51 +1770,50 @@ static int init_filter_graph(AVCodecContext *audio_codec_context, AVFilterGraph 
         err = avfilter_init_str(abuffer_ctx, NULL);
         if (err < 0) {
             fprintf(stderr, "Could not initialize the abuffer filter.\n");
-            return err;
+            goto fail;
         }
 
         src_filter_ctx.push_back(abuffer_ctx);
     }
 
-    const AVFilter *mix_filter = avfilter_get_by_name("amix");
+    mix_filter = avfilter_get_by_name("amix");
     if (!mix_filter) {
         av_log(NULL, AV_LOG_ERROR, "Could not find the mix filter.\n");
-        return AVERROR_FILTER_NOT_FOUND;
+        err = AVERROR_FILTER_NOT_FOUND;
+        goto fail;
     }
 
 #if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(7, 107, 100)
-    bool normalize = false;
-    char args[512];
     snprintf(args, sizeof(args), "inputs=%d:normalize=%s", (int)num_sources, normalize ? "true" : "false");
 #else
-    char args[512];
     snprintf(args, sizeof(args), "inputs=%d", (int)num_sources);
     fprintf(stderr, "Warning: your ffmpeg version doesn't support disabling normalizing of mixed audio. Volume might be lower than expected\n");
 #endif
 
-    AVFilterContext *mix_ctx;
     err = avfilter_graph_create_filter(&mix_ctx, mix_filter, "amix", args, NULL, filter_graph);
     if (err < 0) {
         av_log(NULL, AV_LOG_ERROR, "Cannot create audio amix filter\n");
-        return err;
+        goto fail;
     }
 
-    const AVFilter *abuffersink = avfilter_get_by_name("abuffersink");
+    abuffersink = avfilter_get_by_name("abuffersink");
     if (!abuffersink) {
         fprintf(stderr, "Could not find the abuffersink filter.\n");
-        return AVERROR_FILTER_NOT_FOUND;
+        err = AVERROR_FILTER_NOT_FOUND;
+        goto fail;
     }
 
-    AVFilterContext *abuffersink_ctx = avfilter_graph_alloc_filter(filter_graph, abuffersink, "sink");
+    abuffersink_ctx = avfilter_graph_alloc_filter(filter_graph, abuffersink, "sink");
     if (!abuffersink_ctx) {
         fprintf(stderr, "Could not allocate the abuffersink instance.\n");
-        return AVERROR(ENOMEM);
+        err = AVERROR(ENOMEM);
+        goto fail;
     }
 
     err = avfilter_init_str(abuffersink_ctx, NULL);
     if (err < 0) {
         fprintf(stderr, "Could not initialize the abuffersink instance.\n");
-        return err;
+        goto fail;
     }
 
     err = 0;
@@ -1812,19 +1826,24 @@ static int init_filter_graph(AVCodecContext *audio_codec_context, AVFilterGraph 
         err = avfilter_link(mix_ctx, 0, abuffersink_ctx, 0);
     if (err < 0) {
         av_log(NULL, AV_LOG_ERROR, "Error connecting filters\n");
-        return err;
+        goto fail;
     }
 
     err = avfilter_graph_config(filter_graph, NULL);
     if (err < 0) {
         av_log(NULL, AV_LOG_ERROR, "Error configuring the filter graph\n");
-        return err;
+        goto fail;
     }
 
     *graph = filter_graph;
-    *sink  = abuffersink_ctx;
+    *sink = abuffersink_ctx;
 
     return 0;
+
+fail:
+    avfilter_graph_free(&filter_graph);
+    src_filter_ctx.clear();  // possibly unnecessary?
+    return err;
 }
 
 static gsr_video_encoder* create_video_encoder(gsr_egl *egl, bool overclock, gsr_color_depth color_depth, bool use_software_video_encoder, VideoCodec video_codec) {
