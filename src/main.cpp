@@ -2466,10 +2466,19 @@ static AVPixelFormat get_pixel_format(VideoCodec video_codec, gsr_gpu_vendor ven
     }
 }
 
+enum class ArgType {
+    STRING,
+    BOOLEAN
+};
+
 struct Arg {
     std::vector<const char*> values;
     bool optional = false;
     bool list = false;
+    ArgType arg_type = ArgType::STRING;
+    union {
+        bool boolean = false;
+    } typed_value;
 
     const char* value() const {
         if(values.empty())
@@ -2997,6 +3006,16 @@ static AudioDeviceData create_application_audio_audio_input(const MergedAudioInp
 }
 #endif
 
+static bool arg_get_boolean_value(std::map<std::string, Arg> &args, const char *arg_name, bool default_value) {
+    auto it = args.find(arg_name);
+    if(it == args.end() || !it->second.value()) {
+        return default_value;
+    } else {
+        assert(it->second.arg_type == ArgType::BOOLEAN);
+        return it->second.typed_value.boolean;
+    }
+}
+
 int main(int argc, char **argv) {
     setlocale(LC_ALL, "C"); // Sigh... stupid C
 
@@ -3079,53 +3098,68 @@ int main(int argc, char **argv) {
 
     //av_log_set_level(AV_LOG_TRACE);
 
+    const bool is_optional = true;
+    const bool is_list = true;
     std::map<std::string, Arg> args = {
-        { "-w", Arg { {}, false, false } },
-        { "-c", Arg { {}, true, false } },
-        { "-f", Arg { {}, false, false } },
-        { "-s", Arg { {}, true, false } },
-        { "-a", Arg { {}, true, true } },
-        { "-q", Arg { {}, true, false } },
-        { "-o", Arg { {}, true, false } },
-        { "-r", Arg { {}, true, false } },
-        { "-restart-replay-on-save", Arg { {}, true, false } },
-        { "-k", Arg { {}, true, false } },
-        { "-ac", Arg { {}, true, false } },
-        { "-ab", Arg { {}, true, false } },
-        { "-oc", Arg { {}, true, false } },
-        { "-fm", Arg { {}, true, false } },
-        { "-bm", Arg { {}, true, false } },
-        { "-pixfmt", Arg { {}, true, false } },
-        { "-v", Arg { {}, true, false } },
-        { "-gl-debug", Arg { {}, true, false } },
-        { "-df", Arg { {}, true, false } },
-        { "-sc", Arg { {}, true, false } },
-        { "-cr", Arg { {}, true, false } },
-        { "-cursor", Arg { {}, true, false } },
-        { "-keyint", Arg { {}, true, false } },
-        { "-restore-portal-session", Arg { {}, true, false } },
-        { "-portal-session-token-filepath", Arg { {}, true, false } },
-        { "-encoder", Arg { {}, true, false } },
+        { "-w",                             Arg { {}, !is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-c",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-f",                             Arg { {}, !is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-s",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-a",                             Arg { {},  is_optional,   is_list,  ArgType::STRING,  {false} } },
+        { "-q",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-o",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-r",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-restart-replay-on-save",        Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
+        { "-k",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-ac",                            Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-ab",                            Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-oc",                            Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
+        { "-fm",                            Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-bm",                            Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-pixfmt",                        Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-v",                             Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
+        { "-gl-debug",                      Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
+        { "-df",                            Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
+        { "-sc",                            Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-cr",                            Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-cursor",                        Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
+        { "-keyint",                        Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-restore-portal-session",        Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
+        { "-portal-session-token-filepath", Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
+        { "-encoder",                       Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
     };
 
     for(int i = 1; i < argc; i += 2) {
-        auto it = args.find(argv[i]);
+        const char *arg_name = argv[i];
+        auto it = args.find(arg_name);
         if(it == args.end()) {
-            fprintf(stderr, "Error: invalid argument '%s'\n", argv[i]);
+            fprintf(stderr, "Error: invalid argument '%s'\n", arg_name);
             usage();
         }
 
         if(!it->second.values.empty() && !it->second.list) {
-            fprintf(stderr, "Error: expected argument '%s' to only be specified once\n", argv[i]);
+            fprintf(stderr, "Error: expected argument '%s' to only be specified once\n", arg_name);
             usage();
         }
 
         if(i + 1 >= argc) {
-            fprintf(stderr, "Error: missing value for argument '%s'\n", argv[i]);
+            fprintf(stderr, "Error: missing value for argument '%s'\n", arg_name);
             usage();
         }
 
-        it->second.values.push_back(argv[i + 1]);
+        const char *arg_value = argv[i + 1];
+        if(it->second.arg_type == ArgType::BOOLEAN) {
+            if(strcmp(arg_value, "yes") == 0) {
+                it->second.typed_value.boolean = true;
+            } else if(strcmp(arg_value, "no") == 0) {
+                it->second.typed_value.boolean = false;
+            } else {
+                fprintf(stderr, "Error: %s should either be 'yes' or 'no', got: '%s'\n", arg_name, arg_value);
+                usage();
+            }
+        }
+
+        it->second.values.push_back(arg_value);
     }
 
     for(auto &it : args) {
@@ -3237,89 +3271,13 @@ int main(int argc, char **argv) {
         }
     }
 
-    bool overclock = false;
-    const char *overclock_str = args["-oc"].value();
-    if(!overclock_str)
-        overclock_str = "no";
-
-    if(strcmp(overclock_str, "yes") == 0) {
-        overclock = true;
-    } else if(strcmp(overclock_str, "no") == 0) {
-        overclock = false;
-    } else {
-        fprintf(stderr, "Error: -oc should either be either 'yes' or 'no', got: '%s'\n", overclock_str);
-        usage();
-    }
-
-    bool verbose = true;
-    const char *verbose_str = args["-v"].value();
-    if(!verbose_str)
-        verbose_str = "yes";
-
-    if(strcmp(verbose_str, "yes") == 0) {
-        verbose = true;
-    } else if(strcmp(verbose_str, "no") == 0) {
-        verbose = false;
-    } else {
-        fprintf(stderr, "Error: -v should either be either 'yes' or 'no', got: '%s'\n", verbose_str);
-        usage();
-    }
-
-    bool gl_debug = false;
-    const char *gl_debug_str = args["-gl-debug"].value();
-    if(!gl_debug_str)
-        gl_debug_str = "no";
-
-    if(strcmp(gl_debug_str, "yes") == 0) {
-        gl_debug = true;
-    } else if(strcmp(gl_debug_str, "no") == 0) {
-        gl_debug = false;
-    } else {
-        fprintf(stderr, "Error: -gl-debug should either be either 'yes' or 'no', got: '%s'\n", gl_debug_str);
-        usage();
-    }
-
-    bool record_cursor = true;
-    const char *record_cursor_str = args["-cursor"].value();
-    if(!record_cursor_str)
-        record_cursor_str = "yes";
-
-    if(strcmp(record_cursor_str, "yes") == 0) {
-        record_cursor = true;
-    } else if(strcmp(record_cursor_str, "no") == 0) {
-        record_cursor = false;
-    } else {
-        fprintf(stderr, "Error: -cursor should either be either 'yes' or 'no', got: '%s'\n", record_cursor_str);
-        usage();
-    }
-
-    bool date_folders = false;
-    const char *date_folders_str = args["-df"].value();
-    if(!date_folders_str)
-        date_folders_str = "no";
-
-    if(strcmp(date_folders_str, "yes") == 0) {
-        date_folders = true;
-    } else if(strcmp(date_folders_str, "no") == 0) {
-        date_folders = false;
-    } else {
-        fprintf(stderr, "Error: -df should either be either 'yes' or 'no', got: '%s'\n", date_folders_str);
-        usage();
-    }
-
-    bool restore_portal_session = false;
-    const char *restore_portal_session_str = args["-restore-portal-session"].value();
-    if(!restore_portal_session_str)
-        restore_portal_session_str = "no";
-
-    if(strcmp(restore_portal_session_str, "yes") == 0) {
-        restore_portal_session = true;
-    } else if(strcmp(restore_portal_session_str, "no") == 0) {
-        restore_portal_session = false;
-    } else {
-        fprintf(stderr, "Error: -restore-portal-session should either be either 'yes' or 'no', got: '%s'\n", restore_portal_session_str);
-        usage();
-    }
+    bool overclock = arg_get_boolean_value(args, "-oc", false);
+    const bool verbose = arg_get_boolean_value(args, "-v", true);
+    const bool gl_debug = arg_get_boolean_value(args, "-gl-debug", false);
+    const bool record_cursor = arg_get_boolean_value(args, "-cursor", true);
+    const bool date_folders = arg_get_boolean_value(args, "-df", false);
+    const bool restore_portal_session = arg_get_boolean_value(args, "-restore-portal-session", false);
+    const bool restart_replay_on_save = arg_get_boolean_value(args, "-restart-replay-on-save", false);
 
     const char *portal_session_token_filepath = args["-portal-session-token-filepath"].value();
     if(portal_session_token_filepath) {
@@ -3413,20 +3371,6 @@ int main(int argc, char **argv) {
             _exit(1);
         }
         replay_buffer_size_secs += std::ceil(keyint); // Add a few seconds to account of lost packets because of non-keyframe packets skipped
-    }
-
-    bool restart_replay_on_save = false;
-    const char *restart_replay_on_save_str = args["-restart-replay-on-save"].value();
-    if(!restart_replay_on_save_str)
-        restart_replay_on_save_str = "no";
-
-    if(strcmp(restart_replay_on_save_str, "yes") == 0) {
-        restart_replay_on_save = true;
-    } else if(strcmp(restart_replay_on_save_str, "no") == 0) {
-        restart_replay_on_save = false;
-    } else {
-        fprintf(stderr, "Error: -restart-replay-on-save should either be either 'yes' or 'no', got: '%s'\n", restart_replay_on_save_str);
-        usage();
     }
 
     std::string window_str = args["-w"].value();
