@@ -1442,17 +1442,17 @@ static bool add_hdr_metadata_to_video_stream(gsr_capture *cap, AVStream *video_s
 
     if(!light_metadata || !mastering_display_metadata) {
         if(light_metadata)
-            av_freep(light_metadata);
+            av_freep(&light_metadata);
 
         if(mastering_display_metadata)
-            av_freep(mastering_display_metadata);
+            av_freep(&mastering_display_metadata);
 
         return false;
     }
 
     if(!gsr_capture_set_hdr_metadata(cap, mastering_display_metadata, light_metadata)) {
-        av_freep(light_metadata);
-        av_freep(mastering_display_metadata);
+        av_freep(&light_metadata);
+        av_freep(&mastering_display_metadata);
         return false;
     }
 
@@ -1471,10 +1471,10 @@ static bool add_hdr_metadata_to_video_stream(gsr_capture *cap, AVStream *video_s
     #endif
 
     if(!content_light_level_added)
-        av_freep(light_metadata);
+        av_freep(&light_metadata);
 
     if(!mastering_display_metadata_added)
-        av_freep(mastering_display_metadata);
+        av_freep(&mastering_display_metadata);
 
     // Return true even on failure because we dont want to retry adding hdr metadata on failure
     return true;
@@ -4221,16 +4221,18 @@ int main(int argc, char **argv) {
 
             std::lock_guard<std::mutex> lock(write_output_mutex);
             save_replay_packets.clear();
-            if(restart_replay_on_save) {
-                frame_data_queue.clear();
-                frames_erased = true;
-                replay_start_time = clock_get_monotonic_seconds() - paused_time_offset;
-            }
         }
 
         if(save_replay == 1 && !save_replay_thread.valid() && replay_buffer_size_secs != -1) {
             save_replay = 0;
             save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, frame_data_queue, frames_erased, filename, container_format, file_extension, write_output_mutex, date_folders, hdr, capture);
+
+            std::lock_guard<std::mutex> lock(write_output_mutex);
+            if(restart_replay_on_save) {
+                frame_data_queue.clear();
+                frames_erased = true;
+                replay_start_time = clock_get_monotonic_seconds() - paused_time_offset;
+            }
         }
 
         const double frame_end = clock_get_monotonic_seconds();
@@ -4285,8 +4287,10 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to write trailer\n");
     }
 
-    if(replay_buffer_size_secs == -1 && !(output_format->flags & AVFMT_NOFILE))
+    if(replay_buffer_size_secs == -1 && !(output_format->flags & AVFMT_NOFILE)) {
         avio_close(av_format_context->pb);
+        avformat_free_context(av_format_context);
+    }
 
     gsr_damage_deinit(&damage);
     gsr_color_conversion_deinit(&color_conversion);
