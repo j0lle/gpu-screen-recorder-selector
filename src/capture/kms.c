@@ -756,8 +756,8 @@ static bool gsr_capture_kms_set_hdr_metadata(gsr_capture *cap, AVMasteringDispla
     mastering_display_metadata->min_luminance = av_make_q(self->hdr_metadata.hdmi_metadata_type1.min_display_mastering_luminance, 10000);
     mastering_display_metadata->max_luminance = av_make_q(self->hdr_metadata.hdmi_metadata_type1.max_display_mastering_luminance, 1);
 
-    mastering_display_metadata->has_primaries = mastering_display_metadata->display_primaries[0][0].num > 0;
-    mastering_display_metadata->has_luminance = mastering_display_metadata->max_luminance.num > 0;
+    mastering_display_metadata->has_primaries = true;
+    mastering_display_metadata->has_luminance = true;
 
     return true;
 }
