@@ -95,10 +95,17 @@ static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *u
 
     const char *main_code = NULL;
     if(kde_gamma_correction) {
-        main_code =
-            "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
-            "  FragColor.x = pow((RGBtoYUV * vec4(pixel.rgb, 1.0)).x, 0.55)*0.8;             \n"
-            "  FragColor.w = pixel.a;                                                        \n";
+        if(color_range == GSR_COLOR_RANGE_FULL) {
+            main_code =
+                "  vec4 pixel = texture(tex1, texcoords_out);                                \n"
+                "  FragColor.x = pow((RGBtoYUV * vec4(pixel.rgb, 1.0)).x, 0.62);             \n"
+                "  FragColor.w = pixel.a;                                                    \n";
+        } else {
+            main_code =
+                "  vec4 pixel = texture(tex1, texcoords_out);                                \n"
+                "  FragColor.x = pow((RGBtoYUV * vec4(pixel.rgb, 1.0)).x, 0.72);             \n"
+                "  FragColor.w = pixel.a;                                                    \n";
+        }
     } else {
         main_code =
             "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
@@ -165,10 +172,17 @@ static unsigned int load_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_u
 
     const char *main_code = NULL;
     if(kde_gamma_correction) {
-        main_code =
-            "  vec4 pixel = texture(tex1, texcoords_out);                                          \n"
-            "  FragColor.xy = (RGBtoYUV * vec4(pow(pixel.rgb, vec3(0.3)), 1.0)).yz;                \n"
-            "  FragColor.w = pixel.a;                                                              \n";
+        if(color_range == GSR_COLOR_RANGE_FULL) {
+            main_code =
+                "  vec4 pixel = texture(tex1, texcoords_out);                                      \n"
+                "  FragColor.xy = (RGBtoYUV * vec4(pow(pixel.rgb, vec3(0.3)), 1.0)).yz;            \n"
+                "  FragColor.w = pixel.a;                                                          \n";
+        } else {
+            main_code =
+                "  vec4 pixel = texture(tex1, texcoords_out);                                      \n"
+                "  FragColor.xy = (RGBtoYUV * vec4(pow(pixel.rgb, vec3(0.3)), 1.0)).yz;           \n"
+                "  FragColor.w = pixel.a;                                                          \n";
+        }
     } else {
         main_code =
             "  vec4 pixel = texture(tex1, texcoords_out);                                          \n"
