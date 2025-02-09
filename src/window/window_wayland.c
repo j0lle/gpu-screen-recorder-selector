@@ -29,6 +29,7 @@ typedef struct {
     void *compositor;
     gsr_wayland_output outputs[GSR_MAX_OUTPUTS];
     int num_outputs;
+    bool is_compositor_kwin;
 } gsr_window_wayland;
 
 static void output_handle_geometry(void *data, struct wl_output *wl_output,
@@ -123,6 +124,8 @@ static void registry_add_object(void *data, struct wl_registry *registry, uint32
             .name = NULL,
         };
         wl_output_add_listener(gsr_output->output, &output_listener, gsr_output);
+    } else if(strcmp(interface, "org_kde_plasma_shell") == 0) {
+        window_wayland->is_compositor_kwin = true;
     }
 }
 
@@ -289,6 +292,11 @@ static void gsr_window_wayland_for_each_active_monitor_output_cached(const gsr_w
     }
 }
 
+static bool gsr_window_wayland_is_compositor_kwin(const gsr_window *window) {
+    const gsr_window_wayland *self = window->priv;
+    return self->is_compositor_kwin;
+}
+
 gsr_window* gsr_window_wayland_create(void) {
     gsr_window *window = calloc(1, sizeof(gsr_window));
     if(!window)
@@ -314,6 +322,7 @@ gsr_window* gsr_window_wayland_create(void) {
         .get_display = gsr_window_wayland_get_display,
         .get_window = gsr_window_wayland_get_window,
         .for_each_active_monitor_output_cached = gsr_window_wayland_for_each_active_monitor_output_cached,
+        .is_compositor_kwin = gsr_window_wayland_is_compositor_kwin,
         .priv = window_wayland
     };
 

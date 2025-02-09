@@ -21,6 +21,7 @@ struct gsr_window {
     void* (*get_display)(gsr_window *self);
     void* (*get_window)(gsr_window *self);
     void (*for_each_active_monitor_output_cached)(const gsr_window *self, active_monitor_callback callback, void *userdata);
+    bool (*is_compositor_kwin)(const gsr_window *self); /* can be NULL. Is currently only defined for Wayland */
     void *priv;
 };
 

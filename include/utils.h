@@ -50,6 +50,7 @@ drm_connector_type_count* drm_connector_types_get_index(drm_connector_type_count
 uint32_t monitor_identifier_from_type_and_count(int monitor_type_index, int monitor_type_count);
 
 bool gl_get_gpu_info(gsr_egl *egl, gsr_gpu_info *info);
+bool version_greater_than(int major, int minor, int patch, int other_major, int other_minor, int other_patch);
 bool gl_driver_version_greater_than(const gsr_gpu_info *gpu_info, int major, int minor, int patch);
 
 bool try_card_has_valid_plane(const char *card_path);

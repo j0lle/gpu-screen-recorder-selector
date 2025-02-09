@@ -75,7 +75,7 @@ static const char* color_format_range_get_transform_matrix(gsr_destination_color
     return NULL;
 }
 
-static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture) {
+static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture, bool kde_gamma_correction) {
     const char *color_transform_matrix = color_format_range_get_transform_matrix(color_format, color_range);
 
     char vertex_shader[2048];
@@ -93,6 +93,19 @@ static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *u
         "  gl_Position = vec4(offset.x, offset.y, 0.0, 0.0) + vec4(pos.x, pos.y, 0.0, 1.0);    \n"
         "}                                                 \n");
 
+    const char *main_code = NULL;
+    if(kde_gamma_correction) {
+        main_code =
+            "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
+            "  FragColor.x = pow((RGBtoYUV * vec4(pixel.rgb, 1.0)).x, 0.55)*0.8;             \n"
+            "  FragColor.w = pixel.a;                                                        \n";
+    } else {
+        main_code =
+            "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
+            "  FragColor.x = (RGBtoYUV * vec4(pixel.rgb, 1.0)).x;                            \n"
+            "  FragColor.w = pixel.a;                                                        \n";
+    }
+
     char fragment_shader[2048];
     if(external_texture) {
         snprintf(fragment_shader, sizeof(fragment_shader),
@@ -106,10 +119,8 @@ static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *u
             "%s"
             "void main()                                                                     \n"
             "{                                                                               \n"
-            "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
-            "  FragColor.x = (RGBtoYUV * vec4(pixel.rgb, 1.0)).x;                            \n"
-            "  FragColor.w = pixel.a;                                                        \n"
-            "}                                                                               \n", color_transform_matrix);
+            "%s"
+            "}                                                                               \n", color_transform_matrix, main_code);
     } else {
         snprintf(fragment_shader, sizeof(fragment_shader),
             "#version 300 es                                                                 \n"
@@ -120,10 +131,8 @@ static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *u
             "%s"
             "void main()                                                                     \n"
             "{                                                                               \n"
-            "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
-            "  FragColor.x = (RGBtoYUV * vec4(pixel.rgb, 1.0)).x;                            \n"
-            "  FragColor.w = pixel.a;                                                        \n"
-            "}                                                                               \n", color_transform_matrix);
+            "%s"
+            "}                                                                               \n", color_transform_matrix, main_code);
     }
 
     if(gsr_shader_init(shader, egl, vertex_shader, fragment_shader) != 0)
@@ -136,7 +145,7 @@ static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *u
     return 0;
 }
 
-static unsigned int load_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture) {
+static unsigned int load_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture, bool kde_gamma_correction) {
     const char *color_transform_matrix = color_format_range_get_transform_matrix(color_format, color_range);
 
     char vertex_shader[2048];
@@ -154,6 +163,19 @@ static unsigned int load_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_u
         "  gl_Position = (vec4(offset.x, offset.y, 0.0, 0.0) + vec4(pos.x, pos.y, 0.0, 1.0)) * vec4(0.5, 0.5, 1.0, 1.0) - vec4(0.5, 0.5, 0.0, 0.0);   \n"
         "}                                               \n");
 
+    const char *main_code = NULL;
+    if(kde_gamma_correction) {
+        main_code =
+            "  vec4 pixel = texture(tex1, texcoords_out);                                          \n"
+            "  FragColor.xy = (RGBtoYUV * vec4(pow(pixel.rgb, vec3(0.3)), 1.0)).yz;                \n"
+            "  FragColor.w = pixel.a;                                                              \n";
+    } else {
+        main_code =
+            "  vec4 pixel = texture(tex1, texcoords_out);                                          \n"
+            "  FragColor.xy = (RGBtoYUV * vec4(pixel.rgb, 1.0)).yz;                                \n"
+            "  FragColor.w = pixel.a;                                                              \n";
+    }
+
     char fragment_shader[2048];
     if(external_texture) {
         snprintf(fragment_shader, sizeof(fragment_shader),
@@ -167,10 +189,8 @@ static unsigned int load_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_u
             "%s"
             "void main()                                                                           \n"
             "{                                                                                     \n"
-            "  vec4 pixel = texture(tex1, texcoords_out);                                          \n"
-            "  FragColor.xy = (RGBtoYUV * vec4(pixel.rgb, 1.0)).yz;                                \n"
-            "  FragColor.w = pixel.a;                                                              \n"
-            "}                                                                                     \n", color_transform_matrix);
+            "%s"
+            "}                                                                                     \n", color_transform_matrix, main_code);
     } else {
         snprintf(fragment_shader, sizeof(fragment_shader),
             "#version 300 es                                                                       \n"
@@ -181,10 +201,8 @@ static unsigned int load_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_u
             "%s"
             "void main()                                                                           \n"
             "{                                                                                     \n"
-            "  vec4 pixel = texture(tex1, texcoords_out);                                          \n"
-            "  FragColor.xy = (RGBtoYUV * vec4(pixel.rgb, 1.0)).yz;                                \n"
-            "  FragColor.w = pixel.a;                                                              \n"
-            "}                                                                                     \n", color_transform_matrix);
+            "%s"
+            "}                                                                                     \n", color_transform_matrix, main_code);
     }
 
     if(gsr_shader_init(shader, egl, vertex_shader, fragment_shader) != 0)
@@ -261,23 +279,23 @@ int gsr_color_conversion_init(gsr_color_conversion *self, const gsr_color_conver
                 return -1;
             }
 
-            if(load_shader_y(&self->shaders[0], self->params.egl, &self->uniforms[0], params->destination_color, params->color_range, false) != 0) {
+            if(load_shader_y(&self->shaders[0], self->params.egl, &self->uniforms[0], params->destination_color, params->color_range, false, params->kde_gamma_correction) != 0) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y shader\n");
                 goto err;
             }
 
-            if(load_shader_uv(&self->shaders[1], self->params.egl, &self->uniforms[1], params->destination_color, params->color_range, false) != 0) {
+            if(load_shader_uv(&self->shaders[1], self->params.egl, &self->uniforms[1], params->destination_color, params->color_range, false, params->kde_gamma_correction) != 0) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load UV shader\n");
                 goto err;
             }
 
             if(self->params.load_external_image_shader) {
-                if(load_shader_y(&self->shaders[2], self->params.egl, &self->uniforms[2], params->destination_color, params->color_range, true) != 0) {
+                if(load_shader_y(&self->shaders[2], self->params.egl, &self->uniforms[2], params->destination_color, params->color_range, true, params->kde_gamma_correction) != 0) {
                     fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y shader\n");
                     goto err;
                 }
 
-                if(load_shader_uv(&self->shaders[3], self->params.egl, &self->uniforms[3], params->destination_color, params->color_range, true) != 0) {
+                if(load_shader_uv(&self->shaders[3], self->params.egl, &self->uniforms[3], params->destination_color, params->color_range, true, params->kde_gamma_correction) != 0) {
                     fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load UV shader\n");
                     goto err;
                 }

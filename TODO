@@ -194,8 +194,7 @@ Add option to record audio from the recorded window only.
 
 Add option to automatically select best video codec available. Add -k best, -k best_10bit and -k best_hdr.
 
-HDR is broken on kde plasma > 6.2 because of change to how HDR metadata works. See https://github.com/dec05eba/gpu-screen-recorder-issues/issues/60.
-    Use wayland color management protocol when it's available: https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/14.
+Use wayland color management protocol when it's available: https://gitlab.freedesktop.org/wayland/wayland-protocols/-/merge_requests/14.
 
 Use different exit codes for different errors. Use one for invalid -w option, another one for invalid -a option for audio devices, etc. This is to make UI error reporting better.
     Document these exit codes in an exit code .md file, or finally create a manpage where this can be documented.
