@@ -222,3 +222,7 @@ Support vaapi rotation. Support for it is added in mesa here: https://gitlab.fre
 
 Replay (and recording?) fails to save properly sometimes (especially for long videos). This is noticable with mp4 files since they get corrupt and become unplayable.
     The entire video does seem to get saved (it's a large video file) and it seems to have the correct headers but it's not playable.
+
+Make it possible to save a shorter replay clip remotely. Maybe implement ipc first, to then also allow starting recording/stream while a replay is running.
+
+Add an option to pass http headers when streaming. Some streaming services require streaming keys to be passed in a http header instead of in the url as a parameter.

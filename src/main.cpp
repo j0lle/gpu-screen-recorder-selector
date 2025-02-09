@@ -3007,7 +3007,14 @@ static AudioDeviceData create_application_audio_audio_input(const MergedAudioInp
 #endif
 
 static bool is_kde_plasma_version_greater_than_6_1_90() {
-    FILE *f = popen("plasmashell -v 2> /dev/null", "r");
+    const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
+    const char *cmd = nullptr;
+    if(inside_flatpak)
+        cmd = "flatpak-spawn --host -- plasmashell -v 2> /dev/null";
+    else
+        cmd = "plasmashell -v 2> /dev/null";
+
+    FILE *f = popen(cmd, "r");
     if(!f)
         return false;
 
