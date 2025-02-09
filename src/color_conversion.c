@@ -98,12 +98,12 @@ static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *u
         if(color_range == GSR_COLOR_RANGE_FULL) {
             main_code =
                 "  vec4 pixel = texture(tex1, texcoords_out);                                \n"
-                "  FragColor.x = pow((RGBtoYUV * vec4(pixel.rgb, 1.0)).x, 0.62);             \n"
+                "  FragColor.x = pow((RGBtoYUV * vec4(pixel.rgb, 1.0)).x, 0.55)*0.8;             \n"
                 "  FragColor.w = pixel.a;                                                    \n";
         } else {
             main_code =
                 "  vec4 pixel = texture(tex1, texcoords_out);                                \n"
-                "  FragColor.x = pow((RGBtoYUV * vec4(pixel.rgb, 1.0)).x, 0.72);             \n"
+                "  FragColor.x = pow((RGBtoYUV * vec4(pixel.rgb, 1.0)).x, 0.6)*0.82;             \n"
                 "  FragColor.w = pixel.a;                                                    \n";
         }
     } else {
