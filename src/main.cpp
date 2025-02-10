@@ -1354,16 +1354,17 @@ static void run_recording_saved_script_async(const char *script_file, const char
         return;
     }
 
-    const char *args[6];
+    const char *args[7];
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
 
     if(inside_flatpak) {
         args[0] = "flatpak-spawn";
         args[1] = "--host";
-        args[2] = script_file_full;
-        args[3] = video_file;
-        args[4] = type;
-        args[5] = NULL;
+        args[2] = "--";
+        args[3] = script_file_full;
+        args[4] = video_file;
+        args[5] = type;
+        args[6] = NULL;
     } else {
         args[0] = script_file_full;
         args[1] = video_file;
