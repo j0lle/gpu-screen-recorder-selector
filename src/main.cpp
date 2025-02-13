@@ -3769,7 +3769,7 @@ int main(int argc, char **argv) {
     color_conversion_params.color_range = color_range;
     color_conversion_params.egl = &egl;
     color_conversion_params.load_external_image_shader = gsr_capture_uses_external_image(capture);
-    color_conversion_params.kde_gamma_correction = hdr && is_monitor_capture && window->is_compositor_kwin && window->is_compositor_kwin(window) && is_kde_plasma_version_greater_than_6_1_90();
+    color_conversion_params.kde_gamma_correction = false;//hdr && is_monitor_capture && window->is_compositor_kwin && window->is_compositor_kwin(window) && is_kde_plasma_version_greater_than_6_1_90();
     gsr_video_encoder_get_textures(video_encoder, color_conversion_params.destination_textures, &color_conversion_params.num_destination_textures, &color_conversion_params.destination_color);
 
     gsr_color_conversion color_conversion;

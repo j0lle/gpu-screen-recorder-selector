@@ -236,10 +236,10 @@ static int gsr_capture_kms_start(gsr_capture *cap, AVCodecContext *video_codec_c
     if(self->fast_path_failed)
         fprintf(stderr, "gsr warning: gsr_capture_kms_start: your amd driver (mesa) version is known to be buggy (<= version 24.0.9), falling back to opengl copy\n");
 
-    if(self->params.hdr) {
-        self->fast_path_failed = true;
-        fprintf(stderr, "gsr warning: gsr_capture_kms_start: recording with hdr requires shader color conversion which might be slow. If this is an issue record with -w portal instead (which converts HDR to SDR)\n");
-    }
+    //if(self->params.hdr) {
+    //    self->fast_path_failed = true;
+    //    fprintf(stderr, "gsr warning: gsr_capture_kms_start: recording with hdr requires shader color conversion which might be slow. If this is an issue record with -w portal instead (which converts HDR to SDR)\n");
+    //}
 
     self->mesa_supports_compute_only_vaapi_copy = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 3, 6);
 
