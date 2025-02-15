@@ -181,5 +181,5 @@ You can record with desktop portal option (`-w portal`) instead which ignores ni
 ## Kdenlive says that the video is not usable for editing because it has variable frame rate
 To fix this you can either record the video in .mkv format or constant frame rate (-fm cfr).
 ## Colors look incorrect when recording HDR (with hevc_hdr/av1_hdr) or using an ICC profile
-The latest version of KDE Plasma breaks HDR and ICC profiles for screen recorders. Wayland in general doesn't properly support recording HDR yet. Use desktop portal option (`-w portal`) for now to turn HDR recording into SDR and to be able to record with correct colors when using an ICC profile.\
-Note that this appears to only be an issue when trying to record SDR content. If you for example record a fullscreen HDR game then it appears to record correctly.
+KDE Plasma version 6.2 broke HDR and ICC profiles for screen recorders. This was changed in KDE plasma version 6.3 and recording HDR works now, as long as you set HDR brightness to 100% (which means setting Maximum SDR Brightness in KDE plasma display settings to 203). If you want to convert HDR to SDR then record with desktop portal option (`-w portal`) instead.
+I don't know how well recording HDR works in wayland compositors other than KDE plasma.
