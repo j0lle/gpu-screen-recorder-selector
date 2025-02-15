@@ -40,8 +40,6 @@ typedef struct {
 
     gsr_color_range color_range;
     bool load_external_image_shader;
-
-    bool kde_gamma_correction;
 } gsr_color_conversion_params;
 
 typedef struct {

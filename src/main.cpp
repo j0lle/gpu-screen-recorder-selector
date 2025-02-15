@@ -3007,40 +3007,6 @@ static AudioDeviceData create_application_audio_audio_input(const MergedAudioInp
 }
 #endif
 
-static bool is_kde_plasma_version_greater_than_6_1_90() {
-    const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
-    const char *cmd = nullptr;
-    if(inside_flatpak)
-        cmd = "flatpak-spawn --host -- plasmashell -v 2> /dev/null";
-    else
-        cmd = "plasmashell -v 2> /dev/null";
-
-    FILE *f = popen(cmd, "r");
-    if(!f)
-        return false;
-
-    char output[512];
-    const ssize_t bytes_read = fread(output, 1, sizeof(output) - 1, f);
-    if(bytes_read < 0 || ferror(f)) {
-        pclose(f);
-        return false;
-    }
-    output[bytes_read] = '\0';
-
-    bool is_above = false;
-    const char *version_start = strstr(output, "plasmashell ");
-    if(version_start) {
-        version_start += 12;
-        int major = 0;
-        int minor = 0;
-        int patch = 0;
-        is_above = sscanf(version_start, "%d.%d.%d", &major, &minor, &patch) == 3 && version_greater_than(major, minor, patch, 6, 1, 90);
-    }
-
-    pclose(f);
-    return is_above;
-}
-
 static bool arg_get_boolean_value(std::map<std::string, Arg> &args, const char *arg_name, bool default_value) {
     auto it = args.find(arg_name);
     if(it == args.end() || !it->second.value()) {
@@ -3769,7 +3735,6 @@ int main(int argc, char **argv) {
     color_conversion_params.color_range = color_range;
     color_conversion_params.egl = &egl;
     color_conversion_params.load_external_image_shader = gsr_capture_uses_external_image(capture);
-    color_conversion_params.kde_gamma_correction = false;//hdr && is_monitor_capture && window->is_compositor_kwin && window->is_compositor_kwin(window) && is_kde_plasma_version_greater_than_6_1_90();
     gsr_video_encoder_get_textures(video_encoder, color_conversion_params.destination_textures, &color_conversion_params.num_destination_textures, &color_conversion_params.destination_color);
 
     gsr_color_conversion color_conversion;
