@@ -104,11 +104,13 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_RG                                   0x8227
 #define GL_RGB                                  0x1907
 #define GL_RGBA                                 0x1908
+#define GL_RGB8                                 0x8051
 #define GL_RGBA8                                0x8058
 #define GL_R8                                   0x8229
 #define GL_RG8                                  0x822B
 #define GL_R16                                  0x822A
 #define GL_RG16                                 0x822C
+#define GL_RGB16                                0x8054
 #define GL_UNSIGNED_BYTE                        0x1401
 #define GL_COLOR_BUFFER_BIT                     0x00004000
 #define GL_TEXTURE_WRAP_S                       0x2802

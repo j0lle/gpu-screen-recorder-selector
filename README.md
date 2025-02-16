@@ -7,6 +7,8 @@ similar to shadowplay on windows. This is the fastest screen recording tool for 
 This screen recorder can be used for recording your desktop offline, for live streaming and for nvidia shadowplay-like instant replay,
 where only the last few minutes are saved.
 
+This software can also take screenshots.
+
 This is a cli-only tool, if you want an UI for this check out [GPU Screen Recorder GTK](https://git.dec05eba.com/gpu-screen-recorder-gtk/) or if you prefer a ShadowPlay-like UI then check out [GPU Screen Recorder UI](https://git.dec05eba.com/gpu-screen-recorder-ui/).
 
 Supported video codecs:
@@ -20,7 +22,10 @@ Supported audio codecs:
 * Opus (default)
 * AAC
 
-## Note
+Supported image formats:
+* JPEG
+* PNG
+
 This software works on X11 and Wayland on AMD, Intel and NVIDIA.
 ### TEMPORARY ISSUES
 1) Videos are in variable framerate format. Use MPV to play such videos, otherwise you might experience stuttering in the video if you are using a buggy video player. You can try saving the video into a .mkv file instead as some software may have better support for .mkv files (such as kdenlive). You can use the "-fm cfr" option to to use constant framerate mode.

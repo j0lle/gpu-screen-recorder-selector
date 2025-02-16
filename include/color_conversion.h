@@ -22,7 +22,8 @@ typedef enum {
 
 typedef enum {
     GSR_DESTINATION_COLOR_NV12, /* YUV420, BT709, 8-bit */
-    GSR_DESTINATION_COLOR_P010  /* YUV420, BT2020, 10-bit */
+    GSR_DESTINATION_COLOR_P010, /* YUV420, BT2020, 10-bit */
+    GSR_DESTINATION_COLOR_RGB8
 } gsr_destination_color;
 
 typedef struct {

@@ -1,0 +1,130 @@
+#include "../../../include/encoder/video/image.h"
+#include "../../../include/egl.h"
+
+#include <libavcodec/avcodec.h>
+#include <libavutil/frame.h>
+
+#include <stdlib.h>
+
+#define LINESIZE_ALIGNMENT 4
+
+typedef struct {
+    gsr_video_encoder_image_params params;
+
+    unsigned int target_texture;
+} gsr_video_encoder_image;
+
+static unsigned int gl_create_texture(gsr_egl *egl, int width, int height, int internal_format, unsigned int format) {
+    unsigned int texture_id = 0;
+    egl->glGenTextures(1, &texture_id);
+    egl->glBindTexture(GL_TEXTURE_2D, texture_id);
+    egl->glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
+
+    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    egl->glBindTexture(GL_TEXTURE_2D, 0);
+    return texture_id;
+}
+
+static bool gsr_video_encoder_image_setup_textures(gsr_video_encoder_image *self, AVCodecContext *video_codec_context, AVFrame *frame) {
+    int res = av_frame_get_buffer(frame, LINESIZE_ALIGNMENT);
+    if(res < 0) {
+        fprintf(stderr, "gsr error: gsr_video_encoder_image_setup_textures: av_frame_get_buffer failed: %d\n", res);
+        return false;
+    }
+
+    res = av_frame_make_writable(frame);
+    if(res < 0) {
+        fprintf(stderr, "gsr error: gsr_video_encoder_image_setup_textures: av_frame_make_writable failed: %d\n", res);
+        return false;
+    }
+
+    self->target_texture = gl_create_texture(self->params.egl, video_codec_context->width, video_codec_context->height, self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? GL_RGB8 : GL_RGB16, GL_RGB);
+    if(self->target_texture == 0) {
+        fprintf(stderr, "gsr error: gsr_capture_kms_setup_cuda_textures: failed to create opengl texture\n");
+        return false;
+    }
+
+    return true;
+}
+
+static void gsr_video_encoder_image_stop(gsr_video_encoder_image *self, AVCodecContext *video_codec_context);
+
+static bool gsr_video_encoder_image_start(gsr_video_encoder *encoder, AVCodecContext *video_codec_context, AVFrame *frame) {
+    gsr_video_encoder_image *self = encoder->priv;
+
+    video_codec_context->width = FFALIGN(video_codec_context->width, LINESIZE_ALIGNMENT);
+    video_codec_context->height = FFALIGN(video_codec_context->height, 2);
+
+    frame->width = video_codec_context->width;
+    frame->height = video_codec_context->height;
+
+    if(!gsr_video_encoder_image_setup_textures(self, video_codec_context, frame)) {
+        gsr_video_encoder_image_stop(self, video_codec_context);
+        return false;
+    }
+
+    return true;
+}
+
+void gsr_video_encoder_image_stop(gsr_video_encoder_image *self, AVCodecContext *video_codec_context) {
+    (void)video_codec_context;
+    self->params.egl->glDeleteTextures(1, &self->target_texture);
+    self->target_texture = 0;
+}
+
+static void gsr_video_encoder_image_copy_textures_to_frame(gsr_video_encoder *encoder, AVFrame *frame, gsr_color_conversion *color_conversion) {
+    gsr_video_encoder_image *self = encoder->priv;
+    // TODO: hdr support
+    self->params.egl->glBindTexture(GL_TEXTURE_2D, self->target_texture);
+    // We could use glGetTexSubImage and then we wouldn't have to use a specific linesize (LINESIZE_ALIGNMENT) that adds padding,
+    // but glGetTexSubImage is only available starting from opengl 4.5.
+    self->params.egl->glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, frame->data[0]);
+    self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
+    // cap_kms->kms.base.egl->eglSwapBuffers(cap_kms->kms.base.egl->egl_display, cap_kms->kms.base.egl->egl_surface);
+
+    self->params.egl->glFlush();
+    self->params.egl->glFinish();
+}
+
+static void gsr_video_encoder_image_get_textures(gsr_video_encoder *encoder, unsigned int *textures, int *num_textures, gsr_destination_color *destination_color) {
+    gsr_video_encoder_image *self = encoder->priv;
+    textures[0] = self->target_texture;
+    *num_textures = 1;
+    // TODO: 10-bit support
+    //*destination_color = self->params.color_depth == GSR_COLOR_DEPTH_10_BITS ? GSR_DESTINATION_COLOR_P010 : GSR_DESTINATION_COLOR_NV12;
+    *destination_color = GSR_DESTINATION_COLOR_RGB8;
+}
+
+static void gsr_video_encoder_image_destroy(gsr_video_encoder *encoder, AVCodecContext *video_codec_context) {
+    gsr_video_encoder_image_stop(encoder->priv, video_codec_context);
+    free(encoder->priv);
+    free(encoder);
+}
+
+gsr_video_encoder* gsr_video_encoder_image_create(const gsr_video_encoder_image_params *params) {
+    gsr_video_encoder *encoder = calloc(1, sizeof(gsr_video_encoder));
+    if(!encoder)
+        return NULL;
+
+    gsr_video_encoder_image *encoder_image = calloc(1, sizeof(gsr_video_encoder_image));
+    if(!encoder_image) {
+        free(encoder);
+        return NULL;
+    }
+
+    encoder_image->params = *params;
+
+    *encoder = (gsr_video_encoder) {
+        .start = gsr_video_encoder_image_start,
+        .copy_textures_to_frame = gsr_video_encoder_image_copy_textures_to_frame,
+        .get_textures = gsr_video_encoder_image_get_textures,
+        .destroy = gsr_video_encoder_image_destroy,
+        .priv = encoder_image
+    };
+
+    return encoder;
+}
