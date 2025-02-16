@@ -204,8 +204,7 @@ static unsigned int load_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_u
     return 0;
 }
 
-static unsigned int load_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture) {
-    // TODO: Support hdr
+static unsigned int load_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, bool external_texture) {
     char vertex_shader[2048];
     snprintf(vertex_shader, sizeof(vertex_shader),
         "#version 300 es                                   \n"
@@ -356,13 +355,13 @@ int gsr_color_conversion_init(gsr_color_conversion *self, const gsr_color_conver
                 return -1;
             }
 
-            if(load_shader_rgb(&self->shaders[0], self->params.egl, &self->uniforms[0], params->destination_color, params->color_range, false) != 0) {
+            if(load_shader_rgb(&self->shaders[0], self->params.egl, &self->uniforms[0], false) != 0) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y shader\n");
                 goto err;
             }
 
             if(self->params.load_external_image_shader) {
-                if(load_shader_rgb(&self->shaders[EXTERNAL_TEXTURE_SHADER_OFFSET], self->params.egl, &self->uniforms[EXTERNAL_TEXTURE_SHADER_OFFSET], params->destination_color, params->color_range, true) != 0) {
+                if(load_shader_rgb(&self->shaders[EXTERNAL_TEXTURE_SHADER_OFFSET], self->params.egl, &self->uniforms[EXTERNAL_TEXTURE_SHADER_OFFSET], true) != 0) {
                     fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y shader\n");
                     goto err;
                 }
