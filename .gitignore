@@ -23,3 +23,6 @@ gsr-kms-server
 *.mov
 *.webm
 *.ts
+*.jpg
+*.jpeg
+*.png

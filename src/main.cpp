@@ -3086,13 +3086,14 @@ static AudioDeviceData create_application_audio_audio_input(const MergedAudioInp
 
 static void set_video_codec_for_image_output(const char *filename, VideoCodec *video_codec, const char **video_codec_to_use) {
     const bool video_codec_auto = strcmp(*video_codec_to_use, "auto") == 0;
-    if(!video_codec_auto)
-        fprintf(stderr, "Warning: expected -k option to be set to 'auto' (or not specified) for image output\n");
-
     if(string_ends_with(filename, ".jpg") || string_ends_with(filename, ".jpeg")) {
+        if(!video_codec_auto)
+            fprintf(stderr, "Warning: expected -k option to be set to 'auto' (or not specified) for jpeg output\n");
         *video_codec = VideoCodec::JPEG;
         *video_codec_to_use = "jpeg";
     } else if(string_ends_with(filename, ".png")) {
+        if(!video_codec_auto)
+            fprintf(stderr, "Warning: expected -k option to be set to 'auto' (or not specified) for png output\n");
         *video_codec = VideoCodec::PNG;
         *video_codec_to_use = "png";
     }
