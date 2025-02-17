@@ -31,7 +31,7 @@ This software works on X11 and Wayland on AMD, Intel and NVIDIA.
 1) Videos are in variable framerate format. Use MPV to play such videos, otherwise you might experience stuttering in the video if you are using a buggy video player. You can try saving the video into a .mkv file instead as some software may have better support for .mkv files (such as kdenlive). You can use the "-fm cfr" option to to use constant framerate mode.
 2) FLAC audio codec is disabled at the moment because of temporary issues.
 ### AMD/Intel/Wayland root permission
-When recording a window or when using the `-w portal` option under AMD/Intel no special user permission is required,
+When recording a window or when using the `-w portal` option no special user permission is required,
 however when recording a monitor the program needs root permission (to access KMS).\
 This is safe in GPU Screen Recorder as the part that needs root access has been moved to its own small program that only does one thing.\
 For you as a user this only means that if you installed GPU Screen Recorder as a flatpak then a prompt asking for root password will show up once when you start recording.
