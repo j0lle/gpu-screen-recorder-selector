@@ -1106,7 +1106,7 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
 static void usage_header() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal> [-c <container_format>] [-s WxH] -f <fps> [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+    printf("usage: %s -w <window_id|monitor|focused|portal> [-c <container_format>] [-s WxH] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -1139,6 +1139,7 @@ static void usage_full() {
     printf("        For constant frame rate mode this option is the frame rate every frame will be captured at and if the capture frame rate is below this target frame rate then the frames will be duplicated.\n");
     printf("        For variable frame rate mode this option is the max frame rate and if the capture frame rate is below this target frame rate then frames will not be duplicated.\n");
     printf("        Content frame rate is similar to variable frame rate mode, except the frame rate will match the frame rate of the captured content when possible, but not capturing above the frame rate set in this -f option.\n");
+    printf("        Optional, set to 60 by default.\n");
     printf("\n");
     printf("  -a    Audio device or application to record from (pulse audio device). Can be specified multiple times. Each time this is specified a new audio track is added for the specified audio device or application.\n");
     printf("        The audio device can also be \"default_output\" in which case the default output device is used, or \"default_input\" in which case the default input device is used.\n");
@@ -3196,7 +3197,7 @@ int main(int argc, char **argv) {
     std::map<std::string, Arg> args = {
         { "-w",                             Arg { {}, !is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-c",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
-        { "-f",                             Arg { {}, !is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-f",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-s",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-a",                             Arg { {},  is_optional,   is_list,  ArgType::STRING,  {false} } },
         { "-q",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
@@ -3447,9 +3448,13 @@ int main(int argc, char **argv) {
     if(container_format && strcmp(container_format, "mkv") == 0)
         container_format = "matroska";
 
-    int fps = atoi(args["-f"].value());
+    const char *fps_str = args["-f"].value();
+    if(!fps_str)
+        fps_str = "60";
+
+    int fps = atoi(fps_str);
     if(fps == 0) {
-        fprintf(stderr, "Invalid fps argument: %s\n", args["-f"].value());
+        fprintf(stderr, "Invalid fps argument: %s\n", fps_str);
         _exit(1);
     }
     if(fps < 1)
