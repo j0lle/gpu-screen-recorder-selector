@@ -25,7 +25,6 @@ typedef struct {
     gsr_pipewire_video_dmabuf_data dmabuf_data[GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES];
     int num_dmabuf_data;
 
-    AVCodecContext *video_codec_context;
     bool fast_path_failed;
     bool mesa_supports_compute_only_vaapi_copy;
 } gsr_capture_portal;
@@ -257,7 +256,7 @@ static bool gsr_capture_portal_get_frame_dimensions(gsr_capture_portal *self) {
     return false;
 }
 
-static int gsr_capture_portal_start(gsr_capture *cap, AVCodecContext *video_codec_context, AVFrame *frame) {
+static int gsr_capture_portal_start(gsr_capture *cap, gsr_capture_metadata *capture_metadata) {
     gsr_capture_portal *self = cap->priv;
 
     gsr_capture_portal_create_input_textures(self);
@@ -286,7 +285,7 @@ static int gsr_capture_portal_start(gsr_capture *cap, AVCodecContext *video_code
     fprintf(stderr, "gsr info: gsr_capture_portal_start: setting up pipewire\n");
     /* TODO: support hdr when pipewire supports it */
     /* gsr_pipewire closes the pipewire fd, even on failure */
-    if(!gsr_pipewire_video_init(&self->pipewire, pipewire_fd, pipewire_node, video_codec_context->framerate.num, self->params.record_cursor, self->params.egl)) {
+    if(!gsr_pipewire_video_init(&self->pipewire, pipewire_fd, pipewire_node, capture_metadata->fps, self->params.record_cursor, self->params.egl)) {
         fprintf(stderr, "gsr error: gsr_capture_portal_start: failed to setup pipewire with fd: %d, node: %" PRIu32 "\n", pipewire_fd, pipewire_node);
         gsr_capture_portal_stop(self);
         return -1;
@@ -298,17 +297,14 @@ static int gsr_capture_portal_start(gsr_capture *cap, AVCodecContext *video_code
         return -1;
     }
 
-    /* Disable vsync */
-    self->params.egl->eglSwapInterval(self->params.egl->egl_display, 0);
-
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
         self->params.output_resolution = self->capture_size;
-        video_codec_context->width = FFALIGN(self->capture_size.x, 2);
-        video_codec_context->height = FFALIGN(self->capture_size.y, 2);
+        capture_metadata->width = FFALIGN(self->capture_size.x, 2);
+        capture_metadata->height = FFALIGN(self->capture_size.y, 2);
     } else {
         self->params.output_resolution = scale_keep_aspect_ratio(self->capture_size, self->params.output_resolution);
-        video_codec_context->width = FFALIGN(self->params.output_resolution.x, 2);
-        video_codec_context->height = FFALIGN(self->params.output_resolution.y, 2);
+        capture_metadata->width = FFALIGN(self->params.output_resolution.x, 2);
+        capture_metadata->height = FFALIGN(self->params.output_resolution.y, 2);
     }
 
     self->fast_path_failed = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 0, 9);
@@ -317,10 +313,6 @@ static int gsr_capture_portal_start(gsr_capture *cap, AVCodecContext *video_code
 
     self->mesa_supports_compute_only_vaapi_copy = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 3, 6);
 
-    frame->width = video_codec_context->width;
-    frame->height = video_codec_context->height;
-
-    self->video_codec_context = video_codec_context;
     return 0;
 }
 
@@ -338,8 +330,7 @@ static void gsr_capture_portal_fail_fast_path_if_not_fast(gsr_capture_portal *se
     }
 }
 
-static int gsr_capture_portal_capture(gsr_capture *cap, AVFrame *frame, gsr_color_conversion *color_conversion) {
-    (void)frame;
+static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     (void)color_conversion;
     gsr_capture_portal *self = cap->priv;
 
@@ -365,7 +356,7 @@ static int gsr_capture_portal_capture(gsr_capture *cap, AVFrame *frame, gsr_colo
     vec2i output_size = is_scaled ? self->params.output_resolution : self->capture_size;
     output_size = scale_keep_aspect_ratio(self->capture_size, output_size);
     
-    const vec2i target_pos = { max_int(0, frame->width / 2 - output_size.x / 2), max_int(0, frame->height / 2 - output_size.y / 2) };
+    const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
 
     self->params.egl->glFlush();
     self->params.egl->glFinish();
@@ -373,7 +364,7 @@ static int gsr_capture_portal_capture(gsr_capture *cap, AVFrame *frame, gsr_colo
     // TODO: Handle region crop
 
     /* Fast opengl free path */
-    if(!self->fast_path_failed && video_codec_context_is_vaapi(self->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
+    if(!self->fast_path_failed && video_codec_context_is_vaapi(capture_metadata->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
         int fds[4];
         uint32_t offsets[4];
         uint32_t pitches[4];
@@ -384,7 +375,7 @@ static int gsr_capture_portal_capture(gsr_capture *cap, AVFrame *frame, gsr_colo
             pitches[i] = self->dmabuf_data[i].stride;
             modifiers[i] = pipewire_modifiers;
         }
-        if(!vaapi_copy_drm_planes_to_video_surface(self->video_codec_context, frame, (vec2i){region.x, region.y}, self->capture_size, target_pos, output_size, pipewire_fourcc, self->capture_size, fds, offsets, pitches, modifiers, self->num_dmabuf_data)) {
+        if(!vaapi_copy_drm_planes_to_video_surface(capture_metadata->video_codec_context, capture_metadata->frame, (vec2i){region.x, region.y}, self->capture_size, target_pos, output_size, pipewire_fourcc, self->capture_size, fds, offsets, pitches, modifiers, self->num_dmabuf_data)) {
             fprintf(stderr, "gsr error: gsr_capture_portal_capture: vaapi_copy_drm_planes_to_video_surface failed, falling back to opengl copy. Please report this as an issue at https://github.com/dec05eba/gpu-screen-recorder-issues\n");
             self->fast_path_failed = true;
         }
@@ -442,8 +433,7 @@ static void gsr_capture_portal_clear_damage(gsr_capture *cap) {
     gsr_pipewire_video_clear_damage(&self->pipewire);
 }
 
-static void gsr_capture_portal_destroy(gsr_capture *cap, AVCodecContext *video_codec_context) {
-    (void)video_codec_context;
+static void gsr_capture_portal_destroy(gsr_capture *cap) {
     gsr_capture_portal *self = cap->priv;
     if(cap->priv) {
         gsr_capture_portal_stop(self);

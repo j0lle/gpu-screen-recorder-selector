@@ -230,3 +230,6 @@ Add an option to pass http headers when streaming. Some streaming services requi
 When adding vulkan video support add VK_VIDEO_ENCODE_TUNING_MODE_LOW_LATENCY_KHR.
 
 Implement screenshot without invoking opengl (which is slow to start on some systems).
+
+Automatically use desktop portal on wayland when hdr is enabled (or night light) by checking if kms hdr metadata exists, if hdr video codec is not used.
+    Or maybe do this in the ui?

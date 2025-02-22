@@ -13,7 +13,6 @@ extern "C" {
 #include "../include/encoder/video/vaapi.h"
 #include "../include/encoder/video/vulkan.h"
 #include "../include/encoder/video/software.h"
-#include "../include/encoder/video/image.h"
 #include "../include/codec_query/nvenc.h"
 #include "../include/codec_query/vaapi.h"
 #include "../include/codec_query/vulkan.h"
@@ -23,6 +22,7 @@ extern "C" {
 #include "../include/utils.h"
 #include "../include/damage.h"
 #include "../include/color_conversion.h"
+#include "../include/image_writer.h"
 }
 
 #include <assert.h>
@@ -113,9 +113,7 @@ enum class VideoCodec {
     VP8,
     VP9,
     H264_VULKAN,
-    HEVC_VULKAN,
-    JPEG,
-    PNG
+    HEVC_VULKAN
 };
 
 enum class AudioCodec {
@@ -213,16 +211,6 @@ static bool video_codec_is_vulkan(VideoCodec video_codec) {
     switch(video_codec) {
         case VideoCodec::H264_VULKAN:
         case VideoCodec::HEVC_VULKAN:
-            return true;
-        default:
-            return false;
-    }
-}
-
-static bool video_codec_is_image(VideoCodec video_codec) {
-    switch(video_codec) {
-        case VideoCodec::JPEG:
-        case VideoCodec::PNG:
             return true;
         default:
             return false;
@@ -593,22 +581,7 @@ static AVCodecContext *create_video_codec_context(AVPixelFormat pix_fmt,
     if (codec_context->codec_id == AV_CODEC_ID_MPEG1VIDEO)
         codec_context->mb_decision = 2;
 
-    if(video_codec_is_image(video_codec)) {
-        switch(video_quality) {
-            case VideoQuality::MEDIUM:
-                codec_context->compression_level = 8;
-                break;
-            case VideoQuality::HIGH:
-                codec_context->compression_level = 6;
-                break;
-            case VideoQuality::VERY_HIGH:
-                codec_context->compression_level = 4;
-                break;
-            case VideoQuality::ULTRA:
-                codec_context->compression_level = 2;
-                break;
-        }
-    } else if(!use_software_video_encoder && vendor != GSR_GPU_VENDOR_NVIDIA && bitrate_mode != BitrateMode::CBR) {
+    if(!use_software_video_encoder && vendor != GSR_GPU_VENDOR_NVIDIA && bitrate_mode != BitrateMode::CBR) {
         // 8 bit / 10 bit = 80%, and increase it even more
         const float quality_multiply = hdr ? (8.0f/10.0f * 0.7f) : 1.0f;
         if(codec_context->codec_id == AV_CODEC_ID_AV1 || codec_context->codec_id == AV_CODEC_ID_H264 || codec_context->codec_id == AV_CODEC_ID_HEVC) {
@@ -741,15 +714,6 @@ static AVFrame* create_audio_frame(AVCodecContext *audio_codec_context) {
     }
 
     return frame;
-}
-
-static void open_video_image(AVCodecContext *codec_context) {
-    AVDictionary *options = nullptr;
-    int ret = avcodec_open2(codec_context, codec_context->codec, &options);
-    if (ret < 0) {
-        fprintf(stderr, "Error: Could not open video codec: %s\n", av_error_to_string(ret));
-        _exit(1);
-    }
 }
 
 static void dict_set_profile(AVCodecContext *codec_context, gsr_gpu_vendor vendor, gsr_color_depth color_depth, AVDictionary **options) {
@@ -1295,7 +1259,8 @@ static void usage_full() {
     printf("  %s -w screen -f 60 -a \"app:firefox|app:csgo\" -o \"$HOME/Videos/video.mp4\"\n", program_name);
     printf("  %s -w screen -f 60 -a \"app-inverse:firefox|app-inverse:csgo\" -o \"$HOME/Videos/video.mp4\"\n", program_name);
     printf("  %s -w screen -f 60 -a \"default-input|app-inverse:Brave\" -o \"$HOME/Videos/video.mp4\"\n", program_name);
-    printf("  %s -w screen -f 60 -o \"$HOME/Pictures/image.jpg\"\n", program_name);
+    printf("  %s -w screen -o \"$HOME/Pictures/image.jpg\"\n", program_name);
+    printf("  %s -w screen -q medium -o \"$HOME/Pictures/image.jpg\"\n", program_name);
     //fprintf(stderr, "  gpu-screen-recorder -w screen -f 60 -q ultra -pixfmt yuv444 -o video.mp4\n");
     fflush(stdout);
     _exit(1);
@@ -1895,14 +1860,6 @@ fail:
 static gsr_video_encoder* create_video_encoder(gsr_egl *egl, bool overclock, gsr_color_depth color_depth, bool use_software_video_encoder, VideoCodec video_codec) {
     gsr_video_encoder *video_encoder = nullptr;
 
-    if(video_codec_is_image(video_codec)) {
-        gsr_video_encoder_image_params params;
-        params.egl = egl;
-        params.color_depth = color_depth;
-        video_encoder = gsr_video_encoder_image_create(&params);
-        return video_encoder;
-    }
-
     if(use_software_video_encoder) {
         gsr_video_encoder_software_params params;
         params.egl = egl;
@@ -2052,10 +2009,6 @@ static const AVCodec* get_ffmpeg_video_codec(VideoCodec video_codec, gsr_gpu_ven
             return avcodec_find_encoder_by_name("h264_vulkan");
         case VideoCodec::HEVC_VULKAN:
             return avcodec_find_encoder_by_name("hevc_vulkan");
-        case VideoCodec::JPEG:
-            return avcodec_find_encoder_by_name("libopenjpeg");
-        case VideoCodec::PNG:
-            return avcodec_find_encoder_by_name("png");
     }
     return nullptr;
 }
@@ -2126,10 +2079,6 @@ static void list_supported_video_codecs(gsr_egl *egl, bool wayland) {
         puts("vp8");
     if(supported_video_codecs.vp9.supported)
         puts("vp9");
-    if(avcodec_find_encoder_by_name("libopenjpeg"))
-        puts("jpeg");
-    if(avcodec_find_encoder_by_name("png"))
-        puts("png");
     //if(supported_video_codecs_vulkan.h264.supported)
     //    puts("h264_vulkan");
     //if(supported_video_codecs_vulkan.hevc.supported)
@@ -2247,6 +2196,9 @@ static void info_command() {
     list_gpu_info(&egl);
     puts("section=video_codecs");
     list_supported_video_codecs(&egl, wayland);
+    puts("section=image_formats");
+    puts("jpeg");
+    puts("png");
     puts("section=capture_options");
     list_supported_capture_options(window, egl.card_path, list_monitors);
 
@@ -2404,7 +2356,7 @@ static void validate_monitor_get_valid(const gsr_egl *egl, std::string &window_s
     }
 }
 
-static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_resolution, bool wayland, gsr_egl *egl, int fps, VideoCodec video_codec, gsr_color_range color_range,
+static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_resolution, bool wayland, gsr_egl *egl, int fps, bool hdr, gsr_color_range color_range,
     bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath,
     gsr_color_depth color_depth)
 {
@@ -2478,7 +2430,7 @@ static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_re
             kms_params.color_depth = color_depth;
             kms_params.color_range = color_range;
             kms_params.record_cursor = record_cursor;
-            kms_params.hdr = video_codec_is_hdr(video_codec);
+            kms_params.hdr = hdr;
             kms_params.fps = fps;
             kms_params.output_resolution = output_resolution;
             capture = gsr_capture_kms_create(&kms_params);
@@ -2516,11 +2468,107 @@ static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_re
     return capture;
 }
 
+static gsr_color_range image_format_to_color_range(gsr_image_format image_format) {
+    switch(image_format) {
+        case GSR_IMAGE_FORMAT_JPEG: return GSR_COLOR_RANGE_LIMITED;
+        case GSR_IMAGE_FORMAT_PNG:  return GSR_COLOR_RANGE_FULL;
+    }
+    assert(false);
+    return GSR_COLOR_RANGE_FULL;
+}
+
+static int video_quality_to_image_quality_value(VideoQuality video_quality) {
+    switch(video_quality) {
+        case VideoQuality::MEDIUM:
+            return 60;
+        case VideoQuality::HIGH:
+            return 70;
+        case VideoQuality::VERY_HIGH:
+            return 80;
+        case VideoQuality::ULTRA:
+            return 95;
+    }
+    assert(false);
+    return 80;
+}
+
+// TODO: 10-bit and hdr.
+static void capture_image_to_file(const char *filepath, std::string &window_str, vec2i output_resolution, bool wayland, gsr_egl *egl, gsr_image_format image_format,
+    bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath, VideoQuality video_quality) {
+    const gsr_color_range color_range = image_format_to_color_range(image_format);
+    const int fps = 60;
+    gsr_capture *capture = create_capture_impl(window_str, output_resolution, wayland, egl, fps, false, color_range, record_cursor, restore_portal_session, portal_session_token_filepath, GSR_COLOR_DEPTH_8_BITS);
+
+    gsr_capture_metadata capture_metadata;
+    capture_metadata.width = 0;
+    capture_metadata.height = 0;
+    capture_metadata.fps = fps;
+    capture_metadata.video_codec_context = nullptr;
+    capture_metadata.frame = nullptr;
+
+    int capture_result = gsr_capture_start(capture, &capture_metadata);
+    if(capture_result != 0) {
+        fprintf(stderr, "gsr error: gsr_capture_start failed\n");
+        _exit(capture_result);
+    }
+
+    gsr_image_writer image_writer;
+    if(!gsr_image_writer_init(&image_writer, GSR_IMAGE_WRITER_SOURCE_OPENGL, egl, capture_metadata.width, capture_metadata.height)) {
+        fprintf(stderr, "gsr error: gsr_image_write_gl_init failed\n");
+        _exit(1);
+    }
+
+    gsr_color_conversion_params color_conversion_params;
+    memset(&color_conversion_params, 0, sizeof(color_conversion_params));
+    color_conversion_params.color_range = color_range;
+    color_conversion_params.egl = egl;
+    color_conversion_params.load_external_image_shader = gsr_capture_uses_external_image(capture);
+
+    color_conversion_params.destination_textures[0] = image_writer.texture;
+    color_conversion_params.num_destination_textures = 1;
+    color_conversion_params.destination_color = GSR_DESTINATION_COLOR_RGB8;
+
+    gsr_color_conversion color_conversion;
+    if(gsr_color_conversion_init(&color_conversion, &color_conversion_params) != 0) {
+        fprintf(stderr, "gsr error: gsr_capture_kms_setup_vaapi_textures: failed to create color conversion\n");
+        _exit(1);
+    }
+
+    gsr_color_conversion_clear(&color_conversion);
+
+    bool should_stop_error = false;
+    egl->glClear(0);
+
+    while(true) {
+        should_stop_error = false;
+        if(gsr_capture_should_stop(capture, &should_stop_error))
+            break;
+
+        // It can fail, for example when capturing portal and the target is a monitor that hasn't been updated.
+        // Desktop portal wont refresh the image until there is an update.
+        // TODO: Find out if there is a way to force update desktop portal image.
+        // This can also happen for example if the system suspends and the monitor to capture's framebuffer is gone, or if the target window disappeared.
+        if(gsr_capture_capture(capture, &capture_metadata, &color_conversion) == 0)
+            break;
+
+        usleep(30 * 1000); // 30 ms
+    }
+
+    gsr_egl_swap_buffers(egl);
+    
+    const int image_quality = video_quality_to_image_quality_value(video_quality);
+    if(!gsr_image_writer_write_to_file(&image_writer, filepath, image_format, image_quality)) {
+        fprintf(stderr, "gsr error: failed to write opengl texture to image output file %s\n", filepath);
+        _exit(1);
+    }
+
+    gsr_image_writer_deinit(&image_writer);
+    gsr_capture_destroy(capture);
+    _exit(should_stop_error ? 3 : 0);
+}
+
 static AVPixelFormat get_pixel_format(VideoCodec video_codec, gsr_gpu_vendor vendor, bool use_software_video_encoder) {
-    if(video_codec_is_image(video_codec)) {
-        // TODO: hdr
-        return AV_PIX_FMT_RGB24;
-    } else if(use_software_video_encoder) {
+    if(use_software_video_encoder) {
         return AV_PIX_FMT_NV12;
     } else {
         if(video_codec_is_vulkan(video_codec))
@@ -2744,8 +2792,6 @@ static const char* video_codec_to_string(VideoCodec video_codec) {
         case VideoCodec::VP9:         return "vp9";
         case VideoCodec::H264_VULKAN: return "h264_vulkan";
         case VideoCodec::HEVC_VULKAN: return "hevc_vulkan";
-        case VideoCodec::JPEG:        return "jpeg";
-        case VideoCodec::PNG:         return "png";
     }
     return "";
 }
@@ -2763,8 +2809,6 @@ static bool video_codec_only_supports_low_power_mode(const gsr_supported_video_c
         case VideoCodec::VP9:         return supported_video_codecs.vp9.low_power;
         case VideoCodec::H264_VULKAN: return supported_video_codecs.h264.low_power;
         case VideoCodec::HEVC_VULKAN: return supported_video_codecs.hevc.low_power; // TODO: hdr, 10 bit
-        case VideoCodec::JPEG:        return false;
-        case VideoCodec::PNG:         return false;
     }
     return false;
 }
@@ -2840,11 +2884,6 @@ static const AVCodec* pick_video_codec(VideoCodec *video_codec, gsr_egl *egl, bo
                 video_codec_f = get_ffmpeg_video_codec(*video_codec, egl->gpu_info.vendor);
             break;
         }
-        case VideoCodec::JPEG:
-        case VideoCodec::PNG: {
-            video_codec_f = get_ffmpeg_video_codec(*video_codec, egl->gpu_info.vendor);
-            break;
-        }
     }
 
     if(!video_codec_auto && !video_codec_f && !is_flv) {
@@ -2904,12 +2943,6 @@ static const AVCodec* pick_video_codec(VideoCodec *video_codec, gsr_egl *egl, bo
                 }
                 if(supported_video_codecs.hevc.supported)
                     video_codec_f = get_ffmpeg_video_codec(*video_codec, egl->gpu_info.vendor);
-                break;
-            }
-            case VideoCodec::JPEG:
-            case VideoCodec::PNG: {
-                // TODO:
-                //assert(false);
                 break;
             }
         }
@@ -3085,18 +3118,15 @@ static AudioDeviceData create_application_audio_audio_input(const MergedAudioInp
 }
 #endif
 
-static void set_video_codec_for_image_output(const char *filename, VideoCodec *video_codec, const char **video_codec_to_use) {
-    const bool video_codec_auto = strcmp(*video_codec_to_use, "auto") == 0;
+static bool get_image_format_from_filename(const char *filename, gsr_image_format *image_format) {
     if(string_ends_with(filename, ".jpg") || string_ends_with(filename, ".jpeg")) {
-        if(!video_codec_auto)
-            fprintf(stderr, "Warning: expected -k option to be set to 'auto' (or not specified) for jpeg output\n");
-        *video_codec = VideoCodec::JPEG;
-        *video_codec_to_use = "jpeg";
+        *image_format = GSR_IMAGE_FORMAT_JPEG;
+        return true;
     } else if(string_ends_with(filename, ".png")) {
-        if(!video_codec_auto)
-            fprintf(stderr, "Warning: expected -k option to be set to 'auto' (or not specified) for png output\n");
-        *video_codec = VideoCodec::PNG;
-        *video_codec_to_use = "png";
+        *image_format = GSR_IMAGE_FORMAT_PNG;
+        return true;
+    } else {
+        return false;
     }
 }
 
@@ -3739,10 +3769,15 @@ int main(int argc, char **argv) {
 
     const bool is_output_piped = strcmp(filename, "/dev/stdout") == 0;
 
-    set_video_codec_for_image_output(filename, &video_codec, &video_codec_to_use);
-    if(video_codec_is_image(video_codec) && !audio_input_arg.values.empty()) {
-        fprintf(stderr, "Error: can't record audio (-a) when taking a screenshot\n");
-        _exit(1);
+    gsr_image_format image_format;
+    if(get_image_format_from_filename(filename, &image_format)) {
+        if(!audio_input_arg.values.empty()) {
+            fprintf(stderr, "Error: can't record audio (-a) when taking a screenshot\n");
+            _exit(1);
+        }
+
+        capture_image_to_file(filename, window_str, output_resolution, wayland, &egl, image_format, record_cursor, restore_portal_session, portal_session_token_filepath, quality);
+        _exit(0);
     }
 
     AVFormatContext *av_format_context;
@@ -3771,13 +3806,12 @@ int main(int argc, char **argv) {
     const double target_fps = 1.0 / (double)fps;
 
     const bool uses_amix = merged_audio_inputs_should_use_amix(requested_audio_inputs);
-    if(!video_codec_is_image(video_codec))
-        audio_codec = select_audio_codec_with_fallback(audio_codec, file_extension, uses_amix);
+    audio_codec = select_audio_codec_with_fallback(audio_codec, file_extension, uses_amix);
     bool low_power = false;
     const AVCodec *video_codec_f = select_video_codec_with_fallback(&video_codec, video_codec_to_use, file_extension.c_str(), use_software_video_encoder, &egl, &low_power);
 
     const gsr_color_depth color_depth = video_codec_to_bit_depth(video_codec);
-    gsr_capture *capture = create_capture_impl(window_str, output_resolution, wayland, &egl, fps, video_codec, color_range, record_cursor, restore_portal_session, portal_session_token_filepath, color_depth);
+    gsr_capture *capture = create_capture_impl(window_str, output_resolution, wayland, &egl, fps, video_codec_is_hdr(video_codec), color_range, record_cursor, restore_portal_session, portal_session_token_filepath, color_depth);
 
     // (Some?) livestreaming services require at least one audio track to work.
     // If not audio is provided then create one silent audio track.
@@ -3809,19 +3843,31 @@ int main(int argc, char **argv) {
         _exit(1);
     }
     video_frame->format = video_codec_context->pix_fmt;
-    video_frame->width = video_codec_context->width;
-    video_frame->height = video_codec_context->height;
+    video_frame->width = 0;
+    video_frame->height = 0;
     video_frame->color_range = video_codec_context->color_range;
     video_frame->color_primaries = video_codec_context->color_primaries;
     video_frame->color_trc = video_codec_context->color_trc;
     video_frame->colorspace = video_codec_context->colorspace;
     video_frame->chroma_location = video_codec_context->chroma_sample_location;
 
-    int capture_result = gsr_capture_start(capture, video_codec_context, video_frame);
+    gsr_capture_metadata capture_metadata;
+    capture_metadata.width = 0;
+    capture_metadata.height = 0;
+    capture_metadata.fps = fps;
+    capture_metadata.video_codec_context = video_codec_context;
+    capture_metadata.frame = video_frame;
+
+    int capture_result = gsr_capture_start(capture, &capture_metadata);
     if(capture_result != 0) {
         fprintf(stderr, "gsr error: gsr_capture_start failed\n");
         _exit(capture_result);
     }
+
+    video_codec_context->width = capture_metadata.width;
+    video_codec_context->height = capture_metadata.height;
+    video_frame->width = capture_metadata.width;
+    video_frame->height = capture_metadata.height;
 
     gsr_video_encoder *video_encoder = create_video_encoder(&egl, overclock, color_depth, use_software_video_encoder, video_codec);
     if(!video_encoder) {
@@ -3849,9 +3895,7 @@ int main(int argc, char **argv) {
 
     gsr_color_conversion_clear(&color_conversion);
 
-    if(video_codec_is_image(video_codec)) {
-        open_video_image(video_codec_context);
-    } else if(use_software_video_encoder) {
+    if(use_software_video_encoder) {
         open_video_software(video_codec_context, quality, pixel_format, hdr, color_depth, bitrate_mode);
     } else {
         open_video_hardware(video_codec_context, quality, very_old_gpu, egl.gpu_info.vendor, pixel_format, hdr, color_depth, bitrate_mode, video_codec, low_power);
@@ -3941,8 +3985,6 @@ int main(int argc, char **argv) {
     if(replay_buffer_size_secs == -1) {
         AVDictionary *options = nullptr;
         av_dict_set(&options, "strict", "experimental", 0);
-        if(video_codec_is_image(video_codec))
-            av_dict_set(&options, "update", "true", 0);
         //av_dict_set_int(&av_format_context->metadata, "video_full_range_flag", 1, 0);
 
         int ret = avformat_write_header(av_format_context, &options);
@@ -4192,7 +4234,6 @@ int main(int argc, char **argv) {
 
     double last_capture_seconds = record_start_time;
     bool wait_until_frame_time_elapsed = false;
-    const bool is_image_output = video_codec_is_image(video_codec);
 
     while(running) {
         const double frame_start = clock_get_monotonic_seconds();
@@ -4272,7 +4313,7 @@ int main(int argc, char **argv) {
 
             // TODO: Dont do this if no damage?
             egl.glClear(0);
-            gsr_capture_capture(capture, video_frame, &color_conversion);
+            gsr_capture_capture(capture, &capture_metadata, &color_conversion);
             gsr_egl_swap_buffers(&egl);
             gsr_video_encoder_copy_textures_to_frame(video_encoder, video_frame, &color_conversion);
 
@@ -4300,10 +4341,6 @@ int main(int argc, char **argv) {
                     // TODO: Move to separate thread because this could write to network (for example when livestreaming)
                     receive_frames(video_codec_context, VIDEO_STREAM_INDEX, video_stream, video_frame->pts, av_format_context,
                         replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
-                    if(is_image_output) {
-                        running = 0;
-                        break;
-                    }
                 } else {
                     fprintf(stderr, "Error: avcodec_send_frame failed, error: %s\n", av_error_to_string(ret));
                 }
@@ -4409,7 +4446,7 @@ int main(int argc, char **argv) {
     gsr_damage_deinit(&damage);
     gsr_color_conversion_deinit(&color_conversion);
     gsr_video_encoder_destroy(video_encoder, video_codec_context);
-    gsr_capture_destroy(capture, video_codec_context);
+    gsr_capture_destroy(capture);
 #ifdef GSR_APP_AUDIO
     gsr_pipewire_audio_deinit(&pipewire_audio);
 #endif

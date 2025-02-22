@@ -55,7 +55,6 @@ typedef struct {
     bool is_x11;
     gsr_cursor x11_cursor;
 
-    AVCodecContext *video_codec_context;
     bool performance_error_shown;
     bool fast_path_failed;
     bool mesa_supports_compute_only_vaapi_copy;
@@ -177,7 +176,7 @@ static vec2i rotate_capture_size_if_rotated(gsr_capture_kms *self, vec2i capture
     return capture_size;
 }
 
-static int gsr_capture_kms_start(gsr_capture *cap, AVCodecContext *video_codec_context, AVFrame *frame) {
+static int gsr_capture_kms_start(gsr_capture *cap, gsr_capture_metadata *capture_metadata) {
     gsr_capture_kms *self = cap->priv;
 
     gsr_capture_kms_create_input_texture_ids(self);
@@ -219,17 +218,14 @@ static int gsr_capture_kms_start(gsr_capture *cap, AVCodecContext *video_codec_c
     else
         self->capture_size = rotate_capture_size_if_rotated(self, monitor.size);
 
-    /* Disable vsync */
-    self->params.egl->eglSwapInterval(self->params.egl->egl_display, 0);
-
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
         self->params.output_resolution = self->capture_size;
-        video_codec_context->width = FFALIGN(self->capture_size.x, 2);
-        video_codec_context->height = FFALIGN(self->capture_size.y, 2);
+        capture_metadata->width = FFALIGN(self->capture_size.x, 2);
+        capture_metadata->height = FFALIGN(self->capture_size.y, 2);
     } else {
         self->params.output_resolution = scale_keep_aspect_ratio(self->capture_size, self->params.output_resolution);
-        video_codec_context->width = FFALIGN(self->params.output_resolution.x, 2);
-        video_codec_context->height = FFALIGN(self->params.output_resolution.y, 2);
+        capture_metadata->width = FFALIGN(self->params.output_resolution.x, 2);
+        capture_metadata->height = FFALIGN(self->params.output_resolution.y, 2);
     }
 
     self->fast_path_failed = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 0, 9);
@@ -243,10 +239,6 @@ static int gsr_capture_kms_start(gsr_capture *cap, AVCodecContext *video_codec_c
 
     self->mesa_supports_compute_only_vaapi_copy = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 3, 6);
 
-    frame->width = video_codec_context->width;
-    frame->height = video_codec_context->height;
-
-    self->video_codec_context = video_codec_context;
     self->last_time_monitor_check = clock_get_monotonic_seconds();
     return 0;
 }
@@ -617,7 +609,7 @@ static void gsr_capture_kms_fail_fast_path_if_not_fast(gsr_capture_kms *self, ui
     }
 }
 
-static int gsr_capture_kms_capture(gsr_capture *cap, AVFrame *frame, gsr_color_conversion *color_conversion) {
+static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     gsr_capture_kms *self = cap->priv;
 
     gsr_capture_kms_cleanup_kms_fds(self);
@@ -648,7 +640,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, AVFrame *frame, gsr_color_c
     if(drm_fd->has_hdr_metadata && self->params.hdr && hdr_metadata_is_supported_format(&drm_fd->hdr_metadata))
         gsr_kms_set_hdr_metadata(self, drm_fd);
 
-    if(!self->performance_error_shown && self->monitor_rotation != GSR_MONITOR_ROT_0 && video_codec_context_is_vaapi(self->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
+    if(!self->performance_error_shown && self->monitor_rotation != GSR_MONITOR_ROT_0 && video_codec_context_is_vaapi(capture_metadata->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
         self->performance_error_shown = true;
         self->fast_path_failed = true;
         fprintf(stderr, "gsr warning: gsr_capture_kms_capture: the monitor you are recording is rotated, composition will have to be used."
@@ -664,7 +656,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, AVFrame *frame, gsr_color_c
     output_size = scale_keep_aspect_ratio(self->capture_size, output_size);
 
     const float texture_rotation = monitor_rotation_to_radians(self->monitor_rotation);
-    const vec2i target_pos = { max_int(0, frame->width / 2 - output_size.x / 2), max_int(0, frame->height / 2 - output_size.y / 2) };
+    const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
     gsr_capture_kms_update_capture_size_change(self, color_conversion, target_pos, drm_fd);
 
     vec2i capture_pos = self->capture_pos;
@@ -675,7 +667,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, AVFrame *frame, gsr_color_c
     self->params.egl->glFinish();
 
     /* Fast opengl free path */
-    if(!self->fast_path_failed && self->monitor_rotation == GSR_MONITOR_ROT_0 && video_codec_context_is_vaapi(self->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
+    if(!self->fast_path_failed && self->monitor_rotation == GSR_MONITOR_ROT_0 && video_codec_context_is_vaapi(capture_metadata->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
         int fds[4];
         uint32_t offsets[4];
         uint32_t pitches[4];
@@ -686,7 +678,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, AVFrame *frame, gsr_color_c
             pitches[i] = drm_fd->dma_buf[i].pitch;
             modifiers[i] = drm_fd->modifier;
         }
-        if(!vaapi_copy_drm_planes_to_video_surface(self->video_codec_context, frame, (vec2i){capture_pos.x, capture_pos.y}, self->capture_size, target_pos, output_size, drm_fd->pixel_format, (vec2i){drm_fd->width, drm_fd->height}, fds, offsets, pitches, modifiers, drm_fd->num_dma_bufs)) {
+        if(!vaapi_copy_drm_planes_to_video_surface(capture_metadata->video_codec_context, capture_metadata->frame, (vec2i){capture_pos.x, capture_pos.y}, self->capture_size, target_pos, output_size, drm_fd->pixel_format, (vec2i){drm_fd->width, drm_fd->height}, fds, offsets, pitches, modifiers, drm_fd->num_dma_bufs)) {
             fprintf(stderr, "gsr error: gsr_capture_kms_capture: vaapi_copy_drm_planes_to_video_surface failed, falling back to opengl copy. Please report this as an issue at https://github.com/dec05eba/gpu-screen-recorder-issues\n");
             self->fast_path_failed = true;
         }
@@ -777,8 +769,7 @@ static bool gsr_capture_kms_set_hdr_metadata(gsr_capture *cap, AVMasteringDispla
 //     self->damaged = false;
 // }
 
-static void gsr_capture_kms_destroy(gsr_capture *cap, AVCodecContext *video_codec_context) {
-    (void)video_codec_context;
+static void gsr_capture_kms_destroy(gsr_capture *cap) {
     gsr_capture_kms *self = cap->priv;
     if(cap->priv) {
         gsr_capture_kms_stop(self);

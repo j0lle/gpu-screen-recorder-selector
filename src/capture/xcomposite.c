@@ -31,7 +31,6 @@ typedef struct {
     double window_resize_timer;
     
     WindowTexture window_texture;
-    AVCodecContext *video_codec_context;
 
     Atom net_active_window_atom;
 
@@ -64,7 +63,7 @@ static Window get_focused_window(Display *display, Atom net_active_window_atom) 
     return None;
 }
 
-static int gsr_capture_xcomposite_start(gsr_capture *cap, AVCodecContext *video_codec_context, AVFrame *frame) {
+static int gsr_capture_xcomposite_start(gsr_capture *cap, gsr_capture_metadata *capture_metadata) {
     gsr_capture_xcomposite *self = cap->priv;
 
     if(self->params.follow_focused) {
@@ -95,8 +94,6 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, AVCodecContext *video_
     // TODO: Get select and add these on top of it and then restore at the end. Also do the same in other xcomposite
     XSelectInput(self->display, self->window, StructureNotifyMask | ExposureMask);
 
-    /* Disable vsync */
-    self->params.egl->eglSwapInterval(self->params.egl->egl_display, 0);
     if(window_texture_init(&self->window_texture, self->display, self->window, self->params.egl) != 0 && !self->params.follow_focused) {
         fprintf(stderr, "gsr error: gsr_capture_xcomposite_start: failed to get window texture for window %ld\n", (long)self->window);
         return -1;
@@ -117,21 +114,17 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, AVCodecContext *video_
 
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
         self->params.output_resolution = self->texture_size;
-        video_codec_context->width = FFALIGN(self->texture_size.x, 2);
-        video_codec_context->height = FFALIGN(self->texture_size.y, 2);
+        capture_metadata->width = FFALIGN(self->texture_size.x, 2);
+        capture_metadata->height = FFALIGN(self->texture_size.y, 2);
     } else {
-        video_codec_context->width = FFALIGN(self->params.output_resolution.x, 2);
-        video_codec_context->height = FFALIGN(self->params.output_resolution.y, 2);
+        capture_metadata->width = FFALIGN(self->params.output_resolution.x, 2);
+        capture_metadata->height = FFALIGN(self->params.output_resolution.y, 2);
     }
 
     self->fast_path_failed = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 0, 9);
     if(self->fast_path_failed)
         fprintf(stderr, "gsr warning: gsr_capture_kms_start: your amd driver (mesa) version is known to be buggy (<= version 24.0.9), falling back to opengl copy\n");
 
-    frame->width = video_codec_context->width;
-    frame->height = video_codec_context->height;
-
-    self->video_codec_context = video_codec_context;
     self->window_resize_timer = clock_get_monotonic_seconds();
     return 0;
 }
@@ -255,9 +248,8 @@ static bool gsr_capture_xcomposite_should_stop(gsr_capture *cap, bool *err) {
     return false;
 }
 
-static int gsr_capture_xcomposite_capture(gsr_capture *cap, AVFrame *frame, gsr_color_conversion *color_conversion) {
+static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata *capture_metdata, gsr_color_conversion *color_conversion) {
     gsr_capture_xcomposite *self = cap->priv;
-    (void)frame;
 
     if(self->clear_background) {
         self->clear_background = false;
@@ -268,14 +260,14 @@ static int gsr_capture_xcomposite_capture(gsr_capture *cap, AVFrame *frame, gsr_
     vec2i output_size = is_scaled ? self->params.output_resolution : self->texture_size;
     output_size = scale_keep_aspect_ratio(self->texture_size, output_size);
 
-    const vec2i target_pos = { max_int(0, frame->width / 2 - output_size.x / 2), max_int(0, frame->height / 2 - output_size.y / 2) };
+    const vec2i target_pos = { max_int(0, capture_metdata->width / 2 - output_size.x / 2), max_int(0, capture_metdata->height / 2 - output_size.y / 2) };
 
     self->params.egl->glFlush();
     self->params.egl->glFinish();
 
     /* Fast opengl free path */
-    if(!self->fast_path_failed && video_codec_context_is_vaapi(self->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
-        if(!vaapi_copy_egl_image_to_video_surface(self->params.egl, self->window_texture.image, (vec2i){0, 0}, self->texture_size, target_pos, output_size, self->video_codec_context, frame)) {
+    if(!self->fast_path_failed && video_codec_context_is_vaapi(capture_metdata->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
+        if(!vaapi_copy_egl_image_to_video_surface(self->params.egl, self->window_texture.image, (vec2i){0, 0}, self->texture_size, target_pos, output_size, capture_metdata->video_codec_context, capture_metdata->frame)) {
             fprintf(stderr, "gsr error: gsr_capture_xcomposite_capture: vaapi_copy_egl_image_to_video_surface failed, falling back to opengl copy. Please report this as an issue at https://github.com/dec05eba/gpu-screen-recorder-issues\n");
             self->fast_path_failed = true;
         }
@@ -325,8 +317,7 @@ static uint64_t gsr_capture_xcomposite_get_window_id(gsr_capture *cap) {
     return self->window;
 }
 
-static void gsr_capture_xcomposite_destroy(gsr_capture *cap, AVCodecContext *video_codec_context) {
-    (void)video_codec_context;
+static void gsr_capture_xcomposite_destroy(gsr_capture *cap) {
     if(cap->priv) {
         gsr_capture_xcomposite_stop(cap->priv);
         free(cap->priv);

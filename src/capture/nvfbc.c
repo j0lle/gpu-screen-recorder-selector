@@ -133,31 +133,6 @@ static bool gsr_capture_nvfbc_load_library(gsr_capture *cap) {
     return true;
 }
 
-/* TODO: check for glx swap control extension string (GLX_EXT_swap_control, etc) */
-static void set_vertical_sync_enabled(gsr_egl *egl, int enabled) {
-    int result = 0;
-
-    if(egl->glXSwapIntervalEXT) {
-        assert(gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11);
-        Display *display = gsr_window_get_display(egl->window);
-        const Window window = (Window)gsr_window_get_window(egl->window);
-        egl->glXSwapIntervalEXT(display, window, enabled ? 1 : 0);
-    } else if(egl->glXSwapIntervalMESA) {
-        result = egl->glXSwapIntervalMESA(enabled ? 1 : 0);
-    } else if(egl->glXSwapIntervalSGI) {
-        result = egl->glXSwapIntervalSGI(enabled ? 1 : 0);
-    } else {
-        static int warned = 0;
-        if (!warned) {
-            warned = 1;
-            fprintf(stderr, "gsr warning: setting vertical sync not supported\n");
-        }
-    }
-
-    if(result != 0)
-        fprintf(stderr, "gsr warning: setting vertical sync failed\n");
-}
-
 static void gsr_capture_nvfbc_destroy_session(gsr_capture_nvfbc *self) {
     if(self->fbc_handle_created && self->capture_session_created) {
         NVFBC_DESTROY_CAPTURE_SESSION_PARAMS destroy_capture_params;
@@ -311,7 +286,7 @@ static void gsr_capture_nvfbc_stop(gsr_capture_nvfbc *self) {
     }
 }
 
-static int gsr_capture_nvfbc_start(gsr_capture *cap, AVCodecContext *video_codec_context, AVFrame *frame) {
+static int gsr_capture_nvfbc_start(gsr_capture *cap, gsr_capture_metadata *capture_metadata) {
     gsr_capture_nvfbc *self = cap->priv;
 
     if(!gsr_capture_nvfbc_load_library(cap))
@@ -357,26 +332,20 @@ static int gsr_capture_nvfbc_start(gsr_capture *cap, AVCodecContext *video_codec
     }
 
     if(self->capture_region) {
-        video_codec_context->width = FFALIGN(self->width, 2);
-        video_codec_context->height = FFALIGN(self->height, 2);
+        capture_metadata->width = FFALIGN(self->width, 2);
+        capture_metadata->height = FFALIGN(self->height, 2);
     } else {
-        video_codec_context->width = FFALIGN(self->tracking_width, 2);
-        video_codec_context->height = FFALIGN(self->tracking_height, 2);
+        capture_metadata->width = FFALIGN(self->tracking_width, 2);
+        capture_metadata->height = FFALIGN(self->tracking_height, 2);
     }
 
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
-        self->params.output_resolution = (vec2i){video_codec_context->width, video_codec_context->height};
+        self->params.output_resolution = (vec2i){capture_metadata->width, capture_metadata->height};
     } else {
-        self->params.output_resolution = scale_keep_aspect_ratio((vec2i){video_codec_context->width, video_codec_context->height}, self->params.output_resolution);
-        video_codec_context->width = FFALIGN(self->params.output_resolution.x, 2);
-        video_codec_context->height = FFALIGN(self->params.output_resolution.y, 2);
+        self->params.output_resolution = scale_keep_aspect_ratio((vec2i){capture_metadata->width, capture_metadata->height}, self->params.output_resolution);
+        capture_metadata->width = FFALIGN(self->params.output_resolution.x, 2);
+        capture_metadata->height = FFALIGN(self->params.output_resolution.y, 2);
     }
-
-    frame->width = video_codec_context->width;
-    frame->height = video_codec_context->height;
-
-    /* Disable vsync */
-    set_vertical_sync_enabled(self->params.egl, 0);
 
     return 0;
 
@@ -385,7 +354,7 @@ static int gsr_capture_nvfbc_start(gsr_capture *cap, AVCodecContext *video_codec
     return -1;
 }
 
-static int gsr_capture_nvfbc_capture(gsr_capture *cap, AVFrame *frame, gsr_color_conversion *color_conversion) {
+static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     gsr_capture_nvfbc *self = cap->priv;
 
     const double nvfbc_recreate_retry_time_seconds = 1.0;
@@ -416,7 +385,7 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, AVFrame *frame, gsr_color
     vec2i output_size = is_scaled ? self->params.output_resolution : frame_size;
     output_size = scale_keep_aspect_ratio(frame_size, output_size);
 
-    const vec2i target_pos = { max_int(0, frame->width / 2 - output_size.x / 2), max_int(0, frame->height / 2 - output_size.y / 2) };
+    const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
 
     NVFBC_FRAME_GRAB_INFO frame_info;
     memset(&frame_info, 0, sizeof(frame_info));
@@ -450,8 +419,7 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, AVFrame *frame, gsr_color
     return 0;
 }
 
-static void gsr_capture_nvfbc_destroy(gsr_capture *cap, AVCodecContext *video_codec_context) {
-    (void)video_codec_context;
+static void gsr_capture_nvfbc_destroy(gsr_capture *cap) {
     gsr_capture_nvfbc *self = cap->priv;
     gsr_capture_nvfbc_stop(self);
     free(cap->priv);

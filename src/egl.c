@@ -355,6 +355,44 @@ static void debug_callback(unsigned int source, unsigned int type, unsigned int 
         fprintf(stderr, "gsr info: gl callback: %s type = 0x%x, severity = 0x%x, message = %s\n", type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "", type, severity, message);
 }
 
+/* TODO: check for glx swap control extension string (GLX_EXT_swap_control, etc) */
+static void set_vertical_sync_enabled(gsr_egl *egl, int enabled) {
+    int result = 0;
+
+    if(egl->glXSwapIntervalEXT) {
+        assert(gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11);
+        Display *display = gsr_window_get_display(egl->window);
+        const Window window = (Window)gsr_window_get_window(egl->window);
+        egl->glXSwapIntervalEXT(display, window, enabled ? 1 : 0);
+    } else if(egl->glXSwapIntervalMESA) {
+        result = egl->glXSwapIntervalMESA(enabled ? 1 : 0);
+    } else if(egl->glXSwapIntervalSGI) {
+        result = egl->glXSwapIntervalSGI(enabled ? 1 : 0);
+    } else {
+        static int warned = 0;
+        if (!warned) {
+            warned = 1;
+            fprintf(stderr, "gsr warning: setting vertical sync not supported\n");
+        }
+    }
+
+    if(result != 0)
+        fprintf(stderr, "gsr warning: setting vertical sync failed\n");
+}
+
+static void gsr_egl_disable_vsync(gsr_egl *self) {
+    switch(self->context_type) {
+        case GSR_GL_CONTEXT_TYPE_EGL: {
+            self->eglSwapInterval(self->egl_display, 0);
+            break;
+        }
+        case GSR_GL_CONTEXT_TYPE_GLX: {
+            set_vertical_sync_enabled(self, 0);
+            break;
+        }
+    }
+}
+
 bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bool enable_debug) {
     memset(self, 0, sizeof(gsr_egl));
     self->context_type = GSR_GL_CONTEXT_TYPE_EGL;
@@ -416,6 +454,7 @@ bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bo
         self->glDebugMessageCallback(debug_callback, NULL);
     }
 
+    gsr_egl_disable_vsync(self);
     return true;
 
     fail:

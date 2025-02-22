@@ -635,9 +635,12 @@ static VADisplay video_codec_context_get_vaapi_display(AVCodecContext *video_cod
 }
 
 bool video_codec_context_is_vaapi(AVCodecContext *video_codec_context) {
+    if(!video_codec_context)
+        return false;
+
     AVBufferRef *hw_frames_ctx = video_codec_context->hw_frames_ctx;
     if(!hw_frames_ctx)
-        return NULL;
+        return false;
 
     AVHWFramesContext *hw_frame_context = (AVHWFramesContext*)hw_frames_ctx->data;
     AVHWDeviceContext *device_context = (AVHWDeviceContext*)hw_frame_context->device_ctx;

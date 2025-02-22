@@ -18,7 +18,6 @@ src = [
     'src/encoder/video/vaapi.c',
     'src/encoder/video/vulkan.c',
     'src/encoder/video/software.c',
-    'src/encoder/video/image.c',
     'src/codec_query/nvenc.c',
     'src/codec_query/vaapi.c',
     'src/codec_query/vulkan.c',
@@ -36,6 +35,7 @@ src = [
     'src/library_loader.c',
     'src/cursor.c',
     'src/damage.c',
+    'src/image_writer.c',
     'src/sound.cpp',
     'src/main.cpp',
 ]
