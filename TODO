@@ -233,3 +233,7 @@ Implement screenshot without invoking opengl (which is slow to start on some sys
 
 Automatically use desktop portal on wayland when hdr is enabled (or night light) by checking if kms hdr metadata exists, if hdr video codec is not used.
     Or maybe do this in the ui?
+
+Detect if cached portal session token is no longer valid (this can happen if the user switches to another wayland compositor).
+
+Support reconnecting (and setting things up again) if the audio server is restarted (for both device recording and app recording).
