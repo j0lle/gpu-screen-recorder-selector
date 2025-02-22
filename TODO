@@ -237,3 +237,5 @@ Automatically use desktop portal on wayland when hdr is enabled (or night light)
 Detect if cached portal session token is no longer valid (this can happen if the user switches to another wayland compositor).
 
 Support reconnecting (and setting things up again) if the audio server is restarted (for both device recording and app recording).
+
+Find out how nvidia-smi fixes nvenc not working on opensuse and do that ourselves instead of relying on nvidia-smi that is not always installed.
