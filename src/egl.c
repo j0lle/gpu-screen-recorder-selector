@@ -458,7 +458,7 @@ bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bo
 
     if(self->gpu_info.vendor == GSR_GPU_VENDOR_NVIDIA) {
         /* This fixes nvenc codecs unable to load on openSUSE tumbleweed because of a cuda error. Don't ask me why */
-        system("nvidia-smi");
+        system("nvidia-smi > /dev/null");
     }
 
     return true;
