@@ -2539,10 +2539,12 @@ static void capture_image_to_file(const char *filepath, std::string &window_str,
     bool should_stop_error = false;
     egl->glClear(0);
 
-    while(true) {
+    while(running) {
         should_stop_error = false;
-        if(gsr_capture_should_stop(capture, &should_stop_error))
+        if(gsr_capture_should_stop(capture, &should_stop_error)) {
+            running = 0;
             break;
+        }
 
         // It can fail, for example when capturing portal and the target is a monitor that hasn't been updated.
         // Desktop portal wont refresh the image until there is an update.
