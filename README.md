@@ -26,7 +26,7 @@ Supported image formats:
 * JPEG
 * PNG
 
-This software works on X11 and Wayland on AMD, Intel and NVIDIA.
+This software works on X11 and Wayland on AMD, Intel and NVIDIA. Replay data is stored in RAM, not disk.
 ### TEMPORARY ISSUES
 1) Videos are in variable framerate format. Use MPV to play such videos, otherwise you might experience stuttering in the video if you are using a buggy video player. You can try saving the video into a .mkv file instead as some software may have better support for .mkv files (such as kdenlive). You can use the "-fm cfr" option to to use constant framerate mode.
 2) FLAC audio codec is disabled at the moment because of temporary issues.
