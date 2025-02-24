@@ -178,7 +178,7 @@ Test if `xrandr --output DP-1 --scale 1.5` captures correct size on nvidia.
 
 Fix cursor position and scale when scaling x11 display.
 
-Support surround audio in application audio recording. Right now only stereo sound is supported.
+Support surround audio in application audio recording. Right now only stereo and mono sound is supported.
 
 Support application audio recording without pulseaudio combined sink.
 

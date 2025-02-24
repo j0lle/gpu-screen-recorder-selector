@@ -109,6 +109,17 @@ static void gsr_pipewire_audio_create_link(gsr_pipewire_audio *self, const gsr_p
                     output_fl_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "capture_FL");
                     output_fr_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "capture_FR");
                 }
+                if(!output_fl_port || !output_fr_port) {
+                    const gsr_pipewire_audio_port *output_mono_port = NULL;
+                    output_mono_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "monitor_MONO");
+                    if(!output_mono_port)
+                        output_mono_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "capture_MONO");
+
+                    if(output_mono_port) {
+                        output_fl_port = output_mono_port;
+                        output_fr_port = output_mono_port;
+                    }
+                }
                 break;
             }
         }
