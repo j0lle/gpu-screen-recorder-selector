@@ -2480,16 +2480,16 @@ static gsr_color_range image_format_to_color_range(gsr_image_format image_format
 static int video_quality_to_image_quality_value(VideoQuality video_quality) {
     switch(video_quality) {
         case VideoQuality::MEDIUM:
-            return 60;
-        case VideoQuality::HIGH:
             return 70;
-        case VideoQuality::VERY_HIGH:
+        case VideoQuality::HIGH:
             return 80;
+        case VideoQuality::VERY_HIGH:
+            return 85;
         case VideoQuality::ULTRA:
-            return 95;
+            return 97;
     }
     assert(false);
-    return 80;
+    return 85;
 }
 
 // TODO: 10-bit and hdr.
