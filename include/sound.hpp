@@ -61,6 +61,7 @@ typedef enum {
 
 /*
     Get a sound device by name, returning the device into the |device| parameter.
+    |device_name| can be a device name or "default_output" or "default_input".
     Returns 0 on success, or a negative value on failure.
 */
 int sound_device_get_by_name(SoundDevice *device, const char *device_name, const char *description, unsigned int num_channels, unsigned int period_frame_size, AudioFormat audio_format);

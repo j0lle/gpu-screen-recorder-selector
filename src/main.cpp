@@ -2646,14 +2646,12 @@ static std::vector<MergedAudioInputs> parse_audio_inputs(const AudioDevices &aud
                     fprintf(stderr, "Error: -a default_output was specified but no default audio output is specified in the audio server\n");
                     _exit(2);
                 }
-                request_audio_input.name = audio_devices.default_output;
                 match = true;
             } else if(request_audio_input.name == "default_input") {
                 if(audio_devices.default_input.empty()) {
                     fprintf(stderr, "Error: -a default_input was specified but no default audio input is specified in the audio server\n");
                     _exit(2);
                 }
-                request_audio_input.name = audio_devices.default_input;
                 match = true;
             } else {
                 const bool name_is_existing_audio_device = get_audio_device_by_name(audio_devices.audio_inputs, request_audio_input.name.c_str()) != nullptr;

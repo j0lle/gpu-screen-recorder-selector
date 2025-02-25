@@ -8,11 +8,15 @@ extern "C" {
 #include <string.h>
 #include <cmath>
 #include <time.h>
+#include <mutex>
 
 #include <pulse/pulseaudio.h>
 #include <pulse/mainloop.h>
 #include <pulse/xmalloc.h>
 #include <pulse/error.h>
+
+#define RECONNECT_TRY_TIMEOUT_SECONDS 0.5
+#define DEVICE_NAME_MAX_SIZE 128
 
 #define CHECK_DEAD_GOTO(p, rerror, label)                               \
     do {                                                                \
@@ -29,6 +33,12 @@ extern "C" {
         }                                                               \
     } while(false);
 
+enum class DeviceType {
+    STANDARD,
+    DEFAULT_OUTPUT,
+    DEFAULT_INPUT
+};
+
 struct pa_handle {
     pa_context *context;
     pa_stream *stream;
@@ -42,6 +52,19 @@ struct pa_handle {
 
     int operation_success;
     double latency_seconds;
+
+    pa_buffer_attr attr;
+    pa_sample_spec ss;
+
+    std::mutex reconnect_mutex;
+    DeviceType device_type;
+    char stream_name[256];
+    bool reconnect;
+    double reconnect_last_tried_seconds;
+
+    char device_name[DEVICE_NAME_MAX_SIZE];
+    char default_output_device_name[DEVICE_NAME_MAX_SIZE];
+    char default_input_device_name[DEVICE_NAME_MAX_SIZE];
 };
 
 static void pa_sound_device_free(pa_handle *p) {
@@ -71,22 +94,110 @@ static void pa_sound_device_free(pa_handle *p) {
     pa_xfree(p);
 }
 
+static void subscribe_update_default_devices(pa_context*, const pa_server_info *server_info, void *userdata) {
+    pa_handle *handle = (pa_handle*)userdata;
+    std::lock_guard<std::mutex> lock(handle->reconnect_mutex);
+
+    if(server_info->default_sink_name) {
+        // TODO: Size check
+        snprintf(handle->default_output_device_name, sizeof(handle->default_output_device_name), "%s.monitor", server_info->default_sink_name);
+        if(handle->device_type == DeviceType::DEFAULT_OUTPUT && strcmp(handle->device_name, server_info->default_sink_name) != 0) {
+            handle->reconnect = true;
+            handle->reconnect_last_tried_seconds = clock_get_monotonic_seconds();
+            // TODO: Size check
+            snprintf(handle->device_name, sizeof(handle->device_name), "%s", handle->default_output_device_name);
+        }
+    }
+
+    if(server_info->default_source_name) {
+        // TODO: Size check
+        snprintf(handle->default_input_device_name, sizeof(handle->default_input_device_name), "%s", server_info->default_source_name);
+        if(handle->device_type == DeviceType::DEFAULT_INPUT && strcmp(handle->device_name, server_info->default_sink_name) != 0) {
+            handle->reconnect = true;
+            handle->reconnect_last_tried_seconds = clock_get_monotonic_seconds();
+            // TODO: Size check
+            snprintf(handle->device_name, sizeof(handle->device_name), "%s", handle->default_input_device_name);
+        }
+    }
+}
+
+static void subscribe_cb(pa_context *c, pa_subscription_event_type_t t, uint32_t idx, void *userdata) {
+    (void)idx;
+    pa_handle *handle = (pa_handle*)userdata;
+    if(t & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) {
+        pa_operation *pa = pa_context_get_server_info(c, subscribe_update_default_devices, handle);
+        if(pa)
+            pa_operation_unref(pa);
+    }
+}
+
+static void store_default_devices(pa_context*, const pa_server_info *server_info, void *userdata) {
+    pa_handle *handle = (pa_handle*)userdata;
+    if(server_info->default_sink_name)
+        snprintf(handle->default_output_device_name, sizeof(handle->default_output_device_name), "%s.monitor", server_info->default_sink_name);
+    if(server_info->default_source_name)
+        snprintf(handle->default_input_device_name, sizeof(handle->default_input_device_name), "%s", server_info->default_source_name);
+}
+
+static bool startup_get_default_devices(pa_handle *p, const char *device_name) {
+    pa_operation *pa = pa_context_get_server_info(p->context, store_default_devices, p);
+    while(pa) {
+        pa_operation_state state = pa_operation_get_state(pa);
+        if(state == PA_OPERATION_DONE) {
+            pa_operation_unref(pa);
+            break;
+        } else if(state == PA_OPERATION_CANCELLED) {
+            pa_operation_unref(pa);
+            return false;
+        }
+        pa_mainloop_iterate(p->mainloop, 1, NULL);
+    }
+
+    if(p->default_output_device_name[0] == '\0') {
+        fprintf(stderr, "Error: failed to find default audio output device\n");
+        return false;
+    }
+
+    if(strcmp(device_name, "default_output") == 0) {
+        snprintf(p->device_name, sizeof(p->device_name), "%s", p->default_output_device_name);
+        p->device_type = DeviceType::DEFAULT_OUTPUT;
+    } else if(strcmp(device_name, "default_input") == 0) {
+        snprintf(p->device_name, sizeof(p->device_name), "%s", p->default_input_device_name);
+        p->device_type = DeviceType::DEFAULT_INPUT;
+    } else {
+        snprintf(p->device_name, sizeof(p->device_name), "%s", device_name);
+        p->device_type = DeviceType::STANDARD;
+    }
+
+    return true;
+}
+
 static pa_handle* pa_sound_device_new(const char *server,
         const char *name,
-        const char *dev,
+        const char *device_name,
         const char *stream_name,
         const pa_sample_spec *ss,
         const pa_buffer_attr *attr,
         int *rerror) {
     pa_handle *p;
-    int error = PA_ERR_INTERNAL, r;
+    int error = PA_ERR_INTERNAL;
+    pa_operation *pa = NULL;
 
     p = pa_xnew0(pa_handle, 1);
+    p->attr = *attr;
+    p->ss = *ss;
+    snprintf(p->stream_name, sizeof(p->stream_name), "%s", stream_name);
+
+    p->reconnect = true;
+    p->reconnect_last_tried_seconds = clock_get_monotonic_seconds() - 1000.0;
+    p->default_output_device_name[0] = '\0';
+    p->default_input_device_name[0] = '\0';
+    p->device_type = DeviceType::STANDARD;
 
     const int buffer_size = attr->fragsize;
     void *buffer = malloc(buffer_size);
     if(!buffer) {
-        fprintf(stderr, "failed to allocate buffer for audio\n");
+        fprintf(stderr, "Error: failed to allocate buffer for audio\n");
         *rerror = -1;
         return NULL;
     }
@@ -120,32 +231,13 @@ static pa_handle* pa_sound_device_new(const char *server,
         pa_mainloop_iterate(p->mainloop, 1, NULL);
     }
 
-    if (!(p->stream = pa_stream_new(p->context, stream_name, ss, NULL))) {
-        error = pa_context_errno(p->context);
+    if(!startup_get_default_devices(p, device_name))
         goto fail;
-    }
 
-    r = pa_stream_connect_record(p->stream, dev, attr,
-        (pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING|PA_STREAM_ADJUST_LATENCY|PA_STREAM_AUTO_TIMING_UPDATE));
-
-    if (r < 0) {
-        error = pa_context_errno(p->context);
-        goto fail;
-    }
-
-    for (;;) {
-        pa_stream_state_t state = pa_stream_get_state(p->stream);
-
-        if (state == PA_STREAM_READY)
-            break;
-
-        if (!PA_STREAM_IS_GOOD(state)) {
-            error = pa_context_errno(p->context);
-            goto fail;
-        }
-
-        pa_mainloop_iterate(p->mainloop, 1, NULL);
-    }
+    pa_context_set_subscribe_callback(p->context, subscribe_cb, p);
+    pa = pa_context_subscribe(p->context, PA_SUBSCRIPTION_MASK_SERVER, NULL, NULL);
+    if(pa)
+        pa_operation_unref(pa);
 
     return p;
 
@@ -156,16 +248,74 @@ fail:
     return NULL;
 }
 
+static bool pa_sound_device_should_reconnect(pa_handle *p, double now, char *device_name, size_t device_name_size) {
+    std::lock_guard<std::mutex> lock(p->reconnect_mutex);
+    if(p->reconnect && now - p->reconnect_last_tried_seconds >= RECONNECT_TRY_TIMEOUT_SECONDS) {
+        p->reconnect_last_tried_seconds = now;
+        // TODO: Size check
+        snprintf(device_name, device_name_size, "%s", p->device_name);
+        return true;
+    }
+    return false;
+}
+
+static bool pa_sound_device_handle_reconnect(pa_handle *p, char *device_name, size_t device_name_size, double now) {
+    int r;
+    if(!pa_sound_device_should_reconnect(p, now, device_name, device_name_size))
+        return true;
+
+    if(p->stream) {
+        pa_stream_disconnect(p->stream);
+        pa_stream_unref(p->stream);
+        p->stream = NULL;
+    }
+
+    if(!(p->stream = pa_stream_new(p->context, p->stream_name, &p->ss, NULL))) {
+        //pa_context_errno(p->context);
+        return false;
+    }
+
+    r = pa_stream_connect_record(p->stream, device_name, &p->attr,
+        (pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING|PA_STREAM_ADJUST_LATENCY|PA_STREAM_AUTO_TIMING_UPDATE));
+
+    if(r < 0) {
+        //pa_context_errno(p->context);
+        return false;
+    }
+
+    for(;;) {
+        pa_stream_state_t state = pa_stream_get_state(p->stream);
+
+        if(state == PA_STREAM_READY)
+            break;
+
+        if(!PA_STREAM_IS_GOOD(state)) {
+            //pa_context_errno(p->context);
+            return false;
+        }
+
+        pa_mainloop_iterate(p->mainloop, 1, NULL);
+    }
+
+    std::lock_guard<std::mutex> lock(p->reconnect_mutex);
+    p->reconnect = false;
+    return true;
+}
+
 static int pa_sound_device_read(pa_handle *p, double timeout_seconds) {
     assert(p);
 
     const double start_time = clock_get_monotonic_seconds();
+    char device_name[DEVICE_NAME_MAX_SIZE];
 
     bool success = false;
     int r = 0;
     int *rerror = &r;
     pa_usec_t latency = 0;
     int negative = 0;
+
+    if(!pa_sound_device_handle_reconnect(p, device_name, sizeof(device_name), start_time))
+        goto fail;
 
     CHECK_DEAD_GOTO(p, rerror, fail);
 
@@ -276,7 +426,7 @@ int sound_device_get_by_name(SoundDevice *device, const char *device_name, const
     int error = 0;
     pa_handle *handle = pa_sound_device_new(nullptr, description, device_name, description, &ss, &buffer_attr, &error);
     if(!handle) {
-        fprintf(stderr, "pa_sound_device_new() failed: %s. Audio input device %s might not be valid\n", pa_strerror(error), device_name);
+        fprintf(stderr, "Error: pa_sound_device_new() failed: %s. Audio input device %s might not be valid\n", pa_strerror(error), device_name);
         return -1;
     }
 
