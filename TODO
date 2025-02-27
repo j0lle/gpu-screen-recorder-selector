@@ -240,3 +240,5 @@ Detect if cached portal session token is no longer valid (this can happen if the
 Support reconnecting (and setting things up again) if the audio server is restarted (for both device recording and app recording).
 
 Find out how nvidia-smi fixes nvenc not working on opensuse and do that ourselves instead of relying on nvidia-smi that is not always installed.
+
+Pulseaudio code: add "running" variable to loops to allow stopping the running code when quitting.

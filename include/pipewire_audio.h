@@ -10,6 +10,7 @@
 
 #define GSR_PIPEWIRE_AUDIO_MAX_STREAM_NODES 128
 #define GSR_PIPEWIRE_AUDIO_MAX_PORTS 256
+#define GSR_PIPEWIRE_AUDIO_MAX_LINKS 256
 #define GSR_PIPEWIRE_AUDIO_MAX_REQUESTED_LINKS 32
 #define GSR_PIPEWIRE_AUDIO_MAX_VIRTUAL_SINKS 32
 
@@ -37,14 +38,31 @@ typedef struct {
     char *name;
 } gsr_pipewire_audio_port;
 
+typedef struct {
+    uint32_t id;
+    uint32_t output_node_id;
+    uint32_t input_node_id;
+} gsr_pipewire_audio_link;
+
 typedef enum {
     GSR_PIPEWIRE_AUDIO_LINK_INPUT_TYPE_STREAM, /* Application */
     GSR_PIPEWIRE_AUDIO_LINK_INPUT_TYPE_SINK    /* Combined (virtual) sink */
 } gsr_pipewire_audio_link_input_type;
 
+typedef enum {
+    GSR_PIPEWIRE_AUDIO_REQUESTED_TYPE_STANDARD,
+    GSR_PIPEWIRE_AUDIO_REQUESTED_TYPE_DEFAULT_OUTPUT,
+    GSR_PIPEWIRE_AUDIO_REQUESTED_TYPE_DEFAULT_INPUT
+} gsr_pipewire_audio_requested_type;
+
 typedef struct {
-    char **output_names;
-    int num_output_names;
+    char *name;
+    gsr_pipewire_audio_requested_type type;
+} gsr_pipewire_audio_requested_output;
+
+typedef struct {
+    gsr_pipewire_audio_requested_output *outputs;
+    int num_outputs;
     char *input_name;
     bool inverted;
     gsr_pipewire_audio_node_type output_type;
@@ -60,11 +78,19 @@ typedef struct {
     struct spa_hook registry_listener;
     int server_version_sync;
 
+    struct pw_proxy *metadata_proxy;
+    struct spa_hook metadata_listener;
+    char default_output_device_name[128];
+    char default_input_device_name[128];
+
     gsr_pipewire_audio_node stream_nodes[GSR_PIPEWIRE_AUDIO_MAX_STREAM_NODES];
     int num_stream_nodes;
 
     gsr_pipewire_audio_port ports[GSR_PIPEWIRE_AUDIO_MAX_PORTS];
     int num_ports;
+
+    gsr_pipewire_audio_link links[GSR_PIPEWIRE_AUDIO_MAX_LINKS];
+    int num_links;
 
     gsr_pipewire_audio_requested_link requested_links[GSR_PIPEWIRE_AUDIO_MAX_REQUESTED_LINKS];
     int num_requested_links;
@@ -118,6 +144,8 @@ bool gsr_pipewire_audio_add_link_from_apps_to_sink_inverted(gsr_pipewire_audio *
     If a device or a new device starts outputting audio after this function is called and the device name matches
     then it will automatically link the audio sources.
     |source_names| and |sink_name_input| are case-insensitive matches.
+    |source_names| can include "default_output" or "default_input" to use the default output/input
+    and it will automatically switch when the default output/input is changed in system audio settings.
 */
 bool gsr_pipewire_audio_add_link_from_sources_to_sink(gsr_pipewire_audio *self, const char **source_names, int num_source_names, const char *sink_name_input);
 
