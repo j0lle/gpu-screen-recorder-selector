@@ -68,7 +68,8 @@ Here are some known unofficial packages:
 * Nix: [NixOS wiki](https://wiki.nixos.org/wiki/Gpu-screen-recorder)
 * openSUSE: [openSUSE software repository](https://software.opensuse.org/package/gpu-screen-recorder)
 * Fedora: [Copr](https://copr.fedorainfracloud.org/coprs/brycensranch/gpu-screen-recorder-git/)
-* OpenMandriva: [gpu-screen-recorder](https://github.com/OpenMandrivaAssociation/gpu-screen-recorder/tree/master)
+* OpenMandriva: [gpu-screen-recorder](https://github.com/OpenMandrivaAssociation/gpu-screen-recorder)
+* Solus: [gpu-screen-recorder](https://github.com/getsolus/packages/tree/main/packages/g/gpu-screen-recorder)
 
 # Dependencies
 GPU Screen Recorder uses meson build system so you need to install `meson` to build GPU Screen Recorder.
