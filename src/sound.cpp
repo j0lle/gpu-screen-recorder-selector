@@ -101,7 +101,7 @@ static void subscribe_update_default_devices(pa_context*, const pa_server_info *
     if(server_info->default_sink_name) {
         // TODO: Size check
         snprintf(handle->default_output_device_name, sizeof(handle->default_output_device_name), "%s.monitor", server_info->default_sink_name);
-        if(handle->device_type == DeviceType::DEFAULT_OUTPUT && strcmp(handle->device_name, server_info->default_sink_name) != 0) {
+        if(handle->device_type == DeviceType::DEFAULT_OUTPUT && strcmp(handle->device_name, handle->default_output_device_name) != 0) {
             handle->reconnect = true;
             handle->reconnect_last_tried_seconds = clock_get_monotonic_seconds();
             // TODO: Size check
@@ -112,7 +112,7 @@ static void subscribe_update_default_devices(pa_context*, const pa_server_info *
     if(server_info->default_source_name) {
         // TODO: Size check
         snprintf(handle->default_input_device_name, sizeof(handle->default_input_device_name), "%s", server_info->default_source_name);
-        if(handle->device_type == DeviceType::DEFAULT_INPUT && strcmp(handle->device_name, server_info->default_sink_name) != 0) {
+        if(handle->device_type == DeviceType::DEFAULT_INPUT && strcmp(handle->device_name, handle->default_input_device_name) != 0) {
             handle->reconnect = true;
             handle->reconnect_last_tried_seconds = clock_get_monotonic_seconds();
             // TODO: Size check
