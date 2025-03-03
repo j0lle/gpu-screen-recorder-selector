@@ -234,11 +234,10 @@ static pa_handle* pa_sound_device_new(const char *server,
     if(!startup_get_default_devices(p, device_name))
         goto fail;
 
-    // TODO: This has to be disabled because of bugs in pipewire (and kde plasma?)
-    //pa_context_set_subscribe_callback(p->context, subscribe_cb, p);
-    //pa = pa_context_subscribe(p->context, PA_SUBSCRIPTION_MASK_SERVER, NULL, NULL);
-    //if(pa)
-    //    pa_operation_unref(pa);
+    pa_context_set_subscribe_callback(p->context, subscribe_cb, p);
+    pa = pa_context_subscribe(p->context, PA_SUBSCRIPTION_MASK_SERVER, NULL, NULL);
+    if(pa)
+        pa_operation_unref(pa);
 
     return p;
 
