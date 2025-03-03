@@ -242,3 +242,6 @@ Support reconnecting (and setting things up again) if the audio server is restar
 Find out how nvidia-smi fixes nvenc not working on opensuse and do that ourselves instead of relying on nvidia-smi that is not always installed.
 
 Pulseaudio code: add "running" variable to loops to allow stopping the running code when quitting.
+
+The implementation of changing audio device to capture from when using default_output/default_input and the default device is changed in system audio settings
+    has been disabled because of bugs in pipewire (and kde plasma?). Enable this when it's fixed.
