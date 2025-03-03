@@ -37,7 +37,11 @@ void gsr_dbus_deinit(gsr_dbus *self);
 /* The follow functions should be called in order to setup ScreenCast properly */
 /* These functions that return an int return the response status code */
 int gsr_dbus_screencast_create_session(gsr_dbus *self, char **session_handle);
-int gsr_dbus_screencast_select_sources(gsr_dbus *self, const char *session_handle, gsr_portal_capture_type capture_type, gsr_portal_cursor_mode cursor_mode);
+/*
+    |capture_type| is a bitmask of gsr_portal_capture_type values. gsr_portal_capture_type values that are not supported by the desktop portal will be ignored.
+    |gsr_portal_cursor_mode| is a bitmask of gsr_portal_cursor_mode values. gsr_portal_cursor_mode values that are not supported will be ignored.
+*/
+int gsr_dbus_screencast_select_sources(gsr_dbus *self, const char *session_handle, uint32_t capture_type, uint32_t cursor_mode);
 int gsr_dbus_screencast_start(gsr_dbus *self, const char *session_handle, uint32_t *pipewire_node);
 bool gsr_dbus_screencast_open_pipewire_remote(gsr_dbus *self, const char *session_handle, int *pipewire_fd);
 const char* gsr_dbus_screencast_get_restore_token(gsr_dbus *self);

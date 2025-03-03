@@ -366,7 +366,7 @@ static bool gsr_pipewire_audio_listen_on_metadata(gsr_pipewire_audio *self, uint
     }
 
     // TODO:
-    pw_proxy_add_object_listener(self->metadata_proxy, &self->metadata_listener, &metadata_events, self);
+    pw_metadata_add_listener((struct pw_metadata*)self->metadata_proxy, &self->metadata_listener, &metadata_events, self);
 
     //struct spa_hook proxy_listener;
     //pw_proxy_add_listener(self->metadata_proxy, &proxy_listener, &metadata_proxy_events, self);

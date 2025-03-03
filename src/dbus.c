@@ -614,8 +614,40 @@ int gsr_dbus_screencast_create_session(gsr_dbus *self, char **session_handle) {
     return 0;
 }
 
-int gsr_dbus_screencast_select_sources(gsr_dbus *self, const char *session_handle, gsr_portal_capture_type capture_type, gsr_portal_cursor_mode cursor_mode) {
+static uint32_t unset_unsupported_capture_types(uint32_t requested_capture_types, uint32_t available_capture_types) {
+    if(!(available_capture_types & GSR_PORTAL_CAPTURE_TYPE_MONITOR))
+        requested_capture_types &= ~GSR_PORTAL_CAPTURE_TYPE_MONITOR;
+    if(!(available_capture_types & GSR_PORTAL_CAPTURE_TYPE_WINDOW))
+        requested_capture_types &= ~GSR_PORTAL_CAPTURE_TYPE_WINDOW;
+    if(!(available_capture_types & GSR_PORTAL_CAPTURE_TYPE_VIRTUAL))
+        requested_capture_types &= ~GSR_PORTAL_CAPTURE_TYPE_VIRTUAL;
+    return requested_capture_types;
+}
+
+static uint32_t unset_unsupported_cursor_modes(uint32_t requested_cursor_modes, uint32_t available_cursor_modes) {
+    if(!(available_cursor_modes & GSR_PORTAL_CURSOR_MODE_HIDDEN))
+        requested_cursor_modes &= ~GSR_PORTAL_CURSOR_MODE_HIDDEN;
+    if(!(available_cursor_modes & GSR_PORTAL_CURSOR_MODE_EMBEDDED))
+        requested_cursor_modes &= ~GSR_PORTAL_CURSOR_MODE_EMBEDDED;
+    if(!(available_cursor_modes & GSR_PORTAL_CURSOR_MODE_METADATA))
+        requested_cursor_modes &= ~GSR_PORTAL_CURSOR_MODE_METADATA;
+    return requested_cursor_modes;
+}
+
+int gsr_dbus_screencast_select_sources(gsr_dbus *self, const char *session_handle, uint32_t capture_type, uint32_t cursor_mode) {
     assert(session_handle);
+
+    uint32_t available_source_types = 0;
+    gsr_dbus_desktop_portal_get_property(self, "org.freedesktop.portal.ScreenCast", "AvailableSourceTypes", &available_source_types);
+    if(available_source_types == 0)
+        fprintf(stderr, "gsr error: gsr_dbus_screencast_select_sources: no source types are available\n");
+    capture_type = unset_unsupported_capture_types(capture_type, available_source_types);
+
+    uint32_t available_cursor_modes = 0;
+    gsr_dbus_desktop_portal_get_property(self, "org.freedesktop.portal.ScreenCast", "AvailableCursorModes", &available_cursor_modes);
+    if(available_cursor_modes == 0)
+        fprintf(stderr, "gsr error: gsr_dbus_screencast_select_sources: no cursors modes are available\n");
+    cursor_mode = unset_unsupported_cursor_modes(cursor_mode, available_cursor_modes);
 
     char handle_token[64];
     gsr_dbus_portal_get_unique_handle_token(self, handle_token, sizeof(handle_token));
