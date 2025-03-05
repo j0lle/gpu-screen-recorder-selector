@@ -413,6 +413,7 @@ static void renegotiate_format(void *data, uint64_t expirations) {
     uint8_t params_buffer[4096];
     struct spa_pod_builder pod_builder = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
     if (!gsr_pipewire_video_build_format_params(self, &pod_builder, params, &num_video_formats)) {
+        fprintf(stderr, "gsr error: renegotiate_format: failed to build formats\n");
         pw_thread_loop_unlock(self->thread_loop);
         return;
     }
@@ -509,6 +510,9 @@ static bool gsr_pipewire_video_setup_stream(gsr_pipewire_video *self) {
     // TODO: Error check
     pw_core_add_listener(self->core, &self->core_listener, &core_events, self);
 
+    self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, 0);
+    pw_thread_loop_wait(self->thread_loop);
+
     gsr_pipewire_video_init_modifiers(self);
 
     // TODO: Cleanup?
@@ -518,9 +522,6 @@ static bool gsr_pipewire_video_setup_stream(gsr_pipewire_video *self) {
         fprintf(stderr, "gsr error: gsr_pipewire_video_setup_stream: pw_loop_add_event failed\n");
         goto error;
     }
-
-    self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, 0);
-    pw_thread_loop_wait(self->thread_loop);
 
     self->stream = pw_stream_new(self->core, "com.dec05eba.gpu_screen_recorder",
         pw_properties_new(PW_KEY_MEDIA_TYPE, "Video",

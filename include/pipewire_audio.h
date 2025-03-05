@@ -80,6 +80,7 @@ typedef struct {
 
     struct pw_proxy *metadata_proxy;
     struct spa_hook metadata_listener;
+    struct spa_hook metadata_proxy_listener;
     char default_output_device_name[128];
     char default_input_device_name[128];
 

@@ -329,22 +329,20 @@ static const struct pw_metadata_events metadata_events = {
 static void on_metadata_proxy_removed_cb(void *data) {
     gsr_pipewire_audio *self = data;
     if(self->metadata_proxy) {
-        // TODO:
-        //pw_proxy_destroy(self->metadata_proxy);
-        //self->metadata_proxy = NULL;
+        pw_proxy_destroy(self->metadata_proxy);
+        self->metadata_proxy = NULL;
     }
 }
 
 static void on_metadata_proxy_destroy_cb(void *data) {
 	gsr_pipewire_audio *self = data;
 
-    // TODO:
-	//spa_hook_remove(&metadata->metadata_listener);
-	//spa_hook_remove(&metadata->proxy_listener);
-	//spa_zero(metadata->metadata_listener);
-	//spa_zero(metadata->proxy_listener);
+	spa_hook_remove(&self->metadata_listener);
+	spa_hook_remove(&self->metadata_proxy_listener);
+	spa_zero(self->metadata_listener);
+	spa_zero(self->metadata_proxy_listener);
 
-	//self->metadata_proxy = NULL;
+	self->metadata_proxy = NULL;
 }
 
 static const struct pw_proxy_events metadata_proxy_events = {
@@ -365,11 +363,8 @@ static bool gsr_pipewire_audio_listen_on_metadata(gsr_pipewire_audio *self, uint
         return false;
     }
 
-    // TODO:
-    pw_metadata_add_listener((struct pw_metadata*)self->metadata_proxy, &self->metadata_listener, &metadata_events, self);
-
-    //struct spa_hook proxy_listener;
-    //pw_proxy_add_listener(self->metadata_proxy, &proxy_listener, &metadata_proxy_events, self);
+    pw_proxy_add_object_listener(self->metadata_proxy, &self->metadata_listener, &metadata_events, self);
+    pw_proxy_add_listener(self->metadata_proxy, &self->metadata_proxy_listener, &metadata_proxy_events, self);
     return true;
 }
 
@@ -549,14 +544,13 @@ bool gsr_pipewire_audio_init(gsr_pipewire_audio *self) {
 
     pw_context_load_module(self->context, "libpipewire-module-link-factory", NULL, NULL);
 
-    pw_thread_loop_lock(self->thread_loop);
-
     if(pw_thread_loop_start(self->thread_loop) < 0) {
         fprintf(stderr, "gsr error: gsr_pipewire_audio_init: failed to start thread\n");
-        pw_thread_loop_unlock(self->thread_loop);
         gsr_pipewire_audio_deinit(self);
         return false;
     }
+
+    pw_thread_loop_lock(self->thread_loop);
 
     self->core = pw_context_connect(self->context, pw_properties_new(PW_KEY_REMOTE_NAME, NULL, NULL), 0);
     if(!self->core) {
@@ -568,11 +562,12 @@ bool gsr_pipewire_audio_init(gsr_pipewire_audio *self) {
     // TODO: Error check
     pw_core_add_listener(self->core, &self->core_listener, &core_events, self);
 
+    self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, 0);
+    pw_thread_loop_wait(self->thread_loop);
+
     self->registry = pw_core_get_registry(self->core, PW_VERSION_REGISTRY, 0);
     pw_registry_add_listener(self->registry, &self->registry_listener, &registry_events, self);
 
-    self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, 0);
-    pw_thread_loop_wait(self->thread_loop);
     pw_thread_loop_unlock(self->thread_loop);
     return true;
 }
@@ -592,7 +587,11 @@ void gsr_pipewire_audio_deinit(gsr_pipewire_audio *self) {
     self->num_virtual_sink_proxies = 0;
 
     if(self->metadata_proxy) {
+        spa_hook_remove(&self->metadata_listener);
+        spa_hook_remove(&self->metadata_proxy_listener);
         pw_proxy_destroy(self->metadata_proxy);
+        spa_zero(self->metadata_listener);
+        spa_zero(self->metadata_proxy_listener);
         self->metadata_proxy = NULL;
     }
 
