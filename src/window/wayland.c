@@ -1,4 +1,4 @@
-#include "../../include/window/window_wayland.h"
+#include "../../include/window/wayland.h"
 
 #include "../../include/vec2.h"
 #include "../../include/defs.h"

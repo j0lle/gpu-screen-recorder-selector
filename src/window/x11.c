@@ -1,4 +1,4 @@
-#include "../../include/window/window_x11.h"
+#include "../../include/window/x11.h"
 
 #include "../../include/vec2.h"
 #include "../../include/defs.h"

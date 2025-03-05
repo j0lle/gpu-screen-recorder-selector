@@ -124,7 +124,7 @@ static void subscribe_update_default_devices(pa_context*, const pa_server_info *
 static void subscribe_cb(pa_context *c, pa_subscription_event_type_t t, uint32_t idx, void *userdata) {
     (void)idx;
     pa_handle *handle = (pa_handle*)userdata;
-    if(t & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) {
+    if((t & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) == PA_SUBSCRIPTION_EVENT_SERVER) {
         pa_operation *pa = pa_context_get_server_info(c, subscribe_update_default_devices, handle);
         if(pa)
             pa_operation_unref(pa);
