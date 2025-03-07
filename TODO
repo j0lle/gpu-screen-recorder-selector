@@ -242,3 +242,5 @@ Support reconnecting (and setting things up again) if the audio server is restar
 Find out how nvidia-smi fixes nvenc not working on opensuse and do that ourselves instead of relying on nvidia-smi that is not always installed.
 
 Pulseaudio code: add "running" variable to loops to allow stopping the running code when quitting.
+
+Scale screenshot frame libswscale or implement lanczos shader for improved scaline for video as well.
