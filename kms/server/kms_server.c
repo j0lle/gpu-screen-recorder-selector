@@ -25,7 +25,6 @@
 
 typedef struct {
     int drmfd;
-    drmModePlaneResPtr planes;
 } gsr_drm;
 
 typedef struct {
@@ -296,14 +295,20 @@ static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response, connector_to_crt
     response->err_msg[0] = '\0';
     response->num_items = 0;
 
-    for(uint32_t i = 0; i < drm->planes->count_planes && response->num_items < GSR_KMS_MAX_ITEMS; ++i) {
+    drmModePlaneResPtr planes = drmModeGetPlaneResources(drm->drmfd);
+    if(!planes) {
+        fprintf(stderr, "kms server error: failed to get plane resources, error: %s\n", strerror(errno));
+        goto done;
+    }
+
+    for(uint32_t i = 0; i < planes->count_planes && response->num_items < GSR_KMS_MAX_ITEMS; ++i) {
         drmModePlanePtr plane = NULL;
         drmModeFB2Ptr drmfb = NULL;
 
-        plane = drmModeGetPlane(drm->drmfd, drm->planes->planes[i]);
+        plane = drmModeGetPlane(drm->drmfd, planes->planes[i]);
         if(!plane) {
             response->result = KMS_RESULT_FAILED_TO_GET_PLANE;
-            snprintf(response->err_msg, sizeof(response->err_msg), "failed to get drm plane with id %u, error: %s\n", drm->planes->planes[i], strerror(errno));
+            snprintf(response->err_msg, sizeof(response->err_msg), "failed to get drm plane with id %u, error: %s\n", planes->planes[i], strerror(errno));
             fprintf(stderr, "kms server error: %s\n", response->err_msg);
             goto next;
         }
@@ -388,6 +393,11 @@ static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response, connector_to_crt
         if(plane)
             drmModeFreePlane(plane);
     }
+
+    done:
+
+    if(planes)
+        drmModeFreePlaneResources(planes);
 
     if(response->num_items > 0)
         response->result = KMS_RESULT_OK;
@@ -499,7 +509,6 @@ int main(int argc, char **argv) {
     int socket_fd = 0;
     gsr_drm drm;
     drm.drmfd = 0;
-    drm.planes = NULL;
 
     if(argc != 3) {
         fprintf(stderr, "usage: gsr-kms-server <domain_socket_path> <card_path>\n");
@@ -530,13 +539,6 @@ int main(int argc, char **argv) {
 
     if(drmSetClientCap(drm.drmfd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
         fprintf(stderr, "kms server warning: drmSetClientCap DRM_CLIENT_CAP_ATOMIC failed, error: %s. The wrong monitor may be captured as a result\n", strerror(errno));
-    }
-
-    drm.planes = drmModeGetPlaneResources(drm.drmfd);
-    if(!drm.planes) {
-        fprintf(stderr, "kms server error: failed to get plane resources, error: %s\n", strerror(errno));
-        res = 2;
-        goto done;
     }
 
     connector_to_crtc_map c2crtc_map;
@@ -681,8 +683,6 @@ int main(int argc, char **argv) {
     }
 
     done:
-    if(drm.planes)
-        drmModeFreePlaneResources(drm.planes);
     if(drm.drmfd > 0)
         close(drm.drmfd);
     if(socket_fd > 0)
