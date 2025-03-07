@@ -288,12 +288,16 @@ static int drm_prime_handles_to_fds(gsr_drm *drm, drmModeFB2Ptr drmfb, int *fb_f
     return GSR_KMS_MAX_DMA_BUFS;
 }
 
-static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response, connector_to_crtc_map *c2crtc_map) {
+static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response) {
     int result = -1;
 
     response->result = KMS_RESULT_OK;
     response->err_msg[0] = '\0';
     response->num_items = 0;
+
+    connector_to_crtc_map c2crtc_map;
+    c2crtc_map.num_maps = 0;
+    map_crtc_to_connector_ids(drm, &c2crtc_map);
 
     drmModePlaneResPtr planes = drmModeGetPlaneResources(drm->drmfd);
     if(!planes) {
@@ -351,7 +355,7 @@ static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response, connector_to_crt
 
         const int item_index = response->num_items;
 
-        const connector_crtc_pair *crtc_pair = get_connector_pair_by_crtc_id(c2crtc_map, plane->crtc_id);
+        const connector_crtc_pair *crtc_pair = get_connector_pair_by_crtc_id(&c2crtc_map, plane->crtc_id);
         if(crtc_pair && crtc_pair->hdr_metadata_blob_id) {
             response->items[item_index].has_hdr_metadata = get_hdr_metadata(drm->drmfd, crtc_pair->hdr_metadata_blob_id, &response->items[item_index].hdr_metadata);
         } else {
@@ -541,10 +545,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "kms server warning: drmSetClientCap DRM_CLIENT_CAP_ATOMIC failed, error: %s. The wrong monitor may be captured as a result\n", strerror(errno));
     }
 
-    connector_to_crtc_map c2crtc_map;
-    c2crtc_map.num_maps = 0;
-    map_crtc_to_connector_ids(&drm, &c2crtc_map);
-
     fprintf(stderr, "kms server info: connecting to the client\n");
     bool connected = false;
     const double connect_timeout_sec = 5.0;
@@ -644,7 +644,7 @@ int main(int argc, char **argv) {
                 response.version = GSR_KMS_PROTOCOL_VERSION;
                 response.num_items = 0;
                 
-                if(kms_get_fb(&drm, &response, &c2crtc_map) == 0) {
+                if(kms_get_fb(&drm, &response) == 0) {
                     if(send_msg_to_client(socket_fd, &response) == -1)
                         fprintf(stderr, "kms server error: failed to respond to client KMS_REQUEST_TYPE_GET_KMS request\n");
                 } else {
