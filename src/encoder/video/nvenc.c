@@ -138,6 +138,15 @@ static bool gsr_video_encoder_nvenc_start(gsr_video_encoder *encoder, AVCodecCon
         return false;
     }
 
+    if(video_codec_context->width < 128)
+        video_codec_context->width = 128;
+
+    if(video_codec_context->height < 128)
+        video_codec_context->height = 128;
+
+    frame->width = video_codec_context->width;
+    frame->height = video_codec_context->height;
+
     if(!gsr_video_encoder_nvenc_setup_context(self, video_codec_context)) {
         gsr_video_encoder_nvenc_stop(self, video_codec_context);
         return false;

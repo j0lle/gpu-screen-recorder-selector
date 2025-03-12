@@ -74,19 +74,52 @@ static const int VIDEO_STREAM_INDEX = 0;
 
 static thread_local char av_error_buffer[AV_ERROR_MAX_STRING_SIZE];
 
+typedef struct {
+    const gsr_window *window;
+} MonitorOutputCallbackUserdata;
+
 static void monitor_output_callback_print(const gsr_monitor *monitor, void *userdata) {
-    (void)userdata;
-    fprintf(stderr, "    \"%.*s\"    (%dx%d+%d+%d)\n", monitor->name_len, monitor->name, monitor->size.x, monitor->size.y, monitor->pos.x, monitor->pos.y);
+    const MonitorOutputCallbackUserdata *options = (MonitorOutputCallbackUserdata*)userdata;
+    vec2i monitor_position = monitor->pos;
+    if(gsr_window_get_display_server(options->window) == GSR_DISPLAY_SERVER_WAYLAND) {
+        gsr_monitor_rotation monitor_rotation = GSR_MONITOR_ROT_0;
+        drm_monitor_get_display_server_data(options->window, monitor, &monitor_rotation, &monitor_position);
+    }
+    fprintf(stderr, "  \"%.*s\"    (%dx%d+%d+%d)\n", monitor->name_len, monitor->name, monitor->size.x, monitor->size.y, monitor_position.x, monitor_position.y);
 }
 
 typedef struct {
-    const char *output_name;
+    char *output_name;
 } FirstOutputCallback;
 
-static void get_first_output(const gsr_monitor *monitor, void *userdata) {
-    FirstOutputCallback *first_output = (FirstOutputCallback*)userdata;
-    if(!first_output->output_name)
-        first_output->output_name = strndup(monitor->name, monitor->name_len + 1);
+static void get_first_output_callback(const gsr_monitor *monitor, void *userdata) {
+    FirstOutputCallback *data = (FirstOutputCallback*)userdata;
+    if(!data->output_name)
+        data->output_name = strdup(monitor->name);
+}
+
+typedef struct {
+    gsr_window *window;
+    vec2i position;
+    char *output_name;
+    vec2i monitor_pos;
+    vec2i monitor_size;
+} MonitorByPositionCallback;
+
+static void get_monitor_by_position_callback(const gsr_monitor *monitor, void *userdata) {
+    MonitorByPositionCallback *data = (MonitorByPositionCallback*)userdata;
+
+    gsr_monitor_rotation monitor_rotation = GSR_MONITOR_ROT_0;
+    vec2i monitor_position = monitor->pos;
+    drm_monitor_get_display_server_data(data->window, monitor, &monitor_rotation, &monitor_position);
+
+    if(!data->output_name && data->position.x >= monitor_position.x && data->position.x <= monitor_position.x + monitor->size.x
+        && data->position.y >= monitor_position.y && data->position.y <= monitor_position.y + monitor->size.y)
+    {
+        data->output_name = strdup(monitor->name);
+        data->monitor_pos = monitor_position;
+        data->monitor_size = monitor->size;
+    }
 }
 
 static char* av_error_to_string(int err) {
@@ -1070,7 +1103,7 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
 static void usage_header() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal> [-c <container_format>] [-s WxH] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -1081,10 +1114,11 @@ static void usage_full() {
     usage_header();
     printf("\n");
     printf("OPTIONS:\n");
-    printf("  -w    Window id to record, a display (monitor name), \"screen\", \"screen-direct\", \"focused\" or \"portal\".\n");
+    printf("  -w    Window id to record, a display (monitor name), \"screen\", \"screen-direct\", \"focused\", \"portal\" or \"region\".\n");
     printf("        If this is \"portal\" then xdg desktop screencast portal with PipeWire will be used. Portal option is only available on Wayland.\n");
     printf("        If you select to save the session (token) in the desktop portal capture popup then the session will be saved for the next time you use \"portal\",\n");
     printf("        but the session will be ignored unless you run GPU Screen Recorder with the '-restore-portal-session yes' option.\n");
+    printf("        If this is \"region\" then the region specified by the -region option is recorded.\n");
     printf("        If this is \"screen\" then the first monitor found is recorded.\n");
     printf("        \"screen-direct\" can only be used on Nvidia X11, to allow recording without breaking VRR (G-SYNC). This also records all of your monitors.\n");
     printf("        Using this \"screen-direct\" option is not recommended unless you use VRR (G-SYNC) as there are Nvidia driver issues that can cause your system or games to freeze/crash.\n");
@@ -1098,6 +1132,11 @@ static void usage_full() {
     printf("  -s    The output resolution limit of the video in the format WxH, for example 1920x1080. If this is 0x0 then the original resolution is used. Optional, except when -w is \"focused\".\n");
     printf("        Note: the captured content is scaled to this size. The output resolution might not be exactly as specified by this option. The original aspect ratio is respected so the resolution will match that.\n");
     printf("        The video encoder might also need to add padding, which will result in black bars on the sides of the video. This is especially an issue on AMD.\n");
+    printf("\n");
+    printf("  -region\n");
+    printf("        The region to capture, only to be used with -w region. This is in format WxH+X+Y, which is compatible with tools such as slop (X11) and slurp (kde plasma, wlroots and hyprland).\n");
+    printf("        The region can be inside any monitor. If width and height are 0 (for example 0x0+500+500) then the entire monitor that the region is inside in will be recorded.\n");
+    printf("        Note: currently the region can't span multiple monitors.\n");
     printf("\n");
     printf("  -f    Frame rate to record at. Recording will only capture frames at this target frame rate.\n");
     printf("        For constant frame rate mode this option is the frame rate every frame will be captured at and if the capture frame rate is below this target frame rate then the frames will be duplicated.\n");
@@ -1249,18 +1288,21 @@ static void usage_full() {
     printf("  Send signal SIGUSR2 to gpu-screen-recorder (killall -SIGUSR2 gpu-screen-recorder) to pause/unpause recording. Only applicable and useful when recording (not streaming nor replay).\n");
     printf("\n");
     printf("EXAMPLES:\n");
-    printf("  %s -w screen -f 60 -a default_output -o \"$HOME/Videos/video.mp4\"\n", program_name);
-    printf("  %s -w screen -f 60 -a default_output -a default_input -o \"$HOME/Videos/video.mp4\"\n", program_name);
-    printf("  %s -w screen -f 60 -a \"default_output|default_input\" -o \"$HOME/Videos/video.mp4\"\n", program_name);
+    printf("  %s -w screen -f 60 -a default_output -o video.mp4\n", program_name);
+    printf("  %s -w screen -f 60 -a default_output -a default_input -o video.mp4\n", program_name);
+    printf("  %s -w screen -f 60 -a \"default_output|default_input\" -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -c mkv -r 60 -o \"$HOME/Videos\"\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -c mkv -sc script.sh -r 60 -o \"$HOME/Videos\"\n", program_name);
-    printf("  %s -w portal -f 60 -a default_output -restore-portal-session yes -o \"$HOME/Videos/video.mp4\"\n", program_name);
-    printf("  %s -w screen -f 60 -a default_output -bm cbr -q 15000 -o \"$HOME/Videos/video.mp4\"\n", program_name);
-    printf("  %s -w screen -f 60 -a \"app:firefox|app:csgo\" -o \"$HOME/Videos/video.mp4\"\n", program_name);
-    printf("  %s -w screen -f 60 -a \"app-inverse:firefox|app-inverse:csgo\" -o \"$HOME/Videos/video.mp4\"\n", program_name);
-    printf("  %s -w screen -f 60 -a \"default-input|app-inverse:Brave\" -o \"$HOME/Videos/video.mp4\"\n", program_name);
-    printf("  %s -w screen -o \"$HOME/Pictures/image.jpg\"\n", program_name);
-    printf("  %s -w screen -q medium -o \"$HOME/Pictures/image.jpg\"\n", program_name);
+    printf("  %s -w portal -f 60 -a default_output -restore-portal-session yes -o video.mp4\n", program_name);
+    printf("  %s -w screen -f 60 -a default_output -bm cbr -q 15000 -o video.mp4\n", program_name);
+    printf("  %s -w screen -f 60 -a \"app:firefox|app:csgo\" -o video.mp4\n", program_name);
+    printf("  %s -w screen -f 60 -a \"app-inverse:firefox|app-inverse:csgo\" -o video.mp4\n", program_name);
+    printf("  %s -w screen -f 60 -a \"default-input|app-inverse:Brave\" -o video.mp4\n", program_name);
+    printf("  %s -w screen -o image.jpg\n", program_name);
+    printf("  %s -w screen -q medium -o image.jpg\n", program_name);
+    printf("  %s -w region -region 640x480+100+100 -o video.mp4\n", program_name);
+    printf("  %s -w region -region $(slop) -o video.mp4\n", program_name);
+    printf("  %s -w region -region $(slurp -f \"%%wx%%h+%%x+%%y\") -o video.mp4\n", program_name);
     //fprintf(stderr, "  gpu-screen-recorder -w screen -f 60 -q ultra -pixfmt yuv444 -o video.mp4\n");
     fflush(stdout);
     _exit(1);
@@ -2097,8 +2139,10 @@ static void output_monitor_info(const gsr_monitor *monitor, void *userdata) {
     const capture_options_callback *options = (capture_options_callback*)userdata;
     if(gsr_window_get_display_server(options->window) == GSR_DISPLAY_SERVER_WAYLAND) {
         vec2i monitor_size = monitor->size;
-        const gsr_monitor_rotation rot = drm_monitor_get_display_server_rotation(options->window, monitor);
-        if(rot == GSR_MONITOR_ROT_90 || rot == GSR_MONITOR_ROT_270)
+        gsr_monitor_rotation monitor_rotation = GSR_MONITOR_ROT_0;
+        vec2i monitor_position = {0, 0};
+        drm_monitor_get_display_server_data(options->window, monitor, &monitor_rotation, &monitor_position);
+        if(monitor_rotation == GSR_MONITOR_ROT_90 || monitor_rotation == GSR_MONITOR_ROT_270)
             std::swap(monitor_size.x, monitor_size.y);
         printf("%.*s|%dx%d\n", monitor->name_len, monitor->name, monitor_size.x, monitor_size.y);
     } else {
@@ -2112,6 +2156,7 @@ static void list_supported_capture_options(const gsr_window *window, const char 
         puts("window");
         puts("focused");
     }
+    puts("region");
 
     if(list_monitors) {
         capture_options_callback options;
@@ -2333,12 +2378,13 @@ static void validate_monitor_get_valid(const gsr_egl *egl, std::string &window_s
     const bool capture_use_drm = monitor_capture_use_drm(egl->window, egl->gpu_info.vendor);
 
     if(strcmp(window_str.c_str(), "screen") == 0) {
-        FirstOutputCallback first_output;
-        first_output.output_name = NULL;
-        for_each_active_monitor_output(egl->window, egl->card_path, connection_type, get_first_output, &first_output);
+        FirstOutputCallback data;
+        data.output_name = NULL;
+        for_each_active_monitor_output(egl->window, egl->card_path, connection_type, get_first_output_callback, &data);
 
-        if(first_output.output_name) {
-            window_str = first_output.output_name;
+        if(data.output_name) {
+            window_str = data.output_name;
+            free(data.output_name);
         } else {
             fprintf(stderr, "Error: no usable output found\n");
             _exit(51);
@@ -2347,16 +2393,80 @@ static void validate_monitor_get_valid(const gsr_egl *egl, std::string &window_s
         gsr_monitor gmon;
         if(!get_monitor_by_name(egl, connection_type, window_str.c_str(), &gmon)) {
             fprintf(stderr, "gsr error: display \"%s\" not found, expected one of:\n", window_str.c_str());
-            fprintf(stderr, "    \"screen\"\n");
+            fprintf(stderr, "  \"screen\"\n");
             if(!capture_use_drm)
-                fprintf(stderr, "    \"screen-direct\"\n");
-            for_each_active_monitor_output(egl->window, egl->card_path, connection_type, monitor_output_callback_print, NULL);
+                fprintf(stderr, "  \"screen-direct\"\n");
+
+            MonitorOutputCallbackUserdata userdata;
+            userdata.window = egl->window;
+            for_each_active_monitor_output(egl->window, egl->card_path, connection_type, monitor_output_callback_print, &userdata);
             _exit(51);
         }
     }
 }
 
-static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_resolution, bool wayland, gsr_egl *egl, int fps, bool hdr, gsr_color_range color_range,
+static std::string get_monitor_by_region_center(const gsr_egl *egl, vec2i region_position, vec2i region_size, vec2i *monitor_pos, vec2i *monitor_size) {
+    const bool is_x11 = gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11;
+    const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
+
+    MonitorByPositionCallback data;
+    data.window = egl->window;
+    data.position = { region_position.x + region_size.x / 2, region_position.y + region_size.y / 2 };
+    data.output_name = NULL;
+    data.monitor_pos = {0, 0};
+    data.monitor_size = {0, 0};
+    for_each_active_monitor_output(egl->window, egl->card_path, connection_type, get_monitor_by_position_callback, &data);
+
+    std::string result;
+    if(data.output_name) {
+        result = data.output_name;
+        free(data.output_name);
+    }
+    *monitor_pos = data.monitor_pos;
+    *monitor_size = data.monitor_size;
+    return result;
+}
+
+static gsr_capture* create_monitor_capture(const std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, gsr_egl *egl, int fps, bool hdr, gsr_color_range color_range, bool record_cursor, gsr_color_depth color_depth) {
+    if(!monitor_capture_use_drm(egl->window, egl->gpu_info.vendor)) {
+        const char *capture_target = window_str.c_str();
+        const bool direct_capture = strcmp(window_str.c_str(), "screen-direct") == 0 || strcmp(window_str.c_str(), "screen-direct-force") == 0;
+        if(direct_capture) {
+            capture_target = "screen";
+            fprintf(stderr, "Warning: %s capture option is not recommended unless you use G-SYNC as Nvidia has driver issues that can cause your system or games to freeze/crash.\n", window_str.c_str());
+        }
+
+        gsr_capture_nvfbc_params nvfbc_params;
+        nvfbc_params.egl = egl;
+        nvfbc_params.display_to_capture = capture_target;
+        nvfbc_params.fps = fps;
+        nvfbc_params.pos = { 0, 0 };
+        nvfbc_params.size = { 0, 0 };
+        nvfbc_params.direct_capture = direct_capture;
+        nvfbc_params.color_depth = color_depth;
+        nvfbc_params.color_range = color_range;
+        nvfbc_params.record_cursor = record_cursor;
+        nvfbc_params.output_resolution = output_resolution;
+        nvfbc_params.region_size = region_size;
+        nvfbc_params.region_position = region_position;
+        return gsr_capture_nvfbc_create(&nvfbc_params);
+    } else {
+        gsr_capture_kms_params kms_params;
+        kms_params.egl = egl;
+        kms_params.display_to_capture = window_str.c_str();
+        kms_params.color_depth = color_depth;
+        kms_params.color_range = color_range;
+        kms_params.record_cursor = record_cursor;
+        kms_params.hdr = hdr;
+        kms_params.fps = fps;
+        kms_params.output_resolution = output_resolution;
+        kms_params.region_size = region_size;
+        kms_params.region_position = region_position;
+        return gsr_capture_kms_create(&kms_params);
+    }
+}
+
+static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, bool wayland, gsr_egl *egl, int fps, bool hdr, gsr_color_range color_range,
     bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath,
     gsr_color_depth color_depth)
 {
@@ -2399,44 +2509,40 @@ static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_re
         fprintf(stderr, "Error: option '-w portal' used but GPU Screen Recorder was compiled without desktop portal support. Please recompile GPU Screen recorder with the -Dportal=true option\n");
         _exit(2);
 #endif
+    } else if(strcmp(window_str.c_str(), "region") == 0) {
+        vec2i monitor_pos = {0, 0};
+        vec2i monitor_size = {0, 0};
+        window_str = get_monitor_by_region_center(egl, region_position, region_size, &monitor_pos, &monitor_size);
+        if(window_str.empty()) {
+            const bool is_x11 = gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11;
+            const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
+            fprintf(stderr, "Error: the region %dx%d+%d+%d doesn't match any monitor. Available monitors and their regions:\n", region_size.x, region_size.y, region_position.x, region_position.y);
+
+            MonitorOutputCallbackUserdata userdata;
+            userdata.window = egl->window;
+            for_each_active_monitor_output(egl->window, egl->card_path, connection_type, monitor_output_callback_print, &userdata);
+            _exit(51);
+        }
+
+        // Capture whole monitor when region size is set to 0x0
+        if(region_size.x == 0 && region_size.y == 0) {
+            region_position.x = 0;
+            region_position.y = 0;
+        } else {
+            region_position.x -= monitor_pos.x;
+            region_position.y -= monitor_pos.y;
+        }
+
+        fprintf(stderr, "region: %dx%d+%d+%d\n", region_size.x, region_size.y, region_position.x, region_position.y);
+
+        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, color_range, record_cursor, color_depth);
+        if(!capture)
+            _exit(1);
     } else if(contains_non_hex_number(window_str.c_str())) {
         validate_monitor_get_valid(egl, window_str);
-        if(!monitor_capture_use_drm(egl->window, egl->gpu_info.vendor)) {
-            const char *capture_target = window_str.c_str();
-            const bool direct_capture = strcmp(window_str.c_str(), "screen-direct") == 0 || strcmp(window_str.c_str(), "screen-direct-force") == 0;
-            if(direct_capture) {
-                capture_target = "screen";
-                fprintf(stderr, "Warning: %s capture option is not recommended unless you use G-SYNC as Nvidia has driver issues that can cause your system or games to freeze/crash.\n", window_str.c_str());
-            }
-
-            gsr_capture_nvfbc_params nvfbc_params;
-            nvfbc_params.egl = egl;
-            nvfbc_params.display_to_capture = capture_target;
-            nvfbc_params.fps = fps;
-            nvfbc_params.pos = { 0, 0 };
-            nvfbc_params.size = { 0, 0 };
-            nvfbc_params.direct_capture = direct_capture;
-            nvfbc_params.color_depth = color_depth;
-            nvfbc_params.color_range = color_range;
-            nvfbc_params.record_cursor = record_cursor;
-            nvfbc_params.output_resolution = output_resolution;
-            capture = gsr_capture_nvfbc_create(&nvfbc_params);
-            if(!capture)
-                _exit(1);
-        } else {
-            gsr_capture_kms_params kms_params;
-            kms_params.egl = egl;
-            kms_params.display_to_capture = window_str.c_str();
-            kms_params.color_depth = color_depth;
-            kms_params.color_range = color_range;
-            kms_params.record_cursor = record_cursor;
-            kms_params.hdr = hdr;
-            kms_params.fps = fps;
-            kms_params.output_resolution = output_resolution;
-            capture = gsr_capture_kms_create(&kms_params);
-            if(!capture)
-                _exit(1);
-        }
+        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, color_range, record_cursor, color_depth);
+        if(!capture)
+            _exit(1);
     } else {
         if(wayland) {
             fprintf(stderr, "Error: GPU Screen Recorder window capture only works in a pure X11 session. Xwayland is not supported. You can record a monitor instead on wayland or use -w portal option which supports window capture if your wayland compositor supports window capture\n");
@@ -2493,11 +2599,11 @@ static int video_quality_to_image_quality_value(VideoQuality video_quality) {
 }
 
 // TODO: 10-bit and hdr.
-static void capture_image_to_file(const char *filepath, std::string &window_str, vec2i output_resolution, bool wayland, gsr_egl *egl, gsr_image_format image_format,
+static void capture_image_to_file(const char *filepath, std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, bool wayland, gsr_egl *egl, gsr_image_format image_format,
     bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath, VideoQuality video_quality) {
     const gsr_color_range color_range = image_format_to_color_range(image_format);
     const int fps = 60;
-    gsr_capture *capture = create_capture_impl(window_str, output_resolution, wayland, egl, fps, false, color_range, record_cursor, restore_portal_session, portal_session_token_filepath, GSR_COLOR_DEPTH_8_BITS);
+    gsr_capture *capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, egl, fps, false, color_range, record_cursor, restore_portal_session, portal_session_token_filepath, GSR_COLOR_DEPTH_8_BITS);
 
     gsr_capture_metadata capture_metadata;
     capture_metadata.width = 0;
@@ -3229,6 +3335,7 @@ int main(int argc, char **argv) {
         { "-c",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-f",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-s",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-region",                        Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-a",                             Arg { {},  is_optional,   is_list,  ArgType::STRING,  {false} } },
         { "-q",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-o",                             Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
@@ -3550,7 +3657,7 @@ int main(int argc, char **argv) {
         video_codec = hdr_video_codec_to_sdr_video_codec(video_codec);
     }
 
-    const bool is_monitor_capture = strcmp(window_str.c_str(), "focused") != 0 && !is_portal_capture && contains_non_hex_number(window_str.c_str());
+    const bool is_monitor_capture = strcmp(window_str.c_str(), "focused") != 0 && strcmp(window_str.c_str(), "region") != 0 && !is_portal_capture && contains_non_hex_number(window_str.c_str());
     gsr_egl egl;
     if(!gsr_egl_load(&egl, window, is_monitor_capture, gl_debug)) {
         fprintf(stderr, "gsr error: failed to load opengl\n");
@@ -3703,7 +3810,7 @@ int main(int argc, char **argv) {
 
     const char *output_resolution_str = args["-s"].value();
     if(!output_resolution_str && strcmp(window_str.c_str(), "focused") == 0) {
-        fprintf(stderr, "Error: option -s is required when using -w focused option\n");
+        fprintf(stderr, "Error: option -s is required when using '-w focused' option\n");
         usage();
     }
 
@@ -3716,6 +3823,31 @@ int main(int argc, char **argv) {
 
         if(output_resolution.x < 0 || output_resolution.y < 0) {
             fprintf(stderr, "Error: invalud value for option -s '%s', expected width and height to be greater or equal to 0\n", output_resolution_str);
+            usage();
+        }
+    }
+
+    vec2i region_size = {0, 0};
+    vec2i region_position = {0, 0};
+    const char *region_str = args["-region"].value();
+    if(region_str) {
+        if(strcmp(window_str.c_str(), "region") != 0) {
+            fprintf(stderr, "Error: option -region can only be used when option '-w region' is used\n");
+            usage();
+        }
+
+        if(sscanf(region_str, "%dx%d+%d+%d", &region_size.x, &region_size.y, &region_position.x, &region_position.y) != 4) {
+            fprintf(stderr, "Error: invalid value for option -region '%s', expected a value in format WxH+X+Y\n", region_str);
+            usage();
+        }
+
+        if(region_size.x < 0 || region_size.y < 0 || region_position.x < 0 || region_position.y < 0) {
+            fprintf(stderr, "Error: invalud value for option -region '%s', expected width, height, x and y to be greater or equal to 0\n", region_str);
+            usage();
+        }
+    } else {
+        if(strcmp(window_str.c_str(), "region") == 0) {
+            fprintf(stderr, "Error: option -region is required when '-w region' is used\n");
             usage();
         }
     }
@@ -3776,7 +3908,7 @@ int main(int argc, char **argv) {
             _exit(1);
         }
 
-        capture_image_to_file(filename, window_str, output_resolution, wayland, &egl, image_format, record_cursor, restore_portal_session, portal_session_token_filepath, quality);
+        capture_image_to_file(filename, window_str, output_resolution, region_size, region_position, wayland, &egl, image_format, record_cursor, restore_portal_session, portal_session_token_filepath, quality);
         _exit(0);
     }
 
@@ -3795,7 +3927,7 @@ int main(int argc, char **argv) {
 
     const AVOutputFormat *output_format = av_format_context->oformat;
 
-    std::string file_extension = output_format->extensions;
+    std::string file_extension = output_format->extensions ? output_format->extensions : "";
     {
         size_t comma_index = file_extension.find(',');
         if(comma_index != std::string::npos)
@@ -3811,7 +3943,7 @@ int main(int argc, char **argv) {
     const AVCodec *video_codec_f = select_video_codec_with_fallback(&video_codec, video_codec_to_use, file_extension.c_str(), use_software_video_encoder, &egl, &low_power);
 
     const gsr_color_depth color_depth = video_codec_to_bit_depth(video_codec);
-    gsr_capture *capture = create_capture_impl(window_str, output_resolution, wayland, &egl, fps, video_codec_is_hdr(video_codec), color_range, record_cursor, restore_portal_session, portal_session_token_filepath, color_depth);
+    gsr_capture *capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, &egl, fps, video_codec_is_hdr(video_codec), color_range, record_cursor, restore_portal_session, portal_session_token_filepath, color_depth);
 
     // (Some?) livestreaming services require at least one audio track to work.
     // If not audio is provided then create one silent audio track.

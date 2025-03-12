@@ -28,7 +28,6 @@ typedef struct {
     NVFBC_TOGL_SETUP_PARAMS setup_params;
 
     bool supports_direct_cursor;
-    bool capture_region;
     uint32_t x, y, width, height;
     NVFBC_TRACKING_TYPE tracking_type;
     uint32_t output_id;
@@ -223,11 +222,8 @@ static int gsr_capture_nvfbc_setup_handle(gsr_capture_nvfbc *self) {
         }
     }
 
-    if(!self->capture_region) {
-        self->width = self->tracking_width;
-        self->height = self->tracking_height;
-    }
-
+    self->width = self->tracking_width;
+    self->height = self->tracking_height;
     return 0;
 
     error_cleanup:
@@ -243,8 +239,6 @@ static int gsr_capture_nvfbc_setup_session(gsr_capture_nvfbc *self) {
     create_capture_params.bWithCursor = (!self->params.direct_capture || self->supports_direct_cursor) ? NVFBC_TRUE : NVFBC_FALSE;
     if(!self->params.record_cursor)
         create_capture_params.bWithCursor = false;
-    if(self->capture_region)
-        create_capture_params.captureBox = (NVFBC_BOX){ self->x, self->y, self->width, self->height };
     create_capture_params.eTrackingType = self->tracking_type;
     create_capture_params.dwSamplingRateMs = (uint32_t)ceilf(1000.0f / (float)self->params.fps);
     create_capture_params.bAllowDirectCapture = self->params.direct_capture ? NVFBC_TRUE : NVFBC_FALSE;
@@ -297,8 +291,6 @@ static int gsr_capture_nvfbc_start(gsr_capture *cap, gsr_capture_metadata *captu
     self->width = max_int(self->params.size.x, 0);
     self->height = max_int(self->params.size.y, 0);
 
-    self->capture_region = (self->x > 0 || self->y > 0 || self->width > 0 || self->height > 0);
-
     self->supports_direct_cursor = false;
     int driver_major_version = 0;
     int driver_minor_version = 0;
@@ -331,20 +323,17 @@ static int gsr_capture_nvfbc_start(gsr_capture *cap, gsr_capture_metadata *captu
         goto error_cleanup;
     }
 
-    if(self->capture_region) {
-        capture_metadata->width = FFALIGN(self->width, 2);
-        capture_metadata->height = FFALIGN(self->height, 2);
-    } else {
-        capture_metadata->width = FFALIGN(self->tracking_width, 2);
-        capture_metadata->height = FFALIGN(self->tracking_height, 2);
-    }
+    capture_metadata->width = FFALIGN(self->tracking_width, 2);
+    capture_metadata->height = FFALIGN(self->tracking_height, 2);
 
-    if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
-        self->params.output_resolution = (vec2i){capture_metadata->width, capture_metadata->height};
-    } else {
+    if(self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0) {
         self->params.output_resolution = scale_keep_aspect_ratio((vec2i){capture_metadata->width, capture_metadata->height}, self->params.output_resolution);
         capture_metadata->width = FFALIGN(self->params.output_resolution.x, 2);
         capture_metadata->height = FFALIGN(self->params.output_resolution.y, 2);
+    } else if(self->params.region_size.x > 0 && self->params.region_size.y > 0) {
+        self->params.output_resolution = self->params.region_size;
+        capture_metadata->width = FFALIGN(self->params.region_size.x, 2);
+        capture_metadata->height = FFALIGN(self->params.region_size.y, 2);
     }
 
     return 0;
@@ -380,7 +369,10 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *cap
         }
     }
 
-    const vec2i frame_size = (vec2i){self->width, self->height};
+    vec2i frame_size = (vec2i){self->width, self->height};
+    if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
+        frame_size = self->params.region_size;
+
     const bool is_scaled = self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0;
     vec2i output_size = is_scaled ? self->params.output_resolution : frame_size;
     output_size = scale_keep_aspect_ratio(frame_size, output_size);

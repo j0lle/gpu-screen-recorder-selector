@@ -209,7 +209,8 @@ static int gsr_capture_kms_start(gsr_capture *cap, gsr_capture_metadata *capture
     }
 
     monitor.name = self->params.display_to_capture;
-    self->monitor_rotation = drm_monitor_get_display_server_rotation(self->params.egl->window, &monitor);
+    vec2i monitor_position = {0, 0};
+    drm_monitor_get_display_server_data(self->params.egl->window, &monitor, &self->monitor_rotation, &monitor_position);
 
     self->capture_pos = monitor.pos;
     /* Monitor size is already rotated on x11 when the monitor is rotated, no need to apply it ourselves */
@@ -218,14 +219,18 @@ static int gsr_capture_kms_start(gsr_capture *cap, gsr_capture_metadata *capture
     else
         self->capture_size = rotate_capture_size_if_rotated(self, monitor.size);
 
-    if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
-        self->params.output_resolution = self->capture_size;
-        capture_metadata->width = FFALIGN(self->capture_size.x, 2);
-        capture_metadata->height = FFALIGN(self->capture_size.y, 2);
-    } else {
+    if(self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0) {
         self->params.output_resolution = scale_keep_aspect_ratio(self->capture_size, self->params.output_resolution);
         capture_metadata->width = FFALIGN(self->params.output_resolution.x, 2);
         capture_metadata->height = FFALIGN(self->params.output_resolution.y, 2);
+    } else if(self->params.region_size.x > 0 && self->params.region_size.y > 0) {
+        self->params.output_resolution = self->params.region_size;
+        capture_metadata->width = FFALIGN(self->params.region_size.x, 2);
+        capture_metadata->height = FFALIGN(self->params.region_size.y, 2);
+    } else {
+        self->params.output_resolution = self->capture_size;
+        capture_metadata->width = FFALIGN(self->capture_size.x, 2);
+        capture_metadata->height = FFALIGN(self->capture_size.y, 2);
     }
 
     self->fast_path_failed = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 0, 9);
@@ -448,7 +453,7 @@ static gsr_kms_response_item* find_cursor_drm_if_on_monitor(gsr_capture_kms *sel
     return cursor_drm_fd;
 }
 
-static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color_conversion, const gsr_kms_response_item *cursor_drm_fd, vec2i target_pos, float texture_rotation, vec2i output_size) {
+static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color_conversion, const gsr_kms_response_item *cursor_drm_fd, vec2i target_pos, float texture_rotation, vec2i output_size, vec2i framebuffer_size) {
     const vec2d scale = {
         self->capture_size.x == 0 ? 0 : (double)output_size.x / (double)self->capture_size.x,
         self->capture_size.y == 0 ? 0 : (double)output_size.y / (double)self->capture_size.y
@@ -463,24 +468,27 @@ static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color
             break;
         case GSR_MONITOR_ROT_90:
             cursor_pos = swap_vec2i(cursor_pos);
-            cursor_pos.x = self->capture_size.x - cursor_pos.x;
+            cursor_pos.x = framebuffer_size.x - cursor_pos.x;
             // TODO: Remove this horrible hack
             cursor_pos.x -= cursor_size.x;
             break;
         case GSR_MONITOR_ROT_180:
-            cursor_pos.x = self->capture_size.x - cursor_pos.x;
-            cursor_pos.y = self->capture_size.y - cursor_pos.y;
+            cursor_pos.x = framebuffer_size.x - cursor_pos.x;
+            cursor_pos.y = framebuffer_size.y - cursor_pos.y;
             // TODO: Remove this horrible hack
             cursor_pos.x -= cursor_size.x;
             cursor_pos.y -= cursor_size.y;
             break;
         case GSR_MONITOR_ROT_270:
             cursor_pos = swap_vec2i(cursor_pos);
-            cursor_pos.y = self->capture_size.y - cursor_pos.y;
+            cursor_pos.y = framebuffer_size.y - cursor_pos.y;
             // TODO: Remove this horrible hack
             cursor_pos.y -= cursor_size.y;
             break;
     }
+
+    cursor_pos.x -= self->params.region_position.x;
+    cursor_pos.y -= self->params.region_position.y;
 
     cursor_pos.x *= scale.x;
     cursor_pos.y *= scale.y;
@@ -589,7 +597,8 @@ static void gsr_capture_kms_update_connector_ids(gsr_capture_kms *self) {
     self->monitor_id.connector_ids[0] = monitor.connector_id;
 
     monitor.name = self->params.display_to_capture;
-    self->monitor_rotation = drm_monitor_get_display_server_rotation(self->params.egl->window, &monitor);
+    vec2i monitor_position = {0, 0};
+    drm_monitor_get_display_server_data(self->params.egl->window, &monitor, &self->monitor_rotation, &monitor_position);
 
     self->capture_pos = monitor.pos;
     /* Monitor size is already rotated on x11 when the monitor is rotated, no need to apply it ourselves */
@@ -650,6 +659,8 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     gsr_capture_kms_fail_fast_path_if_not_fast(self, drm_fd->pixel_format);
 
     self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
+    if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
+        self->capture_size = self->params.region_size;
 
     const bool is_scaled = self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0;
     vec2i output_size = is_scaled ? self->params.output_resolution : self->capture_size;
@@ -662,6 +673,9 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     vec2i capture_pos = self->capture_pos;
     if(!capture_is_combined_plane)
         capture_pos = (vec2i){drm_fd->x, drm_fd->y};
+
+    capture_pos.x += self->params.region_position.x;
+    capture_pos.y += self->params.region_position.y;
 
     self->params.egl->glFlush();
     self->params.egl->glFinish();
@@ -706,10 +720,13 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
         // TODO: This doesn't work properly with software cursor on x11 since it will draw the x11 cursor on top of the cursor already in the framebuffer.
         // Detect if software cursor is used on x11 somehow.
         if(self->is_x11) {
-            const vec2i cursor_monitor_offset = self->capture_pos;
+            vec2i cursor_monitor_offset = self->capture_pos;
+            cursor_monitor_offset.x += self->params.region_position.x;
+            cursor_monitor_offset.y += self->params.region_position.y;
             render_x11_cursor(self, color_conversion, cursor_monitor_offset, target_pos, output_size);
         } else if(cursor_drm_fd) {
-            render_drm_cursor(self, color_conversion, cursor_drm_fd, target_pos, texture_rotation, output_size);
+            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
+            render_drm_cursor(self, color_conversion, cursor_drm_fd, target_pos, texture_rotation, output_size, framebuffer_size);
         }
     }
 

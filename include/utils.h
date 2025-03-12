@@ -15,7 +15,7 @@ typedef struct AVFrame AVFrame;
 typedef struct {
     const char *name;
     int name_len;
-    vec2i pos;
+    vec2i pos; /* This is 0, 0 on wayland. Use |drm_monitor_get_display_server_data| to get the position */
     vec2i size;
     uint32_t connector_id; /* Only on x11 and drm */
     gsr_monitor_rotation rotation; /* Only on x11 and wayland */
@@ -43,7 +43,7 @@ typedef void (*active_monitor_callback)(const gsr_monitor *monitor, void *userda
 void for_each_active_monitor_output_x11_not_cached(Display *display, active_monitor_callback callback, void *userdata);
 void for_each_active_monitor_output(const gsr_window *window, const char *card_path, gsr_connection_type connection_type, active_monitor_callback callback, void *userdata);
 bool get_monitor_by_name(const gsr_egl *egl, gsr_connection_type connection_type, const char *name, gsr_monitor *monitor);
-gsr_monitor_rotation drm_monitor_get_display_server_rotation(const gsr_window *window, const gsr_monitor *monitor);
+bool drm_monitor_get_display_server_data(const gsr_window *window, const gsr_monitor *monitor, gsr_monitor_rotation *monitor_rotation, vec2i *monitor_position);
 
 int get_connector_type_by_name(const char *name);
 drm_connector_type_count* drm_connector_types_get_index(drm_connector_type_count *type_counts, int *num_type_counts, int connector_type);

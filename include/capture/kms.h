@@ -12,6 +12,8 @@ typedef struct {
     bool record_cursor;
     int fps;
     vec2i output_resolution;
+    vec2i region_size;
+    vec2i region_position;
 } gsr_capture_kms_params;
 
 gsr_capture* gsr_capture_kms_create(const gsr_capture_kms_params *params);

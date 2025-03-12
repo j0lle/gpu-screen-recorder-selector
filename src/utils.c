@@ -289,6 +289,7 @@ bool get_monitor_by_name(const gsr_egl *egl, gsr_connection_type connection_type
 typedef struct {
     const gsr_monitor *monitor;
     gsr_monitor_rotation rotation;
+    vec2i position;
     bool match_found;
 } get_monitor_by_connector_id_userdata;
 
@@ -300,6 +301,7 @@ static void get_monitor_by_name_and_size_callback(const gsr_monitor *monitor, vo
     get_monitor_by_connector_id_userdata *data = (get_monitor_by_connector_id_userdata*)userdata;
     if(monitor->name && data->monitor->name && strcmp(monitor->name, data->monitor->name) == 0 && vec2i_eql(monitor->size, data->monitor->size)) {
         data->rotation = monitor->rotation;
+        data->position = monitor->pos;
         data->match_found = true;
     }
 }
@@ -310,39 +312,51 @@ static void get_monitor_by_connector_id_callback(const gsr_monitor *monitor, voi
         (!monitor->connector_id && monitor->monitor_identifier == data->monitor->monitor_identifier))
     {
         data->rotation = monitor->rotation;
+        data->position = monitor->pos;
         data->match_found = true;
     }
 }
 
-gsr_monitor_rotation drm_monitor_get_display_server_rotation(const gsr_window *window, const gsr_monitor *monitor) {
+bool drm_monitor_get_display_server_data(const gsr_window *window, const gsr_monitor *monitor, gsr_monitor_rotation *monitor_rotation, vec2i *monitor_position) {
+    *monitor_rotation = GSR_MONITOR_ROT_0;
+    *monitor_position = (vec2i){0, 0};
+
     if(gsr_window_get_display_server(window) == GSR_DISPLAY_SERVER_WAYLAND) {
         {
             get_monitor_by_connector_id_userdata userdata;
             userdata.monitor = monitor;
             userdata.rotation = GSR_MONITOR_ROT_0;
+            userdata.position = (vec2i){0, 0};
             userdata.match_found = false;
             gsr_window_for_each_active_monitor_output_cached(window, get_monitor_by_name_and_size_callback, &userdata);
-            if(userdata.match_found)
-                return userdata.rotation;
+            if(userdata.match_found) {
+                *monitor_rotation = userdata.rotation;
+                *monitor_position = userdata.position;
+                return true;
+            }
         }
         {
             get_monitor_by_connector_id_userdata userdata;
             userdata.monitor = monitor;
             userdata.rotation = GSR_MONITOR_ROT_0;
+            userdata.position = (vec2i){0, 0};
             userdata.match_found = false;
             gsr_window_for_each_active_monitor_output_cached(window, get_monitor_by_connector_id_callback, &userdata);
-            return userdata.rotation;
+            *monitor_rotation = userdata.rotation;
+            *monitor_position = userdata.position;
+            return userdata.match_found;
         }
     } else {
         get_monitor_by_connector_id_userdata userdata;
         userdata.monitor = monitor;
         userdata.rotation = GSR_MONITOR_ROT_0;
+        userdata.position = (vec2i){0, 0};
         userdata.match_found = false;
         gsr_window_for_each_active_monitor_output_cached(window, get_monitor_by_connector_id_callback, &userdata);
-        return userdata.rotation;
+        *monitor_rotation = userdata.rotation;
+        *monitor_position = userdata.position;
+        return userdata.match_found;
     }
-
-    return GSR_MONITOR_ROT_0;
 }
 
 bool gl_get_gpu_info(gsr_egl *egl, gsr_gpu_info *info) {

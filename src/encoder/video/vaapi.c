@@ -169,29 +169,11 @@ static bool gsr_video_encoder_vaapi_start(gsr_video_encoder *encoder, AVCodecCon
         }
     }
 
-    const int crop_top = (video_codec_context->height - frame->height) / 2;
-    const int crop_left = (video_codec_context->width - frame->width) / 2;
-    if(crop_top != 0 || crop_left != 0) {
-        fprintf(stderr, "gsr warning: gsr_video_encoder_vaapi_start: black bars have been added to the video because of a bug in AMD drivers/hardware. Record with h264 codec instead (-k h264) to get around this issue\n");
-#if 0
-        #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 10, 100)
-        const int crop_bottom = crop_top;
-        const int crop_right = crop_left;
-        fprintf(stderr, "gsr info: cropping metadata has been added to the file to try and workaround this issue. Video players that support this will remove the black bars when the video is playing\n");
-        const int frame_cropping_data_size = 4 * sizeof(uint32_t);
-        uint8_t *frame_cropping = av_malloc(frame_cropping_data_size);
-        if(frame_cropping) {
-            AV_WL32(frame_cropping + 0, crop_top);
-            AV_WL32(frame_cropping + 4, crop_bottom);
-            AV_WL32(frame_cropping + 8, crop_left);
-            AV_WL32(frame_cropping + 12, crop_right);
-            const bool sidedata_added = av_packet_side_data_add(&video_stream->codecpar->coded_side_data, &video_stream->codecpar->nb_coded_side_data, AV_PKT_DATA_FRAME_CROPPING, frame_cropping, frame_cropping_data_size, 0) != NULL;
-            if(!sidedata_added)
-                av_free(frame_cropping);
-        }
-        #endif
-#endif
-    }
+    if(video_codec_context->width < 128)
+        video_codec_context->width = 128;
+
+    if(video_codec_context->height < 128)
+        video_codec_context->height = 128;
 
     frame->width = video_codec_context->width;
     frame->height = video_codec_context->height;
