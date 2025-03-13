@@ -165,6 +165,18 @@ static void gsr_video_encoder_vulkan_stop(gsr_video_encoder_vulkan *self, AVCode
 static bool gsr_video_encoder_vulkan_start(gsr_video_encoder *encoder, AVCodecContext *video_codec_context, AVFrame *frame) {
     gsr_video_encoder_vulkan *self = encoder->priv;
 
+    video_codec_context->width = FFALIGN(video_codec_context->width, 2);
+    video_codec_context->height = FFALIGN(video_codec_context->height, 2);
+
+    if(video_codec_context->width < 128)
+        video_codec_context->width = 128;
+
+    if(video_codec_context->height < 128)
+        video_codec_context->height = 128;
+
+    frame->width = video_codec_context->width;
+    frame->height = video_codec_context->height;
+
     if(!gsr_video_encoder_vulkan_setup_context(self, video_codec_context)) {
         gsr_video_encoder_vulkan_stop(self, video_codec_context);
         return false;

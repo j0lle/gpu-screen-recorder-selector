@@ -2533,8 +2533,6 @@ static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_re
             region_position.y -= monitor_pos.y;
         }
 
-        fprintf(stderr, "region: %dx%d+%d+%d\n", region_size.x, region_size.y, region_position.x, region_position.y);
-
         capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, color_range, record_cursor, color_depth);
         if(!capture)
             _exit(1);
@@ -4011,6 +4009,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Error: failed to start video encoder\n");
         _exit(1);
     }
+
+    capture_metadata.width = video_codec_context->width;
+    capture_metadata.height = video_codec_context->height;
 
     gsr_color_conversion_params color_conversion_params;
     memset(&color_conversion_params, 0, sizeof(color_conversion_params));

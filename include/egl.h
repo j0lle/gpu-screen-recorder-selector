@@ -132,6 +132,8 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_ONE_MINUS_SRC_ALPHA                  0x0303
 #define GL_DEBUG_OUTPUT                         0x92E0
 #define GL_SCISSOR_TEST                         0x0C11
+#define GL_PACK_ALIGNMENT                       0x0D05
+#define GL_UNPACK_ALIGNMENT                     0x0CF5
 
 #define GL_VENDOR                               0x1F00
 #define GL_RENDERER                             0x1F01
@@ -269,6 +271,7 @@ struct gsr_egl {
     void (*glEnable)(unsigned int cap);
     void (*glDisable)(unsigned int cap);
     void (*glBlendFunc)(unsigned int sfactor, unsigned int dfactor);
+    void (*glPixelStorei)(unsigned int pname, int param);
     int (*glGetUniformLocation)(unsigned int program, const char *name);
     void (*glUniform1f)(int location, float v0);
     void (*glUniform2f)(int location, float v0, float v1);

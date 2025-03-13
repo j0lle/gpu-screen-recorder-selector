@@ -138,6 +138,9 @@ static bool gsr_video_encoder_nvenc_start(gsr_video_encoder *encoder, AVCodecCon
         return false;
     }
 
+    video_codec_context->width = FFALIGN(video_codec_context->width, 2);
+    video_codec_context->height = FFALIGN(video_codec_context->height, 2);
+
     if(video_codec_context->width < 128)
         video_codec_context->width = 128;
 

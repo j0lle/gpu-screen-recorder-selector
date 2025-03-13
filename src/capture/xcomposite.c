@@ -113,12 +113,11 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, gsr_capture_metadata *
     self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
 
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
-        self->params.output_resolution = self->texture_size;
-        capture_metadata->width = FFALIGN(self->texture_size.x, 2);
-        capture_metadata->height = FFALIGN(self->texture_size.y, 2);
+        capture_metadata->width = self->texture_size.x;
+        capture_metadata->height = self->texture_size.y;
     } else {
-        capture_metadata->width = FFALIGN(self->params.output_resolution.x, 2);
-        capture_metadata->height = FFALIGN(self->params.output_resolution.y, 2);
+        capture_metadata->width = self->params.output_resolution.x;
+        capture_metadata->height = self->params.output_resolution.y;
     }
 
     self->fast_path_failed = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 0, 9);

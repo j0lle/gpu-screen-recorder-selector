@@ -323,17 +323,16 @@ static int gsr_capture_nvfbc_start(gsr_capture *cap, gsr_capture_metadata *captu
         goto error_cleanup;
     }
 
-    capture_metadata->width = FFALIGN(self->tracking_width, 2);
-    capture_metadata->height = FFALIGN(self->tracking_height, 2);
+    capture_metadata->width = self->tracking_width;
+    capture_metadata->height = self->tracking_height;
 
     if(self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0) {
         self->params.output_resolution = scale_keep_aspect_ratio((vec2i){capture_metadata->width, capture_metadata->height}, self->params.output_resolution);
-        capture_metadata->width = FFALIGN(self->params.output_resolution.x, 2);
-        capture_metadata->height = FFALIGN(self->params.output_resolution.y, 2);
+        capture_metadata->width = self->params.output_resolution.x;
+        capture_metadata->height = self->params.output_resolution.y;
     } else if(self->params.region_size.x > 0 && self->params.region_size.y > 0) {
-        self->params.output_resolution = self->params.region_size;
-        capture_metadata->width = FFALIGN(self->params.region_size.x, 2);
-        capture_metadata->height = FFALIGN(self->params.region_size.y, 2);
+        capture_metadata->width = self->params.region_size.x;
+        capture_metadata->height = self->params.region_size.y;
     }
 
     return 0;

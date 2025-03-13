@@ -324,6 +324,7 @@ static bool gsr_egl_load_gl(gsr_egl *self, void *library) {
         { (void**)&self->glEnable, "glEnable" },
         { (void**)&self->glDisable, "glDisable" },
         { (void**)&self->glBlendFunc, "glBlendFunc" },
+        { (void**)&self->glPixelStorei, "glPixelStorei" },
         { (void**)&self->glGetUniformLocation, "glGetUniformLocation" },
         { (void**)&self->glUniform1f, "glUniform1f" },
         { (void**)&self->glUniform2f, "glUniform2f" },
@@ -448,6 +449,8 @@ bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bo
 
     self->glEnable(GL_BLEND);
     self->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    self->glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    self->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
     if(enable_debug) {
         self->glEnable(GL_DEBUG_OUTPUT);
