@@ -100,7 +100,7 @@ static bool gsr_video_encoder_vulkan_setup_textures(gsr_video_encoder_vulkan *se
     const int div[2] = {1, 2}; // divide UV texture size by 2 because chroma is half size
 
     for(int i = 0; i < 2; ++i) {
-        self->target_textures[i] = gl_create_texture(self->params.egl, video_codec_context->width / div[i], video_codec_context->height / div[i], self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? internal_formats_nv12[i] : internal_formats_p010[i], formats[i], GL_LINEAR);
+        self->target_textures[i] = gl_create_texture(self->params.egl, video_codec_context->width / div[i], video_codec_context->height / div[i], self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? internal_formats_nv12[i] : internal_formats_p010[i], formats[i], GL_NEAREST);
         if(self->target_textures[i] == 0) {
             fprintf(stderr, "gsr error: gsr_video_encoder_cuda_setup_textures: failed to create opengl texture\n");
             return false;

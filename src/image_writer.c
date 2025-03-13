@@ -17,7 +17,7 @@ bool gsr_image_writer_init_opengl(gsr_image_writer *self, gsr_egl *egl, int widt
     self->egl = egl;
     self->width = width;
     self->height = height;
-    self->texture = gl_create_texture(self->egl, self->width, self->height, GL_RGB8, GL_RGB, GL_LINEAR); /* TODO: use GL_RGB16 instead of GL_RGB8 for hdr/10-bit */
+    self->texture = gl_create_texture(self->egl, self->width, self->height, GL_RGB8, GL_RGB, GL_NEAREST); /* TODO: use GL_RGB16 instead of GL_RGB8 for hdr/10-bit */
     if(self->texture == 0) {
         fprintf(stderr, "gsr error: gsr_image_writer_init: failed to create texture\n");
         return false;
