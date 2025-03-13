@@ -249,6 +249,4 @@ Support high quality scaling with -s by using lanczos.
 
 Support spanning multiple monitors with region capture. This would also allow the user to record multiple monitors at the same time, the same way screen-direct works on nvidia x11.
 
-Use x11 grab (or shmgetimage https://stackoverflow.com/questions/43442675/how-to-use-xshmgetimage-and-xshmputimage) instead of nvfbc for fullscreen screenshot on nvidia x11. Right now you cant record and take a screenshot because nvidia driver limitation that only allows one nvfbc session at a time system-wide.
-
 When webcam support is added also support v4l2loopback? this is done by using avdevice_register_all(); and -c v4l2 -o /dev/video0; but it needs to output raw data as well instead of h264 and possibly yuv420p. Maybe add a -k yuv420p option to do that.
