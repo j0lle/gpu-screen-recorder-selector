@@ -14,9 +14,7 @@
 #include <xf86drm.h>
 #include <libdrm/drm_fourcc.h>
 
-#include <libavcodec/avcodec.h>
 #include <libavutil/mastering_display_metadata.h>
-#include <libavformat/avformat.h>
 
 #define FIND_CRTC_BY_NAME_TIMEOUT_SECONDS 2.0
 

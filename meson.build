@@ -12,6 +12,7 @@ src = [
     'src/capture/capture.c',
     'src/capture/nvfbc.c',
     'src/capture/xcomposite.c',
+    'src/capture/ximage.c',
     'src/capture/kms.c',
     'src/encoder/video/video.c',
     'src/encoder/video/nvenc.c',

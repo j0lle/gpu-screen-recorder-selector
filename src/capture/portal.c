@@ -8,9 +8,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <limits.h>
 #include <assert.h>
-
-#include <libavcodec/avcodec.h>
 
 typedef struct {
     gsr_capture_portal_params params;

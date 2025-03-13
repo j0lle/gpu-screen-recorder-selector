@@ -1,19 +1,18 @@
-#ifndef GSR_CAPTURE_KMS_H
-#define GSR_CAPTURE_KMS_H
+#ifndef GSR_CAPTURE_XIMAGE_H
+#define GSR_CAPTURE_XIMAGE_H
 
 #include "capture.h"
+#include "../vec2.h"
 
 typedef struct {
     gsr_egl *egl;
     const char *display_to_capture; /* A copy is made of this */
-    bool hdr;
     bool record_cursor;
-    int fps;
     vec2i output_resolution;
     vec2i region_size;
     vec2i region_position;
-} gsr_capture_kms_params;
+} gsr_capture_ximage_params;
 
-gsr_capture* gsr_capture_kms_create(const gsr_capture_kms_params *params);
+gsr_capture* gsr_capture_ximage_create(const gsr_capture_ximage_params *params);
 
-#endif /* GSR_CAPTURE_KMS_H */
+#endif /* GSR_CAPTURE_XIMAGE_H */

@@ -1,5 +1,6 @@
 #include "../../../include/encoder/video/software.h"
 #include "../../../include/egl.h"
+#include "../../../include/utils.h"
 
 #include <libavcodec/avcodec.h>
 #include <libavutil/frame.h>
@@ -13,21 +14,6 @@ typedef struct {
 
     unsigned int target_textures[2];
 } gsr_video_encoder_software;
-
-static unsigned int gl_create_texture(gsr_egl *egl, int width, int height, int internal_format, unsigned int format) {
-    unsigned int texture_id = 0;
-    egl->glGenTextures(1, &texture_id);
-    egl->glBindTexture(GL_TEXTURE_2D, texture_id);
-    egl->glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
-
-    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-    egl->glBindTexture(GL_TEXTURE_2D, 0);
-    return texture_id;
-}
 
 static bool gsr_video_encoder_software_setup_textures(gsr_video_encoder_software *self, AVCodecContext *video_codec_context, AVFrame *frame) {
     int res = av_frame_get_buffer(frame, LINESIZE_ALIGNMENT);
@@ -48,7 +34,7 @@ static bool gsr_video_encoder_software_setup_textures(gsr_video_encoder_software
     const int div[2] = {1, 2}; // divide UV texture size by 2 because chroma is half size
 
     for(int i = 0; i < 2; ++i) {
-        self->target_textures[i] = gl_create_texture(self->params.egl, video_codec_context->width / div[i], video_codec_context->height / div[i], self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? internal_formats_nv12[i] : internal_formats_p010[i], formats[i]);
+        self->target_textures[i] = gl_create_texture(self->params.egl, video_codec_context->width / div[i], video_codec_context->height / div[i], self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? internal_formats_nv12[i] : internal_formats_p010[i], formats[i], GL_LINEAR);
         if(self->target_textures[i] == 0) {
             fprintf(stderr, "gsr error: gsr_capture_kms_setup_cuda_textures: failed to create opengl texture\n");
             return false;

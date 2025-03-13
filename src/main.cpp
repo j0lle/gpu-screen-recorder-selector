@@ -1,6 +1,7 @@
 extern "C" {
 #include "../include/capture/nvfbc.h"
 #include "../include/capture/xcomposite.h"
+#include "../include/capture/ximage.h"
 #include "../include/capture/kms.h"
 #ifdef GSR_PORTAL
 #include "../include/capture/portal.h"
@@ -2427,7 +2428,7 @@ static std::string get_monitor_by_region_center(const gsr_egl *egl, vec2i region
     return result;
 }
 
-static gsr_capture* create_monitor_capture(const std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, gsr_egl *egl, int fps, bool hdr, gsr_color_range color_range, bool record_cursor, gsr_color_depth color_depth) {
+static gsr_capture* create_monitor_capture(const std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, gsr_egl *egl, int fps, bool hdr, bool record_cursor) {
     if(!monitor_capture_use_drm(egl->window, egl->gpu_info.vendor)) {
         const char *capture_target = window_str.c_str();
         const bool direct_capture = strcmp(window_str.c_str(), "screen-direct") == 0 || strcmp(window_str.c_str(), "screen-direct-force") == 0;
@@ -2443,8 +2444,6 @@ static gsr_capture* create_monitor_capture(const std::string &window_str, vec2i 
         nvfbc_params.pos = { 0, 0 };
         nvfbc_params.size = { 0, 0 };
         nvfbc_params.direct_capture = direct_capture;
-        nvfbc_params.color_depth = color_depth;
-        nvfbc_params.color_range = color_range;
         nvfbc_params.record_cursor = record_cursor;
         nvfbc_params.output_resolution = output_resolution;
         nvfbc_params.region_size = region_size;
@@ -2454,8 +2453,6 @@ static gsr_capture* create_monitor_capture(const std::string &window_str, vec2i 
         gsr_capture_kms_params kms_params;
         kms_params.egl = egl;
         kms_params.display_to_capture = window_str.c_str();
-        kms_params.color_depth = color_depth;
-        kms_params.color_range = color_range;
         kms_params.record_cursor = record_cursor;
         kms_params.hdr = hdr;
         kms_params.fps = fps;
@@ -2466,9 +2463,33 @@ static gsr_capture* create_monitor_capture(const std::string &window_str, vec2i 
     }
 }
 
-static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, bool wayland, gsr_egl *egl, int fps, bool hdr, gsr_color_range color_range,
-    bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath,
-    gsr_color_depth color_depth)
+static void region_get_data(std::string &window_str, gsr_egl *egl, vec2i *region_size, vec2i *region_position) {
+    vec2i monitor_pos = {0, 0};
+    vec2i monitor_size = {0, 0};
+    window_str = get_monitor_by_region_center(egl, *region_position, *region_size, &monitor_pos, &monitor_size);
+    if(window_str.empty()) {
+        const bool is_x11 = gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11;
+        const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
+        fprintf(stderr, "Error: the region %dx%d+%d+%d doesn't match any monitor. Available monitors and their regions:\n", region_size->x, region_size->y, region_position->x, region_position->y);
+
+        MonitorOutputCallbackUserdata userdata;
+        userdata.window = egl->window;
+        for_each_active_monitor_output(egl->window, egl->card_path, connection_type, monitor_output_callback_print, &userdata);
+        _exit(51);
+    }
+
+    // Capture whole monitor when region size is set to 0x0
+    if(region_size->x == 0 && region_size->y == 0) {
+        region_position->x = 0;
+        region_position->y = 0;
+    } else {
+        region_position->x -= monitor_pos.x;
+        region_position->y -= monitor_pos.y;
+    }
+}
+
+static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, bool wayland, gsr_egl *egl, int fps, bool hdr,
+    bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath)
 {
     Window src_window_id = None;
     bool follow_focused = false;
@@ -2496,8 +2517,6 @@ static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_re
 
         gsr_capture_portal_params portal_params;
         portal_params.egl = egl;
-        portal_params.color_depth = color_depth;
-        portal_params.color_range = color_range;
         portal_params.record_cursor = record_cursor;
         portal_params.restore_portal_session = restore_portal_session;
         portal_params.portal_session_token_filepath = portal_session_token_filepath;
@@ -2510,35 +2529,13 @@ static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_re
         _exit(2);
 #endif
     } else if(strcmp(window_str.c_str(), "region") == 0) {
-        vec2i monitor_pos = {0, 0};
-        vec2i monitor_size = {0, 0};
-        window_str = get_monitor_by_region_center(egl, region_position, region_size, &monitor_pos, &monitor_size);
-        if(window_str.empty()) {
-            const bool is_x11 = gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11;
-            const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
-            fprintf(stderr, "Error: the region %dx%d+%d+%d doesn't match any monitor. Available monitors and their regions:\n", region_size.x, region_size.y, region_position.x, region_position.y);
-
-            MonitorOutputCallbackUserdata userdata;
-            userdata.window = egl->window;
-            for_each_active_monitor_output(egl->window, egl->card_path, connection_type, monitor_output_callback_print, &userdata);
-            _exit(51);
-        }
-
-        // Capture whole monitor when region size is set to 0x0
-        if(region_size.x == 0 && region_size.y == 0) {
-            region_position.x = 0;
-            region_position.y = 0;
-        } else {
-            region_position.x -= monitor_pos.x;
-            region_position.y -= monitor_pos.y;
-        }
-
-        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, color_range, record_cursor, color_depth);
+        region_get_data(window_str, egl, &region_size, &region_position);
+        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, record_cursor);
         if(!capture)
             _exit(1);
     } else if(contains_non_hex_number(window_str.c_str())) {
         validate_monitor_get_valid(egl, window_str);
-        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, color_range, record_cursor, color_depth);
+        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, record_cursor);
         if(!capture)
             _exit(1);
     } else {
@@ -2560,9 +2557,7 @@ static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_re
         xcomposite_params.egl = egl;
         xcomposite_params.window = src_window_id;
         xcomposite_params.follow_focused = follow_focused;
-        xcomposite_params.color_range = color_range;
         xcomposite_params.record_cursor = record_cursor;
-        xcomposite_params.color_depth = color_depth;
         xcomposite_params.output_resolution = output_resolution;
         capture = gsr_capture_xcomposite_create(&xcomposite_params);
         if(!capture)
@@ -2601,7 +2596,29 @@ static void capture_image_to_file(const char *filepath, std::string &window_str,
     bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath, VideoQuality video_quality) {
     const gsr_color_range color_range = image_format_to_color_range(image_format);
     const int fps = 60;
-    gsr_capture *capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, egl, fps, false, color_range, record_cursor, restore_portal_session, portal_session_token_filepath, GSR_COLOR_DEPTH_8_BITS);
+    gsr_capture *capture = nullptr;
+    switch(gsr_window_get_display_server(egl->window)) {
+        case GSR_DISPLAY_SERVER_X11: {
+            if(window_str == "region")
+                region_get_data(window_str, egl, &region_size, &region_position);
+            else
+                validate_monitor_get_valid(egl, window_str);
+
+            gsr_capture_ximage_params ximage_params;
+            ximage_params.egl = egl;
+            ximage_params.display_to_capture = window_str.c_str();
+            ximage_params.record_cursor = record_cursor;
+            ximage_params.output_resolution = output_resolution;
+            ximage_params.region_size = region_size;
+            ximage_params.region_position = region_position;
+            capture = gsr_capture_ximage_create(&ximage_params);
+            break;
+        }
+        case GSR_DISPLAY_SERVER_WAYLAND: {
+            capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, egl, fps, false, record_cursor, restore_portal_session, portal_session_token_filepath);
+            break;
+        }
+    }
 
     gsr_capture_metadata capture_metadata;
     capture_metadata.width = 0;
@@ -2612,13 +2629,13 @@ static void capture_image_to_file(const char *filepath, std::string &window_str,
 
     int capture_result = gsr_capture_start(capture, &capture_metadata);
     if(capture_result != 0) {
-        fprintf(stderr, "gsr error: gsr_capture_start failed\n");
+        fprintf(stderr, "gsr error: capture_image_to_file_wayland: gsr_capture_start failed\n");
         _exit(capture_result);
     }
 
     gsr_image_writer image_writer;
-    if(!gsr_image_writer_init(&image_writer, GSR_IMAGE_WRITER_SOURCE_OPENGL, egl, capture_metadata.width, capture_metadata.height)) {
-        fprintf(stderr, "gsr error: gsr_image_write_gl_init failed\n");
+    if(!gsr_image_writer_init_opengl(&image_writer, egl, capture_metadata.width, capture_metadata.height)) {
+        fprintf(stderr, "gsr error: capture_image_to_file_wayland: gsr_image_write_gl_init failed\n");
         _exit(1);
     }
 
@@ -2634,7 +2651,7 @@ static void capture_image_to_file(const char *filepath, std::string &window_str,
 
     gsr_color_conversion color_conversion;
     if(gsr_color_conversion_init(&color_conversion, &color_conversion_params) != 0) {
-        fprintf(stderr, "gsr error: gsr_capture_kms_setup_vaapi_textures: failed to create color conversion\n");
+        fprintf(stderr, "gsr error: capture_image_to_file_wayland: failed to create color conversion\n");
         _exit(1);
     }
 
@@ -2664,7 +2681,7 @@ static void capture_image_to_file(const char *filepath, std::string &window_str,
     
     const int image_quality = video_quality_to_image_quality_value(video_quality);
     if(!gsr_image_writer_write_to_file(&image_writer, filepath, image_format, image_quality)) {
-        fprintf(stderr, "gsr error: failed to write opengl texture to image output file %s\n", filepath);
+        fprintf(stderr, "gsr error: capture_image_to_file_wayland: failed to write opengl texture to image output file %s\n", filepath);
         _exit(1);
     }
 
@@ -3941,7 +3958,7 @@ int main(int argc, char **argv) {
     const AVCodec *video_codec_f = select_video_codec_with_fallback(&video_codec, video_codec_to_use, file_extension.c_str(), use_software_video_encoder, &egl, &low_power);
 
     const gsr_color_depth color_depth = video_codec_to_bit_depth(video_codec);
-    gsr_capture *capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, &egl, fps, video_codec_is_hdr(video_codec), color_range, record_cursor, restore_portal_session, portal_session_token_filepath, color_depth);
+    gsr_capture *capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, &egl, fps, video_codec_is_hdr(video_codec), record_cursor, restore_portal_session, portal_session_token_filepath);
 
     // (Some?) livestreaming services require at least one audio track to work.
     // If not audio is provided then create one silent audio track.
@@ -4022,7 +4039,7 @@ int main(int argc, char **argv) {
 
     gsr_color_conversion color_conversion;
     if(gsr_color_conversion_init(&color_conversion, &color_conversion_params) != 0) {
-        fprintf(stderr, "gsr error: gsr_capture_kms_setup_vaapi_textures: failed to create color conversion\n");
+        fprintf(stderr, "gsr error: main: failed to create color conversion\n");
         _exit(1);
     }
 

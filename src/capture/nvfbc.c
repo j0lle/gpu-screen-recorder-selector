@@ -13,7 +13,6 @@
 #include <assert.h>
 
 #include <X11/Xlib.h>
-#include <libavcodec/avcodec.h>
 
 typedef struct {
     gsr_capture_nvfbc_params params;

@@ -65,21 +65,6 @@ static bool gsr_video_encoder_nvenc_setup_context(gsr_video_encoder_nvenc *self,
     return true;
 }
 
-static unsigned int gl_create_texture(gsr_egl *egl, int width, int height, int internal_format, unsigned int format) {
-    unsigned int texture_id = 0;
-    egl->glGenTextures(1, &texture_id);
-    egl->glBindTexture(GL_TEXTURE_2D, texture_id);
-    egl->glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
-
-    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-    egl->glBindTexture(GL_TEXTURE_2D, 0);
-    return texture_id;
-}
-
 static bool cuda_register_opengl_texture(gsr_cuda *cuda, CUgraphicsResource *cuda_graphics_resource, CUarray *mapped_array, unsigned int texture_id) {
     CUresult res;
     res = cuda->cuGraphicsGLRegisterImage(cuda_graphics_resource, texture_id, GL_TEXTURE_2D, CU_GRAPHICS_REGISTER_FLAGS_NONE);
@@ -110,7 +95,7 @@ static bool gsr_video_encoder_nvenc_setup_textures(gsr_video_encoder_nvenc *self
     const int div[2] = {1, 2}; // divide UV texture size by 2 because chroma is half size
 
     for(int i = 0; i < 2; ++i) {
-        self->target_textures[i] = gl_create_texture(self->params.egl, video_codec_context->width / div[i], video_codec_context->height / div[i], self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? internal_formats_nv12[i] : internal_formats_p010[i], formats[i]);
+        self->target_textures[i] = gl_create_texture(self->params.egl, video_codec_context->width / div[i], video_codec_context->height / div[i], self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? internal_formats_nv12[i] : internal_formats_p010[i], formats[i], GL_LINEAR);
         if(self->target_textures[i] == 0) {
             fprintf(stderr, "gsr error: gsr_video_encoder_nvenc_setup_textures: failed to create opengl texture\n");
             return false;

@@ -11,7 +11,8 @@ typedef enum {
 } gsr_image_format;
 
 typedef enum {
-    GSR_IMAGE_WRITER_SOURCE_OPENGL
+    GSR_IMAGE_WRITER_SOURCE_OPENGL,
+    GSR_IMAGE_WRITER_SOURCE_MEMORY
 } gsr_image_writer_source;
 
 typedef struct {
@@ -20,9 +21,12 @@ typedef struct {
     int width;
     int height;
     unsigned int texture;
+    const void *memory; /* Reference */
 } gsr_image_writer;
 
-bool gsr_image_writer_init(gsr_image_writer *self, gsr_image_writer_source source, gsr_egl *egl, int width, int height);
+bool gsr_image_writer_init_opengl(gsr_image_writer *self, gsr_egl *egl, int width, int height);
+/* |memory| is taken as a reference */
+bool gsr_image_writer_init_memory(gsr_image_writer *self, const void *memory, int width, int height);
 void gsr_image_writer_deinit(gsr_image_writer *self);
 
 /* Quality is between 1 and 100 where 100 is the max quality. Quality doesn't apply to lossless formats */

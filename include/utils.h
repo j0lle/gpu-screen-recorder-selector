@@ -69,4 +69,6 @@ bool vaapi_copy_egl_image_to_video_surface(gsr_egl *egl, EGLImage image, vec2i s
 
 vec2i scale_keep_aspect_ratio(vec2i from, vec2i to);
 
+unsigned int gl_create_texture(gsr_egl *egl, int width, int height, int internal_format, unsigned int format, int filter);
+
 #endif /* GSR_UTILS_H */

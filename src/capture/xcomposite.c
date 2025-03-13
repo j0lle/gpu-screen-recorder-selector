@@ -12,9 +12,6 @@
 
 #include <X11/Xlib.h>
 
-#include <libavutil/frame.h>
-#include <libavcodec/avcodec.h>
-
 typedef struct {
     gsr_capture_xcomposite_params params;
     Display *display;
