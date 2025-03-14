@@ -8,8 +8,6 @@ typedef struct {
     gsr_egl *egl;
     const char *display_to_capture; /* if this is "screen", then the entire x11 screen is captured (all displays). A copy is made of this */
     int fps;
-    vec2i pos;
-    vec2i size;
     bool direct_capture;
     bool record_cursor;
     vec2i output_resolution;

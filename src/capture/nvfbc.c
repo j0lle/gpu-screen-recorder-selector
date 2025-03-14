@@ -27,7 +27,7 @@ typedef struct {
     NVFBC_TOGL_SETUP_PARAMS setup_params;
 
     bool supports_direct_cursor;
-    uint32_t x, y, width, height;
+    uint32_t width, height;
     NVFBC_TRACKING_TYPE tracking_type;
     uint32_t output_id;
     uint32_t tracking_width, tracking_height;
@@ -284,11 +284,6 @@ static int gsr_capture_nvfbc_start(gsr_capture *cap, gsr_capture_metadata *captu
 
     if(!gsr_capture_nvfbc_load_library(cap))
         return -1;
-
-    self->x = max_int(self->params.pos.x, 0);
-    self->y = max_int(self->params.pos.y, 0);
-    self->width = max_int(self->params.size.x, 0);
-    self->height = max_int(self->params.size.y, 0);
 
     self->supports_direct_cursor = false;
     int driver_major_version = 0;

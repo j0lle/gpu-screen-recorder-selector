@@ -1224,7 +1224,8 @@ static void usage_full() {
     printf("        By default this value is set to 2.0.\n");
     printf("\n");
     printf("  -restore-portal-session\n");
-    printf("        If GPU Screen Recorder should use the same capture option as the last time. Using this option removes the popup asking what you want to record the next time you record with '-w portal' if you selected the option to save session (token) in the desktop portal screencast popup.\n");
+    printf("        If GPU Screen Recorder should use the same capture option as the last time. Using this option removes the popup asking what you want to record the next time you record with '-w portal'\n");
+    printf("        if you selected the option to save session (token) in the desktop portal screencast popup.\n");
     printf("        This option may not have any effect on your Wayland compositor and your systems desktop portal needs to support ScreenCast version 5 or later. Optional, set to 'no' by default.\n");
     printf("\n");
     printf("  -portal-session-token-filepath\n");
@@ -2428,8 +2429,30 @@ static std::string get_monitor_by_region_center(const gsr_egl *egl, vec2i region
     return result;
 }
 
-static gsr_capture* create_monitor_capture(const std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, gsr_egl *egl, int fps, bool hdr, bool record_cursor) {
-    if(!monitor_capture_use_drm(egl->window, egl->gpu_info.vendor)) {
+static gsr_capture* create_monitor_capture(const std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, gsr_egl *egl, int fps, bool hdr, bool record_cursor, bool prefer_ximage) {
+    if(gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11 && prefer_ximage) {
+        gsr_capture_ximage_params ximage_params;
+        ximage_params.egl = egl;
+        ximage_params.display_to_capture = window_str.c_str();
+        ximage_params.record_cursor = record_cursor;
+        ximage_params.output_resolution = output_resolution;
+        ximage_params.region_size = region_size;
+        ximage_params.region_position = region_position;
+        return gsr_capture_ximage_create(&ximage_params);
+    }
+
+    if(monitor_capture_use_drm(egl->window, egl->gpu_info.vendor)) {
+        gsr_capture_kms_params kms_params;
+        kms_params.egl = egl;
+        kms_params.display_to_capture = window_str.c_str();
+        kms_params.record_cursor = record_cursor;
+        kms_params.hdr = hdr;
+        kms_params.fps = fps;
+        kms_params.output_resolution = output_resolution;
+        kms_params.region_size = region_size;
+        kms_params.region_position = region_position;
+        return gsr_capture_kms_create(&kms_params);
+    } else {
         const char *capture_target = window_str.c_str();
         const bool direct_capture = strcmp(window_str.c_str(), "screen-direct") == 0 || strcmp(window_str.c_str(), "screen-direct-force") == 0;
         if(direct_capture) {
@@ -2441,25 +2464,12 @@ static gsr_capture* create_monitor_capture(const std::string &window_str, vec2i 
         nvfbc_params.egl = egl;
         nvfbc_params.display_to_capture = capture_target;
         nvfbc_params.fps = fps;
-        nvfbc_params.pos = { 0, 0 };
-        nvfbc_params.size = { 0, 0 };
         nvfbc_params.direct_capture = direct_capture;
         nvfbc_params.record_cursor = record_cursor;
         nvfbc_params.output_resolution = output_resolution;
         nvfbc_params.region_size = region_size;
         nvfbc_params.region_position = region_position;
         return gsr_capture_nvfbc_create(&nvfbc_params);
-    } else {
-        gsr_capture_kms_params kms_params;
-        kms_params.egl = egl;
-        kms_params.display_to_capture = window_str.c_str();
-        kms_params.record_cursor = record_cursor;
-        kms_params.hdr = hdr;
-        kms_params.fps = fps;
-        kms_params.output_resolution = output_resolution;
-        kms_params.region_size = region_size;
-        kms_params.region_position = region_position;
-        return gsr_capture_kms_create(&kms_params);
     }
 }
 
@@ -2489,7 +2499,7 @@ static void region_get_data(std::string &window_str, gsr_egl *egl, vec2i *region
 }
 
 static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_resolution, vec2i region_size, vec2i region_position, bool wayland, gsr_egl *egl, int fps, bool hdr,
-    bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath)
+    bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath, bool prefer_ximage)
 {
     Window src_window_id = None;
     bool follow_focused = false;
@@ -2530,12 +2540,12 @@ static gsr_capture* create_capture_impl(std::string &window_str, vec2i output_re
 #endif
     } else if(strcmp(window_str.c_str(), "region") == 0) {
         region_get_data(window_str, egl, &region_size, &region_position);
-        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, record_cursor);
+        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, record_cursor, prefer_ximage);
         if(!capture)
             _exit(1);
     } else if(contains_non_hex_number(window_str.c_str())) {
         validate_monitor_get_valid(egl, window_str);
-        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, record_cursor);
+        capture = create_monitor_capture(window_str, output_resolution, region_size, region_position, egl, fps, hdr, record_cursor, prefer_ximage);
         if(!capture)
             _exit(1);
     } else {
@@ -2596,29 +2606,8 @@ static void capture_image_to_file(const char *filepath, std::string &window_str,
     bool record_cursor, bool restore_portal_session, const char *portal_session_token_filepath, VideoQuality video_quality) {
     const gsr_color_range color_range = image_format_to_color_range(image_format);
     const int fps = 60;
-    gsr_capture *capture = nullptr;
-    switch(gsr_window_get_display_server(egl->window)) {
-        case GSR_DISPLAY_SERVER_X11: {
-            if(window_str == "region")
-                region_get_data(window_str, egl, &region_size, &region_position);
-            else
-                validate_monitor_get_valid(egl, window_str);
-
-            gsr_capture_ximage_params ximage_params;
-            ximage_params.egl = egl;
-            ximage_params.display_to_capture = window_str.c_str();
-            ximage_params.record_cursor = record_cursor;
-            ximage_params.output_resolution = output_resolution;
-            ximage_params.region_size = region_size;
-            ximage_params.region_position = region_position;
-            capture = gsr_capture_ximage_create(&ximage_params);
-            break;
-        }
-        case GSR_DISPLAY_SERVER_WAYLAND: {
-            capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, egl, fps, false, record_cursor, restore_portal_session, portal_session_token_filepath);
-            break;
-        }
-    }
+    const bool prefer_ximage = true;
+    gsr_capture *capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, egl, fps, false, record_cursor, restore_portal_session, portal_session_token_filepath, prefer_ximage);
 
     gsr_capture_metadata capture_metadata;
     capture_metadata.width = 0;
@@ -3958,7 +3947,7 @@ int main(int argc, char **argv) {
     const AVCodec *video_codec_f = select_video_codec_with_fallback(&video_codec, video_codec_to_use, file_extension.c_str(), use_software_video_encoder, &egl, &low_power);
 
     const gsr_color_depth color_depth = video_codec_to_bit_depth(video_codec);
-    gsr_capture *capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, &egl, fps, video_codec_is_hdr(video_codec), record_cursor, restore_portal_session, portal_session_token_filepath);
+    gsr_capture *capture = create_capture_impl(window_str, output_resolution, region_size, region_position, wayland, &egl, fps, video_codec_is_hdr(video_codec), record_cursor, restore_portal_session, portal_session_token_filepath, false);
 
     // (Some?) livestreaming services require at least one audio track to work.
     // If not audio is provided then create one silent audio track.
