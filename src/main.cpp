@@ -777,7 +777,7 @@ static void dict_set_profile(AVCodecContext *codec_context, gsr_gpu_vendor vendo
         //if(color_depth == GSR_COLOR_DEPTH_10_BITS)
         //    av_dict_set_int(options, "profile", AV_PROFILE_H264_HIGH_10, 0);
         //else
-        av_dict_set_int(options, "profile", AV_PROFILE_H264_HIGH, 0);
+        av_dict_set_int(options, "profile", vendor == GSR_GPU_VENDOR_NVIDIA ? 2 : AV_PROFILE_H264_HIGH, 0);
     } else if(codec_context->codec_id == AV_CODEC_ID_AV1) {
         if(vendor == GSR_GPU_VENDOR_NVIDIA) {
             if(color_depth == GSR_COLOR_DEPTH_10_BITS)
@@ -787,9 +787,9 @@ static void dict_set_profile(AVCodecContext *codec_context, gsr_gpu_vendor vendo
         }
     } else if(codec_context->codec_id == AV_CODEC_ID_HEVC) {
         if(color_depth == GSR_COLOR_DEPTH_10_BITS)
-            av_dict_set_int(options, "profile", AV_PROFILE_HEVC_MAIN_10, 0);
+            av_dict_set_int(options, "profile", vendor == GSR_GPU_VENDOR_NVIDIA ? 1 : AV_PROFILE_HEVC_MAIN_10, 0);
         else
-            av_dict_set_int(options, "profile", AV_PROFILE_HEVC_MAIN, 0);
+            av_dict_set_int(options, "profile", vendor == GSR_GPU_VENDOR_NVIDIA ? 0 : AV_PROFILE_HEVC_MAIN, 0);
     }
     #endif
 }
