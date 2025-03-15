@@ -365,6 +365,8 @@ static bool gsr_pipewire_audio_listen_on_metadata(gsr_pipewire_audio *self, uint
 
     pw_proxy_add_object_listener(self->metadata_proxy, &self->metadata_listener, &metadata_events, self);
     pw_proxy_add_listener(self->metadata_proxy, &self->metadata_proxy_listener, &metadata_proxy_events, self);
+
+    self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, self->server_version_sync);
     return true;
 }
 
@@ -562,11 +564,11 @@ bool gsr_pipewire_audio_init(gsr_pipewire_audio *self) {
     // TODO: Error check
     pw_core_add_listener(self->core, &self->core_listener, &core_events, self);
 
-    self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, 0);
-    pw_thread_loop_wait(self->thread_loop);
-
     self->registry = pw_core_get_registry(self->core, PW_VERSION_REGISTRY, 0);
     pw_registry_add_listener(self->registry, &self->registry_listener, &registry_events, self);
+
+    self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, self->server_version_sync);
+    pw_thread_loop_wait(self->thread_loop);
 
     pw_thread_loop_unlock(self->thread_loop);
     return true;
@@ -594,6 +596,9 @@ void gsr_pipewire_audio_deinit(gsr_pipewire_audio *self) {
         spa_zero(self->metadata_proxy_listener);
         self->metadata_proxy = NULL;
     }
+
+    spa_hook_remove(&self->registry_listener);
+    spa_hook_remove(&self->core_listener);
 
     if(self->core) {
         pw_core_disconnect(self->core);
