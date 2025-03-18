@@ -3321,7 +3321,7 @@ int main(int argc, char **argv) {
             const char *vendor_str = argv[3];
             gsr_gpu_vendor vendor;
             if(!gpu_vendor_from_string(vendor_str, &vendor)) {
-                fprintf(stderr, "Error: \"%s\" is not a valid vendor, expected \"amd\", \"intel\" or \"nvidia\"\n", vendor_str);
+                fprintf(stderr, "Error: \"%s\" is not a valid vendor, expected \"amd\", \"intel\", \"nvidia\" or \"broadcom\"\n", vendor_str);
                 _exit(1);
             }
 
