@@ -6,7 +6,8 @@
 typedef enum {
     GSR_GPU_VENDOR_AMD,
     GSR_GPU_VENDOR_INTEL,
-    GSR_GPU_VENDOR_NVIDIA
+    GSR_GPU_VENDOR_NVIDIA,
+    GSR_GPU_VENDOR_BROADCOM
 } gsr_gpu_vendor;
 
 typedef struct {

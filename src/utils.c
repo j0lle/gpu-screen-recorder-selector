@@ -396,6 +396,8 @@ bool gl_get_gpu_info(gsr_egl *egl, gsr_gpu_info *info) {
         info->vendor = GSR_GPU_VENDOR_INTEL;
     else if(strstr((const char*)gl_vendor, "NVIDIA"))
         info->vendor = GSR_GPU_VENDOR_NVIDIA;
+    else if(strstr((const char*)gl_vendor, "Broadcom"))
+        info->vendor = GSR_GPU_VENDOR_BROADCOM;
     else {
         fprintf(stderr, "gsr error: unknown gpu vendor: %s\n", gl_vendor);
         supported = false;

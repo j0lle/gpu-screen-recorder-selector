@@ -1922,7 +1922,8 @@ static gsr_video_encoder* create_video_encoder(gsr_egl *egl, bool overclock, gsr
 
     switch(egl->gpu_info.vendor) {
         case GSR_GPU_VENDOR_AMD:
-        case GSR_GPU_VENDOR_INTEL: {
+        case GSR_GPU_VENDOR_INTEL:
+        case GSR_GPU_VENDOR_BROADCOM: {
             gsr_video_encoder_vaapi_params params;
             params.egl = egl;
             params.color_depth = color_depth;
@@ -1956,6 +1957,7 @@ static bool get_supported_video_codecs(gsr_egl *egl, VideoCodec video_codec, boo
     switch(egl->gpu_info.vendor) {
         case GSR_GPU_VENDOR_AMD:
         case GSR_GPU_VENDOR_INTEL:
+        case GSR_GPU_VENDOR_BROADCOM:
             return gsr_get_supported_video_codecs_vaapi(video_codecs, egl->card_path, cleanup);
         case GSR_GPU_VENDOR_NVIDIA:
             return gsr_get_supported_video_codecs_nvenc(video_codecs, cleanup);
@@ -2028,6 +2030,9 @@ static void list_gpu_info(gsr_egl *egl) {
             break;
         case GSR_GPU_VENDOR_NVIDIA:
             printf("vendor|nvidia\n");
+            break;
+        case GSR_GPU_VENDOR_BROADCOM:
+            printf("vendor|broadcom\n");
             break;
     }
     printf("card_path|%s\n", egl->card_path);
@@ -2368,6 +2373,9 @@ static bool gpu_vendor_from_string(const char *vendor_str, gsr_gpu_vendor *vendo
         return true;
     } else if(strcmp(vendor_str, "nvidia") == 0) {
         *vendor = GSR_GPU_VENDOR_NVIDIA;
+        return true;
+    } else if(strcmp(vendor_str, "broadcom") == 0) {
+        *vendor = GSR_GPU_VENDOR_BROADCOM;
         return true;
     } else {
         return false;
