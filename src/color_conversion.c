@@ -5,8 +5,6 @@
 #include <math.h>
 #include <assert.h>
 
-/* TODO: highp instead of mediump? */
-
 #define MAX_SHADERS 4
 #define MAX_FRAMEBUFFERS 2
 #define EXTERNAL_TEXTURE_SHADER_OFFSET 2
@@ -108,7 +106,7 @@ static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *u
             "#version 300 es                                                                 \n"
             "#extension GL_OES_EGL_image_external : enable                                   \n"
             "#extension GL_OES_EGL_image_external_essl3 : require                            \n"
-            "precision mediump float;                                                        \n"
+            "precision highp float;                                                        \n"
             "in vec2 texcoords_out;                                                          \n"
             "uniform samplerExternalOES tex1;                                                \n"
             "out vec4 FragColor;                                                             \n"
@@ -120,7 +118,7 @@ static int load_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *u
     } else {
         snprintf(fragment_shader, sizeof(fragment_shader),
             "#version 300 es                                                                 \n"
-            "precision mediump float;                                                        \n"
+            "precision highp float;                                                        \n"
             "in vec2 texcoords_out;                                                          \n"
             "uniform sampler2D tex1;                                                         \n"
             "out vec4 FragColor;                                                             \n"
@@ -171,7 +169,7 @@ static unsigned int load_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_u
             "#version 300 es                                                                       \n"
             "#extension GL_OES_EGL_image_external : enable                                         \n"
             "#extension GL_OES_EGL_image_external_essl3 : require                                  \n"
-            "precision mediump float;                                                              \n"
+            "precision highp float;                                                              \n"
             "in vec2 texcoords_out;                                                                \n"
             "uniform samplerExternalOES tex1;                                                      \n"
             "out vec4 FragColor;                                                                   \n"
@@ -183,7 +181,7 @@ static unsigned int load_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_u
     } else {
         snprintf(fragment_shader, sizeof(fragment_shader),
             "#version 300 es                                                                       \n"
-            "precision mediump float;                                                              \n"
+            "precision highp float;                                                              \n"
             "in vec2 texcoords_out;                                                                \n"
             "uniform sampler2D tex1;                                                               \n"
             "out vec4 FragColor;                                                                   \n"
@@ -231,7 +229,7 @@ static unsigned int load_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_
             "#version 300 es                                                                       \n"
             "#extension GL_OES_EGL_image_external : enable                                         \n"
             "#extension GL_OES_EGL_image_external_essl3 : require                                  \n"
-            "precision mediump float;                                                              \n"
+            "precision highp float;                                                              \n"
             "in vec2 texcoords_out;                                                                \n"
             "uniform samplerExternalOES tex1;                                                      \n"
             "out vec4 FragColor;                                                                   \n"
@@ -242,7 +240,7 @@ static unsigned int load_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_
     } else {
         snprintf(fragment_shader, sizeof(fragment_shader),
             "#version 300 es                                                                       \n"
-            "precision mediump float;                                                              \n"
+            "precision highp float;                                                              \n"
             "in vec2 texcoords_out;                                                                \n"
             "uniform sampler2D tex1;                                                               \n"
             "out vec4 FragColor;                                                                   \n"
