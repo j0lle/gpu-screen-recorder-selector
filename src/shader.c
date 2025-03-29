@@ -36,36 +36,28 @@ static unsigned int loader_shader(gsr_egl *egl, unsigned int type, const char *s
     return shader_id;
 }
 
-static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const char *fragment_shader, const char *compute_shader) {
+static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const char *fragment_shader) {
     unsigned int vertex_shader_id = 0;
     unsigned int fragment_shader_id = 0;
-    unsigned int compute_shader_id = 0;
     unsigned int program_id = 0;
     int linked = 0;
-    bool success = false;
 
     if(vertex_shader) {
         vertex_shader_id = loader_shader(egl, GL_VERTEX_SHADER, vertex_shader);
         if(vertex_shader_id == 0)
-            goto done;
+            goto err;
     }
 
     if(fragment_shader) {
         fragment_shader_id = loader_shader(egl, GL_FRAGMENT_SHADER, fragment_shader);
         if(fragment_shader_id == 0)
-            goto done;
-    }
-
-    if(compute_shader) {
-        compute_shader_id = loader_shader(egl, GL_COMPUTE_SHADER, compute_shader);
-        if(compute_shader_id == 0)
-            goto done;
+            goto err;
     }
 
     program_id = egl->glCreateProgram();
     if(program_id == 0) {
         fprintf(stderr, "gsr error: load_program: failed to create shader program, error: %d\n", egl->glGetError());
-        goto done;
+        goto err;
     }
 
     if(vertex_shader_id)
@@ -73,9 +65,6 @@ static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const 
 
     if(fragment_shader_id)
         egl->glAttachShader(program_id, fragment_shader_id);
-
-    if(compute_shader_id)
-        egl->glAttachShader(program_id, compute_shader_id);
 
     egl->glLinkProgram(program_id);
 
@@ -90,36 +79,37 @@ static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const 
             fprintf(stderr, "gsr error: load program: linking shader program failed, error:\n%s\n", info_log);            
         }
 
-        goto done;
+        goto err;
     }
 
-    success = true;
-    done:
-
-    if(!success) {
-        if(program_id)
-            egl->glDeleteProgram(program_id);
-    }
-    if(compute_shader_id)
-        egl->glDeleteShader(compute_shader_id);
     if(fragment_shader_id)
         egl->glDeleteShader(fragment_shader_id);
     if(vertex_shader_id)
         egl->glDeleteShader(vertex_shader_id);
+
     return program_id;
+
+    err:
+    if(program_id)
+        egl->glDeleteProgram(program_id);
+    if(fragment_shader_id)
+        egl->glDeleteShader(fragment_shader_id);
+    if(vertex_shader_id)
+        egl->glDeleteShader(vertex_shader_id);
+    return 0;
 }
 
-int gsr_shader_init(gsr_shader *self, gsr_egl *egl, const char *vertex_shader, const char *fragment_shader, const char *compute_shader) {
+int gsr_shader_init(gsr_shader *self, gsr_egl *egl, const char *vertex_shader, const char *fragment_shader) {
     assert(egl);
     self->egl = egl;
     self->program_id = 0;
 
-    if(!vertex_shader && !fragment_shader && !compute_shader) {
-        fprintf(stderr, "gsr error: gsr_shader_init: vertex, fragment shader and compute shaders can't be NULL at the same time\n");
+    if(!vertex_shader && !fragment_shader) {
+        fprintf(stderr, "gsr error: gsr_shader_init: vertex shader and fragment shader can't be NULL at the same time\n");
         return -1;
     }
 
-    self->program_id = load_program(self->egl, vertex_shader, fragment_shader, compute_shader);
+    self->program_id = load_program(self->egl, vertex_shader, fragment_shader);
     if(self->program_id == 0)
         return -1;
 

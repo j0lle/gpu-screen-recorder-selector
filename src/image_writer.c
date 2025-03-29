@@ -17,7 +17,7 @@ bool gsr_image_writer_init_opengl(gsr_image_writer *self, gsr_egl *egl, int widt
     self->egl = egl;
     self->width = width;
     self->height = height;
-    self->texture = gl_create_texture(self->egl, self->width, self->height, GL_RGBA8, GL_RGBA, GL_NEAREST); /* TODO: use GL_RGB16 instead of GL_RGB8 for hdr/10-bit */
+    self->texture = gl_create_texture(self->egl, self->width, self->height, GL_RGB8, GL_RGB, GL_NEAREST); /* TODO: use GL_RGB16 instead of GL_RGB8 for hdr/10-bit */
     if(self->texture == 0) {
         fprintf(stderr, "gsr error: gsr_image_writer_init: failed to create texture\n");
         return false;
@@ -50,10 +50,10 @@ static bool gsr_image_writer_write_memory_to_file(gsr_image_writer *self, const 
     bool success = false;
     switch(image_format) {
         case GSR_IMAGE_FORMAT_JPEG:
-            success = stbi_write_jpg(filepath, self->width, self->height, 4, data, quality);
+            success = stbi_write_jpg(filepath, self->width, self->height, 3, data, quality);
             break;
         case GSR_IMAGE_FORMAT_PNG:
-            success = stbi_write_png(filepath, self->width, self->height, 4, data, 0);
+            success = stbi_write_png(filepath, self->width, self->height, 3, data, 0);
             break;
     }
 
@@ -65,7 +65,7 @@ static bool gsr_image_writer_write_memory_to_file(gsr_image_writer *self, const 
 
 static bool gsr_image_writer_write_opengl_texture_to_file(gsr_image_writer *self, const char *filepath, gsr_image_format image_format, int quality) {
     assert(self->source == GSR_IMAGE_WRITER_SOURCE_OPENGL);
-    uint8_t *frame_data = malloc(self->width * self->height * 4);
+    uint8_t *frame_data = malloc(self->width * self->height * 3);
     if(!frame_data) {
         fprintf(stderr, "gsr error: gsr_image_writer_write_to_file: failed to allocate memory for image frame\n");
         return false;
@@ -74,7 +74,7 @@ static bool gsr_image_writer_write_opengl_texture_to_file(gsr_image_writer *self
     // TODO: hdr support
     self->egl->glBindTexture(GL_TEXTURE_2D, self->texture);
     // We could use glGetTexSubImage, but it's only available starting from opengl 4.5
-    self->egl->glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, frame_data);
+    self->egl->glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, frame_data);
     self->egl->glBindTexture(GL_TEXTURE_2D, 0);
 
     self->egl->glFlush();

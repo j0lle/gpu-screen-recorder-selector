@@ -98,7 +98,7 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_TEXTURE_EXTERNAL_OES                 0x8D65
 #define GL_RED                                  0x1903
 #define GL_GREEN                                0x1904
-#define GL_BLUE                                 0x1905
+#define GL_BLUE                                    0x1905
 #define GL_ALPHA                                0x1906
 #define GL_TEXTURE_SWIZZLE_RGBA                 0x8E46
 #define GL_RG                                   0x8227
@@ -111,7 +111,6 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_R16                                  0x822A
 #define GL_RG16                                 0x822C
 #define GL_RGB16                                0x8054
-#define GL_RGBA32F                              0x8814
 #define GL_UNSIGNED_BYTE                        0x1401
 #define GL_COLOR_BUFFER_BIT                     0x00004000
 #define GL_TEXTURE_WRAP_S                       0x2802
@@ -135,10 +134,6 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_SCISSOR_TEST                         0x0C11
 #define GL_PACK_ALIGNMENT                       0x0D05
 #define GL_UNPACK_ALIGNMENT                     0x0CF5
-#define GL_READ_ONLY                            0x88B8
-#define GL_WRITE_ONLY                           0x88B9
-#define GL_READ_WRITE                           0x88BA
-#define GL_MAX_COMPUTE_FIXED_GROUP_INVOCATIONS  0x90EB
 
 #define GL_VENDOR                               0x1F00
 #define GL_RENDERER                             0x1F01
@@ -148,7 +143,6 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_INFO_LOG_LENGTH                      0x8B84
 #define GL_FRAGMENT_SHADER                      0x8B30
 #define GL_VERTEX_SHADER                        0x8B31
-#define GL_COMPUTE_SHADER                       0x91B9
 #define GL_COMPILE_STATUS                       0x8B81
 #define GL_LINK_STATUS                          0x8B82
 
@@ -237,7 +231,6 @@ struct gsr_egl {
     void (*glGenTextures)(int n, unsigned int *textures);
     void (*glDeleteTextures)(int n, const unsigned int *texture);
     void (*glBindTexture)(unsigned int target, unsigned int texture);
-    void (*glBindImageTexture)(unsigned int unit, unsigned int texture, int level, unsigned char layered, int layer, unsigned int access, unsigned int format);
     void (*glTexParameteri)(unsigned int target, unsigned int pname, int param);
     void (*glTexParameteriv)(unsigned int target, unsigned int pname, const int *params);
     void (*glGetTexLevelParameteriv)(unsigned int target, int level, unsigned int pname, int *params);
@@ -247,8 +240,6 @@ struct gsr_egl {
     void (*glGenFramebuffers)(int n, unsigned int *framebuffers);
     void (*glBindFramebuffer)(unsigned int target, unsigned int framebuffer);
     void (*glDeleteFramebuffers)(int n, const unsigned int *framebuffers);
-    void (*glDispatchCompute)(unsigned int num_groups_x, unsigned int num_groups_y, unsigned int num_groups_z);
-    void (*glMemoryBarrier)(unsigned int barriers);
     void (*glViewport)(int x, int y, int width, int height);
     void (*glFramebufferTexture2D)(unsigned int target, unsigned int attachment, unsigned int textarget, unsigned int texture, int level);
     void (*glDrawBuffers)(int n, const unsigned int *bufs);
@@ -285,14 +276,11 @@ struct gsr_egl {
     int (*glGetUniformLocation)(unsigned int program, const char *name);
     void (*glUniform1f)(int location, float v0);
     void (*glUniform2f)(int location, float v0, float v1);
-    void (*glUniform2i)(int location, int v0, int v1);
-    void (*glUniformMatrix2fv)(int location, int count, unsigned char transpose, const float *value);
     void (*glDebugMessageCallback)(GLDEBUGPROC callback, const void *userParam);
     void (*glScissor)(int x, int y, int width, int height);
     void (*glReadPixels)(int x, int y, int width, int height, unsigned int format, unsigned int type, void *pixels);
     void* (*glMapBuffer)(unsigned int target, unsigned int access);
     unsigned char (*glUnmapBuffer)(unsigned int target);
-    void (*glGetIntegerv)(unsigned int pname, int *params);
 };
 
 bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bool enable_debug);
