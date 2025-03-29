@@ -23,9 +23,6 @@ typedef struct {
     vec2i capture_size;
     gsr_pipewire_video_dmabuf_data dmabuf_data[GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES];
     int num_dmabuf_data;
-
-    bool fast_path_failed;
-    bool mesa_supports_compute_only_vaapi_copy;
 } gsr_capture_portal;
 
 static void gsr_capture_portal_cleanup_plane_fds(gsr_capture_portal *self) {
@@ -305,27 +302,11 @@ static int gsr_capture_portal_start(gsr_capture *cap, gsr_capture_metadata *capt
         capture_metadata->height = self->params.output_resolution.y;
     }
 
-    self->fast_path_failed = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 0, 9);
-    if(self->fast_path_failed)
-        fprintf(stderr, "gsr warning: gsr_capture_kms_start: your amd driver (mesa) version is known to be buggy (<= version 24.0.9), falling back to opengl copy\n");
-
-    self->mesa_supports_compute_only_vaapi_copy = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 3, 6);
-
     return 0;
 }
 
 static int max_int(int a, int b) {
     return a > b ? a : b;
-}
-
-static void gsr_capture_portal_fail_fast_path_if_not_fast(gsr_capture_portal *self, uint32_t pixel_format) {
-    const uint8_t pixel_format_color_depth_1 = (pixel_format >> 16) & 0xFF;
-    if(!self->fast_path_failed && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !self->mesa_supports_compute_only_vaapi_copy && (pixel_format_color_depth_1 == '3' || pixel_format_color_depth_1 == '4')) {
-        self->fast_path_failed = true;
-        fprintf(stderr, "gsr warning: gsr_capture_kms_capture: the monitor you are recording is in 10/12-bit color format and your mesa version is <= 24.3.6, composition will be used."
-            " If you experience performance problems in the video then record on a single window on X11 instead or disable 10/12-bit color option in your desktop environment settings,"
-            " or try to record the monitor on X11 instead (if you aren't already doing that) or update your mesa version.\n");
-    }
 }
 
 static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
@@ -348,45 +329,21 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
         return 0;
     }
 
-    gsr_capture_portal_fail_fast_path_if_not_fast(self, pipewire_fourcc);
-
     const bool is_scaled = self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0;
     vec2i output_size = is_scaled ? self->params.output_resolution : self->capture_size;
     output_size = scale_keep_aspect_ratio(self->capture_size, output_size);
     
     const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
 
-    self->params.egl->glFlush();
-    self->params.egl->glFinish();
+    //self->params.egl->glFlush();
+    //self->params.egl->glFinish();
 
     // TODO: Handle region crop
 
-    /* Fast opengl free path */
-    if(!self->fast_path_failed && video_codec_context_is_vaapi(capture_metadata->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
-        int fds[4];
-        uint32_t offsets[4];
-        uint32_t pitches[4];
-        uint64_t modifiers[4];
-        for(int i = 0; i < self->num_dmabuf_data; ++i) {
-            fds[i] = self->dmabuf_data[i].fd;
-            offsets[i] = self->dmabuf_data[i].offset;
-            pitches[i] = self->dmabuf_data[i].stride;
-            modifiers[i] = pipewire_modifiers;
-        }
-        if(!vaapi_copy_drm_planes_to_video_surface(capture_metadata->video_codec_context, capture_metadata->frame, (vec2i){region.x, region.y}, self->capture_size, target_pos, output_size, pipewire_fourcc, self->capture_size, fds, offsets, pitches, modifiers, self->num_dmabuf_data)) {
-            fprintf(stderr, "gsr error: gsr_capture_portal_capture: vaapi_copy_drm_planes_to_video_surface failed, falling back to opengl copy. Please report this as an issue at https://github.com/dec05eba/gpu-screen-recorder-issues\n");
-            self->fast_path_failed = true;
-        }
-    } else {
-        self->fast_path_failed = true;
-    }
-
-    if(self->fast_path_failed) {
-        gsr_color_conversion_draw(color_conversion, using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
-            target_pos, output_size,
-            (vec2i){region.x, region.y}, self->capture_size,
-            0.0f, using_external_image, GSR_SOURCE_COLOR_RGB);
-    }
+    gsr_color_conversion_draw(color_conversion, using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
+        target_pos, output_size,
+        (vec2i){region.x, region.y}, self->capture_size,
+        GSR_ROT_0, using_external_image, GSR_SOURCE_COLOR_RGB);
 
     if(self->params.record_cursor && self->texture_map.cursor_texture_id > 0 && cursor_region.width > 0) {
         const vec2d scale = {
@@ -404,12 +361,12 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
         gsr_color_conversion_draw(color_conversion, self->texture_map.cursor_texture_id,
             (vec2i){cursor_pos.x, cursor_pos.y}, (vec2i){cursor_region.width * scale.x, cursor_region.height * scale.y},
             (vec2i){0, 0}, (vec2i){cursor_region.width, cursor_region.height},
-            0.0f, false, GSR_SOURCE_COLOR_RGB);
+            GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
         self->params.egl->glDisable(GL_SCISSOR_TEST);
     }
 
-    self->params.egl->glFlush();
-    self->params.egl->glFinish();
+    //self->params.egl->glFlush();
+    //self->params.egl->glFinish();
 
     gsr_capture_portal_cleanup_plane_fds(self);
 

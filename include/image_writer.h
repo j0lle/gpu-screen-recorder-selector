@@ -25,7 +25,7 @@ typedef struct {
 } gsr_image_writer;
 
 bool gsr_image_writer_init_opengl(gsr_image_writer *self, gsr_egl *egl, int width, int height);
-/* |memory| is taken as a reference */
+/* |memory| is taken as a reference. The data is expected to be in rgba8 format (8 bit rgba) */
 bool gsr_image_writer_init_memory(gsr_image_writer *self, const void *memory, int width, int height);
 void gsr_image_writer_deinit(gsr_image_writer *self);
 

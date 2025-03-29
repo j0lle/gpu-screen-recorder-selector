@@ -1072,8 +1072,9 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
         // TODO: More quality options
         if(low_power)
             av_dict_set_int(&options, "low_power", 1, 0);
-        // Improves performance but increases vram
-        //av_dict_set_int(&options, "async_depth", 8, 0);
+        // Improves performance but increases vram.
+        // TODO: Might need a different async_depth for optimal performance on different amd/intel gpus
+        //av_dict_set_int(&options, "async_depth", 3, 0);
 
         if(codec_context->codec_id == AV_CODEC_ID_H264) {
             // Removed because it causes stutter in games for some people

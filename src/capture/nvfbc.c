@@ -390,16 +390,16 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *cap
         return 0;
     }
 
-    self->params.egl->glFlush();
-    self->params.egl->glFinish();
+    //self->params.egl->glFlush();
+    //self->params.egl->glFinish();
 
     gsr_color_conversion_draw(color_conversion, self->setup_params.dwTextures[grab_params.dwTextureIndex],
         target_pos, (vec2i){output_size.x, output_size.y},
         self->params.region_position, frame_size,
-        0.0f, false, GSR_SOURCE_COLOR_BGR);
+        GSR_ROT_0, false, GSR_SOURCE_COLOR_BGR);
 
-    self->params.egl->glFlush();
-    self->params.egl->glFinish();
+    //self->params.egl->glFlush();
+    //self->params.egl->glFinish();
 
     return 0;
 }
