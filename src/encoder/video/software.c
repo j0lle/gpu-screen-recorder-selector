@@ -83,8 +83,8 @@ static void gsr_video_encoder_software_copy_textures_to_frame(gsr_video_encoder 
     self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
     // cap_kms->kms.base.egl->eglSwapBuffers(cap_kms->kms.base.egl->egl_display, cap_kms->kms.base.egl->egl_surface);
 
-    self->params.egl->glFlush();
-    self->params.egl->glFinish();
+    //self->params.egl->glFlush();
+    //self->params.egl->glFinish();
 }
 
 static void gsr_video_encoder_software_get_textures(gsr_video_encoder *encoder, unsigned int *textures, int *num_textures, gsr_destination_color *destination_color) {

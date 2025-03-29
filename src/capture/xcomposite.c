@@ -34,7 +34,6 @@ typedef struct {
     gsr_cursor cursor;
 
     bool clear_background;
-    bool fast_path_failed;
 } gsr_capture_xcomposite;
 
 static void gsr_capture_xcomposite_stop(gsr_capture_xcomposite *self) {
@@ -116,10 +115,6 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, gsr_capture_metadata *
         capture_metadata->width = self->params.output_resolution.x;
         capture_metadata->height = self->params.output_resolution.y;
     }
-
-    self->fast_path_failed = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 0, 9);
-    if(self->fast_path_failed)
-        fprintf(stderr, "gsr warning: gsr_capture_kms_start: your amd driver (mesa) version is known to be buggy (<= version 24.0.9), falling back to opengl copy\n");
 
     self->window_resize_timer = clock_get_monotonic_seconds();
     return 0;
@@ -258,25 +253,13 @@ static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata
 
     const vec2i target_pos = { max_int(0, capture_metdata->width / 2 - output_size.x / 2), max_int(0, capture_metdata->height / 2 - output_size.y / 2) };
 
-    self->params.egl->glFlush();
-    self->params.egl->glFinish();
+    //self->params.egl->glFlush();
+    //self->params.egl->glFinish();
 
-    /* Fast opengl free path */
-    if(!self->fast_path_failed && video_codec_context_is_vaapi(capture_metdata->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
-        if(!vaapi_copy_egl_image_to_video_surface(self->params.egl, self->window_texture.image, (vec2i){0, 0}, self->texture_size, target_pos, output_size, capture_metdata->video_codec_context, capture_metdata->frame)) {
-            fprintf(stderr, "gsr error: gsr_capture_xcomposite_capture: vaapi_copy_egl_image_to_video_surface failed, falling back to opengl copy. Please report this as an issue at https://github.com/dec05eba/gpu-screen-recorder-issues\n");
-            self->fast_path_failed = true;
-        }
-    } else {
-        self->fast_path_failed = true;
-    }
-
-    if(self->fast_path_failed) {
-        gsr_color_conversion_draw(color_conversion, window_texture_get_opengl_texture_id(&self->window_texture),
-            target_pos, output_size,
-            (vec2i){0, 0}, self->texture_size,
-            0.0f, false, GSR_SOURCE_COLOR_RGB);
-    }
+    gsr_color_conversion_draw(color_conversion, window_texture_get_opengl_texture_id(&self->window_texture),
+        target_pos, output_size,
+        (vec2i){0, 0}, self->texture_size,
+        GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
 
     if(self->params.record_cursor && self->cursor.visible) {
         const vec2d scale = {
@@ -297,13 +280,13 @@ static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata
         gsr_color_conversion_draw(color_conversion, self->cursor.texture_id,
             cursor_pos, (vec2i){self->cursor.size.x * scale.x, self->cursor.size.y * scale.y},
             (vec2i){0, 0}, self->cursor.size,
-            0.0f, false, GSR_SOURCE_COLOR_RGB);
+            GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
 
         self->params.egl->glDisable(GL_SCISSOR_TEST);
     }
 
-    self->params.egl->glFlush();
-    self->params.egl->glFinish();
+    //self->params.egl->glFlush();
+    //self->params.egl->glFinish();
 
     return 0;
 }

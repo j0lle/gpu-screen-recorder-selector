@@ -2,8 +2,11 @@
 #define GSR_COLOR_CONVERSION_H
 
 #include "shader.h"
+#include "defs.h"
 #include "vec2.h"
 #include <stdbool.h>
+
+#define GSR_COLOR_CONVERSION_MAX_SHADERS 3
 
 typedef enum {
     GSR_COLOR_RANGE_LIMITED,
@@ -26,9 +29,18 @@ typedef enum {
     GSR_DESTINATION_COLOR_RGB8
 } gsr_destination_color;
 
+typedef enum {
+    GSR_ROT_0,
+    GSR_ROT_90,
+    GSR_ROT_180,
+    GSR_ROT_270
+} gsr_rotation;
+
 typedef struct {
-    int offset;
-    int rotation;
+    int rotation_matrix;
+    int source_position;
+    int target_position;
+    int scale;
 } gsr_color_uniforms;
 
 typedef struct {
@@ -45,19 +57,23 @@ typedef struct {
 
 typedef struct {
     gsr_color_conversion_params params;
-    gsr_color_uniforms uniforms[4];
-    gsr_shader shaders[4];
+    gsr_color_uniforms uniforms[GSR_COLOR_CONVERSION_MAX_SHADERS];
+    gsr_shader shaders[GSR_COLOR_CONVERSION_MAX_SHADERS];
 
     unsigned int framebuffers[2];
 
     unsigned int vertex_array_object_id;
     unsigned int vertex_buffer_object_id;
+
+    int max_local_size_dim;
 } gsr_color_conversion;
 
 int gsr_color_conversion_init(gsr_color_conversion *self, const gsr_color_conversion_params *params);
 void gsr_color_conversion_deinit(gsr_color_conversion *self);
 
-void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i source_pos, vec2i source_size, vec2i texture_pos, vec2i texture_size, float rotation, bool external_texture, gsr_source_color source_color);
+void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i texture_pos, vec2i texture_size, gsr_rotation rotation, bool external_texture, gsr_source_color source_color);
 void gsr_color_conversion_clear(gsr_color_conversion *self);
+
+gsr_rotation gsr_monitor_rotation_to_rotation(gsr_monitor_rotation monitor_rotation);
 
 #endif /* GSR_COLOR_CONVERSION_H */

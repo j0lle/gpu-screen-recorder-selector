@@ -53,10 +53,6 @@ typedef struct {
     bool is_x11;
     gsr_cursor x11_cursor;
 
-    bool performance_error_shown;
-    bool fast_path_failed;
-    bool mesa_supports_compute_only_vaapi_copy;
-
     //int drm_fd;
     //uint64_t prev_sequence;
     //bool damaged;
@@ -229,17 +225,6 @@ static int gsr_capture_kms_start(gsr_capture *cap, gsr_capture_metadata *capture
         capture_metadata->height = self->capture_size.y;
     }
 
-    self->fast_path_failed = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 0, 9);
-    if(self->fast_path_failed)
-        fprintf(stderr, "gsr warning: gsr_capture_kms_start: your amd driver (mesa) version is known to be buggy (<= version 24.0.9), falling back to opengl copy\n");
-
-    //if(self->params.hdr) {
-    //    self->fast_path_failed = true;
-    //    fprintf(stderr, "gsr warning: gsr_capture_kms_start: recording with hdr requires shader color conversion which might be slow. If this is an issue record with -w portal instead (which converts HDR to SDR)\n");
-    //}
-
-    self->mesa_supports_compute_only_vaapi_copy = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && gl_driver_version_greater_than(&self->params.egl->gpu_info, 24, 3, 6);
-
     self->last_time_monitor_check = clock_get_monotonic_seconds();
     return 0;
 }
@@ -273,16 +258,6 @@ static void gsr_capture_kms_on_event(gsr_capture *cap, gsr_egl *egl) {
 //         self->damaged = true;
 //     }
 // }
-
-static float monitor_rotation_to_radians(gsr_monitor_rotation rot) {
-    switch(rot) {
-        case GSR_MONITOR_ROT_0:   return 0.0f;
-        case GSR_MONITOR_ROT_90:  return M_PI_2;
-        case GSR_MONITOR_ROT_180: return M_PI;
-        case GSR_MONITOR_ROT_270: return M_PI + M_PI_2;
-    }
-    return 0.0f;
-}
 
 static gsr_kms_response_item* find_drm_by_connector_id(gsr_kms_response *kms_response, uint32_t connector_id) {
     for(int i = 0; i < kms_response->num_items; ++i) {
@@ -449,7 +424,7 @@ static gsr_kms_response_item* find_cursor_drm_if_on_monitor(gsr_capture_kms *sel
     return cursor_drm_fd;
 }
 
-static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color_conversion, const gsr_kms_response_item *cursor_drm_fd, vec2i target_pos, float texture_rotation, vec2i output_size, vec2i framebuffer_size) {
+static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color_conversion, const gsr_kms_response_item *cursor_drm_fd, vec2i target_pos, vec2i output_size, vec2i framebuffer_size) {
     const vec2d scale = {
         self->capture_size.x == 0 ? 0 : (double)output_size.x / (double)self->capture_size.x,
         self->capture_size.y == 0 ? 0 : (double)output_size.y / (double)self->capture_size.y
@@ -523,7 +498,7 @@ static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color
     gsr_color_conversion_draw(color_conversion, self->cursor_texture_id,
         cursor_pos, (vec2i){cursor_size.x * scale.x, cursor_size.y * scale.y},
         (vec2i){0, 0}, cursor_size,
-        texture_rotation, cursor_texture_id_is_external, GSR_SOURCE_COLOR_RGB);
+        gsr_monitor_rotation_to_rotation(self->monitor_rotation), cursor_texture_id_is_external, GSR_SOURCE_COLOR_RGB);
 
     self->params.egl->glDisable(GL_SCISSOR_TEST);
 }
@@ -551,7 +526,7 @@ static void render_x11_cursor(gsr_capture_kms *self, gsr_color_conversion *color
     gsr_color_conversion_draw(color_conversion, self->x11_cursor.texture_id,
         cursor_pos, (vec2i){self->x11_cursor.size.x * scale.x, self->x11_cursor.size.y * scale.y},
         (vec2i){0, 0}, self->x11_cursor.size,
-        0.0f, false, GSR_SOURCE_COLOR_RGB);
+        GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
 
     self->params.egl->glDisable(GL_SCISSOR_TEST);
 }
@@ -604,16 +579,6 @@ static void gsr_capture_kms_update_connector_ids(gsr_capture_kms *self) {
         self->capture_size = rotate_capture_size_if_rotated(self, monitor.size);
 }
 
-static void gsr_capture_kms_fail_fast_path_if_not_fast(gsr_capture_kms *self, uint32_t pixel_format) {
-    const uint8_t pixel_format_color_depth_1 = (pixel_format >> 16) & 0xFF;
-    if(!self->fast_path_failed && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && !self->mesa_supports_compute_only_vaapi_copy && (pixel_format_color_depth_1 == '3' || pixel_format_color_depth_1 == '4')) {
-        self->fast_path_failed = true;
-        fprintf(stderr, "gsr warning: gsr_capture_kms_capture: the monitor you are recording is in 10/12-bit color format and your mesa version is <= 24.3.6, composition will be used."
-            " If you experience performance problems in the video then record on a single window on X11 or use portal capture option instead or disable 10/12-bit color option in your desktop environment settings,"
-            " or try to record the monitor on X11 instead (if you aren't already doing that) or update your mesa version.\n");
-    }
-}
-
 static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     gsr_capture_kms *self = cap->priv;
 
@@ -645,15 +610,6 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     if(drm_fd->has_hdr_metadata && self->params.hdr && hdr_metadata_is_supported_format(&drm_fd->hdr_metadata))
         gsr_kms_set_hdr_metadata(self, drm_fd);
 
-    if(!self->performance_error_shown && self->monitor_rotation != GSR_MONITOR_ROT_0 && video_codec_context_is_vaapi(capture_metadata->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
-        self->performance_error_shown = true;
-        self->fast_path_failed = true;
-        fprintf(stderr, "gsr warning: gsr_capture_kms_capture: the monitor you are recording is rotated, composition will have to be used."
-            " If you experience performance problems in the video then record a single window on X11 or use portal capture option instead\n");
-    }
-
-    gsr_capture_kms_fail_fast_path_if_not_fast(self, drm_fd->pixel_format);
-
     self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
     if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
         self->capture_size = self->params.region_size;
@@ -662,7 +618,6 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     vec2i output_size = is_scaled ? self->params.output_resolution : self->capture_size;
     output_size = scale_keep_aspect_ratio(self->capture_size, output_size);
 
-    const float texture_rotation = monitor_rotation_to_radians(self->monitor_rotation);
     const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
     gsr_capture_kms_update_capture_size_change(self, color_conversion, target_pos, drm_fd);
 
@@ -673,41 +628,19 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     capture_pos.x += self->params.region_position.x;
     capture_pos.y += self->params.region_position.y;
 
-    self->params.egl->glFlush();
-    self->params.egl->glFinish();
+    //self->params.egl->glFlush();
+    //self->params.egl->glFinish();
 
-    /* Fast opengl free path */
-    if(!self->fast_path_failed && self->monitor_rotation == GSR_MONITOR_ROT_0 && video_codec_context_is_vaapi(capture_metadata->video_codec_context) && self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD) {
-        int fds[4];
-        uint32_t offsets[4];
-        uint32_t pitches[4];
-        uint64_t modifiers[4];
-        for(int i = 0; i < drm_fd->num_dma_bufs; ++i) {
-            fds[i] = drm_fd->dma_buf[i].fd;
-            offsets[i] = drm_fd->dma_buf[i].offset;
-            pitches[i] = drm_fd->dma_buf[i].pitch;
-            modifiers[i] = drm_fd->modifier;
-        }
-        if(!vaapi_copy_drm_planes_to_video_surface(capture_metadata->video_codec_context, capture_metadata->frame, (vec2i){capture_pos.x, capture_pos.y}, self->capture_size, target_pos, output_size, drm_fd->pixel_format, (vec2i){drm_fd->width, drm_fd->height}, fds, offsets, pitches, modifiers, drm_fd->num_dma_bufs)) {
-            fprintf(stderr, "gsr error: gsr_capture_kms_capture: vaapi_copy_drm_planes_to_video_surface failed, falling back to opengl copy. Please report this as an issue at https://github.com/dec05eba/gpu-screen-recorder-issues\n");
-            self->fast_path_failed = true;
-        }
-    } else {
-        self->fast_path_failed = true;
+    EGLImage image = gsr_capture_kms_create_egl_image_with_fallback(self, drm_fd);
+    if(image) {
+        gsr_capture_kms_bind_image_to_input_texture_with_fallback(self, image);
+        self->params.egl->eglDestroyImage(self->params.egl->egl_display, image);
     }
 
-    if(self->fast_path_failed) {
-        EGLImage image = gsr_capture_kms_create_egl_image_with_fallback(self, drm_fd);
-        if(image) {
-            gsr_capture_kms_bind_image_to_input_texture_with_fallback(self, image);
-            self->params.egl->eglDestroyImage(self->params.egl->egl_display, image);
-        }
-
-        gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
-            target_pos, output_size,
-            capture_pos, self->capture_size,
-            texture_rotation, self->external_texture_fallback, GSR_SOURCE_COLOR_RGB);
-    }
+    gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
+        target_pos, output_size,
+        capture_pos, self->capture_size,
+        gsr_monitor_rotation_to_rotation(self->monitor_rotation), self->external_texture_fallback, GSR_SOURCE_COLOR_RGB);
 
     if(self->params.record_cursor) {
         gsr_kms_response_item *cursor_drm_fd = find_cursor_drm_if_on_monitor(self, drm_fd->connector_id, capture_is_combined_plane);
@@ -722,12 +655,12 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
             render_x11_cursor(self, color_conversion, cursor_monitor_offset, target_pos, output_size);
         } else if(cursor_drm_fd) {
             const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
-            render_drm_cursor(self, color_conversion, cursor_drm_fd, target_pos, texture_rotation, output_size, framebuffer_size);
+            render_drm_cursor(self, color_conversion, cursor_drm_fd, target_pos, output_size, framebuffer_size);
         }
     }
 
-    self->params.egl->glFlush();
-    self->params.egl->glFinish();
+    //self->params.egl->glFlush();
+    //self->params.egl->glFinish();
 
     gsr_capture_kms_cleanup_kms_fds(self);
 

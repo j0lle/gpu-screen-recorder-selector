@@ -284,6 +284,7 @@ static bool gsr_egl_load_gl(gsr_egl *self, void *library) {
         { (void**)&self->glGenTextures, "glGenTextures" },
         { (void**)&self->glDeleteTextures, "glDeleteTextures" },
         { (void**)&self->glBindTexture, "glBindTexture" },
+        { (void**)&self->glBindImageTexture, "glBindImageTexture" },
         { (void**)&self->glTexParameteri, "glTexParameteri" },
         { (void**)&self->glTexParameteriv, "glTexParameteriv" },
         { (void**)&self->glGetTexLevelParameteriv, "glGetTexLevelParameteriv" },
@@ -293,6 +294,8 @@ static bool gsr_egl_load_gl(gsr_egl *self, void *library) {
         { (void**)&self->glGenFramebuffers, "glGenFramebuffers" },
         { (void**)&self->glBindFramebuffer, "glBindFramebuffer" },
         { (void**)&self->glDeleteFramebuffers, "glDeleteFramebuffers" },
+        { (void**)&self->glDispatchCompute, "glDispatchCompute" },
+        { (void**)&self->glMemoryBarrier, "glMemoryBarrier" },
         { (void**)&self->glViewport, "glViewport" },
         { (void**)&self->glFramebufferTexture2D, "glFramebufferTexture2D" },
         { (void**)&self->glDrawBuffers, "glDrawBuffers" },
@@ -329,11 +332,14 @@ static bool gsr_egl_load_gl(gsr_egl *self, void *library) {
         { (void**)&self->glGetUniformLocation, "glGetUniformLocation" },
         { (void**)&self->glUniform1f, "glUniform1f" },
         { (void**)&self->glUniform2f, "glUniform2f" },
+        { (void**)&self->glUniform2i, "glUniform2i" },
+        { (void**)&self->glUniformMatrix2fv, "glUniformMatrix2fv" },
         { (void**)&self->glDebugMessageCallback, "glDebugMessageCallback" },
         { (void**)&self->glScissor, "glScissor" },
         { (void**)&self->glReadPixels, "glReadPixels" },
         { (void**)&self->glMapBuffer, "glMapBuffer" },
         { (void**)&self->glUnmapBuffer, "glUnmapBuffer" },
+        { (void**)&self->glGetIntegerv, "glGetIntegerv" },
 
         { NULL, NULL }
     };
