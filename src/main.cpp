@@ -1258,7 +1258,7 @@ static void usage_full() {
     printf("          window\n");
     printf("          DP-1|1920x1080\n");
     printf("        The <option> and <monitor_name> is the name that can be passed to GPU Screen Recorder with the -w option.\n");
-    printf("        --list-capture-options optionally accepts a card path (\"/dev/dri/cardN\") and vendor (\"amd\", \"intel\" or \"nvidia\") which can improve the performance of running this command.\n");
+    printf("        --list-capture-options optionally accepts a card path (\"/dev/dri/cardN\") and vendor (\"amd\", \"intel\", \"nvidia\" or \"broadcom\") which can improve the performance of running this command.\n");
     printf("\n");
     printf("  --list-audio-devices\n");
     printf("        List audio devices. Lists audio devices in the following format (prints them to stdout and exits):\n");
