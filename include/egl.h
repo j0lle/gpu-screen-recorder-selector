@@ -139,6 +139,8 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_WRITE_ONLY                           0x88B9
 #define GL_READ_WRITE                           0x88BA
 #define GL_MAX_COMPUTE_FIXED_GROUP_INVOCATIONS  0x90EB
+#define GL_TEXTURE0                             0x84C0
+#define GL_TEXTURE1                             0x84C1
 
 #define GL_VENDOR                               0x1F00
 #define GL_RENDERER                             0x1F01
@@ -236,6 +238,7 @@ struct gsr_egl {
     void (*glClearColor)(float red, float green, float blue, float alpha);
     void (*glGenTextures)(int n, unsigned int *textures);
     void (*glDeleteTextures)(int n, const unsigned int *texture);
+    void (*glActiveTexture)(unsigned int texture);
     void (*glBindTexture)(unsigned int target, unsigned int texture);
     void (*glBindImageTexture)(unsigned int unit, unsigned int texture, int level, unsigned char layered, int layer, unsigned int access, unsigned int format);
     void (*glTexParameteri)(unsigned int target, unsigned int pname, int param);
@@ -285,6 +288,7 @@ struct gsr_egl {
     int (*glGetUniformLocation)(unsigned int program, const char *name);
     void (*glUniform1f)(int location, float v0);
     void (*glUniform2f)(int location, float v0, float v1);
+    void (*glUniform1i)(int location, int v0);
     void (*glUniform2i)(int location, int v0, int v1);
     void (*glUniformMatrix2fv)(int location, int count, unsigned char transpose, const float *value);
     void (*glDebugMessageCallback)(GLDEBUGPROC callback, const void *userParam);
