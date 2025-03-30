@@ -6,7 +6,7 @@
 #include "vec2.h"
 #include <stdbool.h>
 
-#define GSR_COLOR_CONVERSION_MAX_SHADERS 3
+#define GSR_COLOR_CONVERSION_MAX_SHADERS 6
 
 typedef enum {
     GSR_COLOR_RANGE_LIMITED,
