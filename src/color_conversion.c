@@ -165,6 +165,7 @@ static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_u
         "#version 310 es\n"
         "#extension GL_OES_EGL_image_external : enable\n"
         "#extension GL_OES_EGL_image_external_essl3 : require\n"
+        "precision highp float;\n"
         "layout (local_size_x = %d, local_size_y = %d, local_size_z = 1) in;\n"
         "layout(binding = 0) uniform highp %s img_input;\n"
         "layout(binding = 1) uniform highp sampler2D img_background;\n"
