@@ -1027,7 +1027,7 @@ static void video_hardware_set_qp(AVCodecContext *codec_context, VideoQuality vi
     }
 }
 
-static void open_video_hardware(AVCodecContext *codec_context, VideoQuality video_quality, bool very_old_gpu, gsr_gpu_vendor vendor, PixelFormat pixel_format, bool hdr, gsr_color_depth color_depth, BitrateMode bitrate_mode, VideoCodec video_codec, bool low_power, bool high_performance_encoding) {
+static void open_video_hardware(AVCodecContext *codec_context, VideoQuality video_quality, bool very_old_gpu, gsr_gpu_vendor vendor, PixelFormat pixel_format, bool hdr, gsr_color_depth color_depth, BitrateMode bitrate_mode, VideoCodec video_codec, bool low_power) {
     (void)very_old_gpu;
     AVDictionary *options = nullptr;
 
@@ -1082,8 +1082,7 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
             av_dict_set_int(&options, "low_power", 1, 0);
         // Improves performance but increases vram.
         // TODO: Might need a different async_depth for optimal performance on different amd/intel gpus
-        if(high_performance_encoding)
-            av_dict_set_int(&options, "async_depth", 3, 0);
+        av_dict_set_int(&options, "async_depth", 3, 0);
 
         if(codec_context->codec_id == AV_CODEC_ID_H264) {
             // Removed because it causes stutter in games for some people
@@ -1114,7 +1113,7 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
 static void usage_header() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-high-performance-encoding yes|no] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -1247,10 +1246,6 @@ static void usage_full() {
     printf("  -encoder\n");
     printf("        Which device should be used for video encoding. Should either be 'gpu' or 'cpu'. 'cpu' option currently only work with h264 codec option (-k).\n");
     printf("        Optional, set to 'gpu' by default.\n");
-    printf("\n");
-    printf("  -high-performance-encoding\n");
-    printf("        Enable high performance video encoding mode. Only applicable to AMD and Intel. Optional, set to 'no' by default.\n");
-    printf("        Note: this option is experimental. On some AMD GPUs this may cause the game you are recording to performance worse.\n");
     printf("\n");
     printf("  --info\n");
     printf("        List info about the system. Lists the following information (prints them to stdout and exits):\n");
@@ -3384,7 +3379,6 @@ int main(int argc, char **argv) {
         { "-restore-portal-session",        Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
         { "-portal-session-token-filepath", Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-encoder",                       Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
-        { "-high-performance-encoding",     Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
     };
 
     for(int i = 1; i < argc; i += 2) {
@@ -3536,7 +3530,6 @@ int main(int argc, char **argv) {
     const bool date_folders = arg_get_boolean_value(args, "-df", false);
     const bool restore_portal_session = arg_get_boolean_value(args, "-restore-portal-session", false);
     const bool restart_replay_on_save = arg_get_boolean_value(args, "-restart-replay-on-save", false);
-    const bool high_performance_encoding = arg_get_boolean_value(args, "-high-performance-encoding", false);
 
     const char *portal_session_token_filepath = args["-portal-session-token-filepath"].value();
     if(portal_session_token_filepath) {
@@ -4061,7 +4054,7 @@ int main(int argc, char **argv) {
     if(use_software_video_encoder) {
         open_video_software(video_codec_context, quality, pixel_format, hdr, color_depth, bitrate_mode);
     } else {
-        open_video_hardware(video_codec_context, quality, very_old_gpu, egl.gpu_info.vendor, pixel_format, hdr, color_depth, bitrate_mode, video_codec, low_power, high_performance_encoding);
+        open_video_hardware(video_codec_context, quality, very_old_gpu, egl.gpu_info.vendor, pixel_format, hdr, color_depth, bitrate_mode, video_codec, low_power);
     }
     if(video_stream)
         avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
