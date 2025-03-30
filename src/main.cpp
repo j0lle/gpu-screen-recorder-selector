@@ -82,11 +82,14 @@ typedef struct {
 static void monitor_output_callback_print(const gsr_monitor *monitor, void *userdata) {
     const MonitorOutputCallbackUserdata *options = (MonitorOutputCallbackUserdata*)userdata;
     vec2i monitor_position = monitor->pos;
+    vec2i monitor_size = monitor->size;
     if(gsr_window_get_display_server(options->window) == GSR_DISPLAY_SERVER_WAYLAND) {
         gsr_monitor_rotation monitor_rotation = GSR_MONITOR_ROT_0;
         drm_monitor_get_display_server_data(options->window, monitor, &monitor_rotation, &monitor_position);
+        if(monitor_rotation == GSR_MONITOR_ROT_90 || monitor_rotation == GSR_MONITOR_ROT_270)
+            std::swap(monitor_size.x, monitor_size.y);
     }
-    fprintf(stderr, "  \"%.*s\"    (%dx%d+%d+%d)\n", monitor->name_len, monitor->name, monitor->size.x, monitor->size.y, monitor_position.x, monitor_position.y);
+    fprintf(stderr, "  \"%.*s\"    (%dx%d+%d+%d)\n", monitor->name_len, monitor->name, monitor_size.x, monitor_size.y, monitor_position.x, monitor_position.y);
 }
 
 typedef struct {
@@ -110,9 +113,14 @@ typedef struct {
 static void get_monitor_by_position_callback(const gsr_monitor *monitor, void *userdata) {
     MonitorByPositionCallback *data = (MonitorByPositionCallback*)userdata;
 
-    gsr_monitor_rotation monitor_rotation = GSR_MONITOR_ROT_0;
     vec2i monitor_position = monitor->pos;
-    drm_monitor_get_display_server_data(data->window, monitor, &monitor_rotation, &monitor_position);
+    vec2i monitor_size = monitor->size;
+    if(gsr_window_get_display_server(data->window) == GSR_DISPLAY_SERVER_WAYLAND) {
+        gsr_monitor_rotation monitor_rotation = GSR_MONITOR_ROT_0;
+        drm_monitor_get_display_server_data(data->window, monitor, &monitor_rotation, &monitor_position);
+        if(monitor_rotation == GSR_MONITOR_ROT_90 || monitor_rotation == GSR_MONITOR_ROT_270)
+            std::swap(monitor_size.x, monitor_size.y);
+    }
 
     if(!data->output_name && data->position.x >= monitor_position.x && data->position.x <= monitor_position.x + monitor->size.x
         && data->position.y >= monitor_position.y && data->position.y <= monitor_position.y + monitor->size.y)

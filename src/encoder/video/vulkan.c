@@ -94,7 +94,7 @@ static bool gsr_video_encoder_vulkan_setup_textures(gsr_video_encoder_vulkan *se
     //AVVkFrame *target_surface_id = (AVVkFrame*)frame->data[0];
     self->vv = video_codec_context_get_vulkan_data(video_codec_context);
 
-    const unsigned int internal_formats_nv12[2] = { GL_RGBA8, GL_RGBA8 };
+    const unsigned int internal_formats_nv12[2] = { GL_RGBA8, GL_RGBA8 }; // TODO: GL_R8, GL_R16
     const unsigned int internal_formats_p010[2] = { GL_R16, GL_RG16 };
     const unsigned int formats[2] = { GL_RED, GL_RG };
     const int div[2] = {1, 2}; // divide UV texture size by 2 because chroma is half size

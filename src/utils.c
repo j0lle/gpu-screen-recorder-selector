@@ -671,12 +671,19 @@ vec2i scale_keep_aspect_ratio(vec2i from, vec2i to) {
 }
 
 unsigned int gl_create_texture(gsr_egl *egl, int width, int height, int internal_format, unsigned int format, int filter) {
+    float border_color[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    if(format == GL_RG) { // UV
+        border_color[0] = 0.5f;
+        border_color[1] = 0.5f;
+        border_color[2] = 0.0f;
+        border_color[3] = 1.0f;
+    }
+
     unsigned int texture_id = 0;
     egl->glGenTextures(1, &texture_id);
     egl->glBindTexture(GL_TEXTURE_2D, texture_id);
     egl->glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
 
-    const float border_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
     egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     egl->glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border_color);
