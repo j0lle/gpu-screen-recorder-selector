@@ -7,6 +7,7 @@
 #include <stdbool.h>
 
 #define GSR_COLOR_CONVERSION_MAX_SHADERS 6
+#define GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS 2
 
 typedef enum {
     GSR_COLOR_RANGE_LIMITED,
@@ -60,7 +61,7 @@ typedef struct {
     gsr_color_uniforms uniforms[GSR_COLOR_CONVERSION_MAX_SHADERS];
     gsr_shader shaders[GSR_COLOR_CONVERSION_MAX_SHADERS];
 
-    unsigned int framebuffers[2];
+    unsigned int framebuffers[GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS];
 
     unsigned int vertex_array_object_id;
     unsigned int vertex_buffer_object_id;

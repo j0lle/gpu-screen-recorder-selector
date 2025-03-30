@@ -8,13 +8,6 @@
 // TODO: Scissor doesn't work with compute shader. In the compute shader this can be implemented with two step calls, and using the result
 // with a call to mix to choose source/output color.
 
-#define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT 0x00000020
-// TODO: Use the minimal barrier required and move this to egl.h
-#define GL_ALL_BARRIER_BITS               0xFFFFFFFF
-
-#define MAX_FRAMEBUFFERS 2
-#define EXTERNAL_TEXTURE_SHADER_OFFSET 2
-
 /* https://en.wikipedia.org/wiki/YCbCr, see study/color_space_transform_matrix.png */
 
 /* ITU-R BT2020, full */
@@ -199,7 +192,7 @@ static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_u
 static int load_framebuffers(gsr_color_conversion *self) {
     /* TODO: Only generate the necessary amount of framebuffers (self->params.num_destination_textures) */
     const unsigned int draw_buffer = GL_COLOR_ATTACHMENT0;
-    self->params.egl->glGenFramebuffers(MAX_FRAMEBUFFERS, self->framebuffers);
+    self->params.egl->glGenFramebuffers(GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS, self->framebuffers);
 
     self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, self->framebuffers[0]);
     self->params.egl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self->params.destination_textures[0], 0);
@@ -335,8 +328,8 @@ void gsr_color_conversion_deinit(gsr_color_conversion *self) {
         self->vertex_array_object_id = 0;
     }
 
-    self->params.egl->glDeleteFramebuffers(MAX_FRAMEBUFFERS, self->framebuffers);
-    for(int i = 0; i < MAX_FRAMEBUFFERS; ++i) {
+    self->params.egl->glDeleteFramebuffers(GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS, self->framebuffers);
+    for(int i = 0; i < GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS; ++i) {
         self->framebuffers[i] = 0;
     }
 
@@ -402,7 +395,6 @@ static void gsr_color_conversion_swizzle_reset(gsr_color_conversion *self, gsr_s
     }
 }
 
-// TODO: Handle source_color
 void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i texture_pos, vec2i texture_size, gsr_rotation rotation, bool external_texture, gsr_source_color source_color) {
     vec2f scale = {0.0f, 0.0f};
     if(texture_size.x > 0 && texture_size.y > 0)
@@ -483,6 +475,7 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
         }
     }
 
+    // TODO: Use the minimal barrier required
     self->params.egl->glMemoryBarrier(GL_ALL_BARRIER_BITS); // GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
     self->params.egl->glUseProgram(0);
 
