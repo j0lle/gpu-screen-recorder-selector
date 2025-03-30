@@ -468,8 +468,8 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
     float rotation_matrix[2][2] = {{0, 0}, {0, 0}};
     gsr_color_conversion_apply_rotation(rotation, rotation_matrix, &source_position, texture_size, scale);
 
-    source_position.x += texture_pos.x;
-    source_position.y += texture_pos.y;
+    source_position.x -= (texture_pos.x * scale.x + 0.5);
+    source_position.y -= (texture_pos.y * scale.y + 0.5);
 
     const int texture_target = external_texture ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D;
     self->params.egl->glBindTexture(texture_target, texture_id);
