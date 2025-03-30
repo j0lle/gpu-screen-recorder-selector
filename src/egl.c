@@ -288,6 +288,7 @@ static bool gsr_egl_load_gl(gsr_egl *self, void *library) {
         { (void**)&self->glBindImageTexture, "glBindImageTexture" },
         { (void**)&self->glTexParameteri, "glTexParameteri" },
         { (void**)&self->glTexParameteriv, "glTexParameteriv" },
+        { (void**)&self->glTexParameterfv, "glTexParameterfv" },
         { (void**)&self->glGetTexLevelParameteriv, "glGetTexLevelParameteriv" },
         { (void**)&self->glTexImage2D, "glTexImage2D" },
         { (void**)&self->glTexSubImage2D, "glTexSubImage2D" },

@@ -141,6 +141,8 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_MAX_COMPUTE_FIXED_GROUP_INVOCATIONS  0x90EB
 #define GL_TEXTURE0                             0x84C0
 #define GL_TEXTURE1                             0x84C1
+#define GL_CLAMP_TO_BORDER                      0x812D
+#define GL_TEXTURE_BORDER_COLOR                 0x1004
 
 #define GL_VENDOR                               0x1F00
 #define GL_RENDERER                             0x1F01
@@ -243,6 +245,7 @@ struct gsr_egl {
     void (*glBindImageTexture)(unsigned int unit, unsigned int texture, int level, unsigned char layered, int layer, unsigned int access, unsigned int format);
     void (*glTexParameteri)(unsigned int target, unsigned int pname, int param);
     void (*glTexParameteriv)(unsigned int target, unsigned int pname, const int *params);
+    void (*glTexParameterfv)(unsigned int target, unsigned int pname, const float *params);
     void (*glGetTexLevelParameteriv)(unsigned int target, int level, unsigned int pname, int *params);
     void (*glTexImage2D)(unsigned int target, int level, int internalFormat, int width, int height, int border, unsigned int format, unsigned int type, const void *pixels);
     void (*glTexSubImage2D)(unsigned int target, int level, int xoffset, int yoffset, int width, int height, unsigned format, unsigned type, const void *pixels);

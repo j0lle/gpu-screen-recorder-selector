@@ -274,15 +274,13 @@ static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata
             target_pos.y + (self->cursor.position.y - self->cursor.hotspot.y) * scale.y
         };
 
-        self->params.egl->glEnable(GL_SCISSOR_TEST);
-        self->params.egl->glScissor(target_pos.x, target_pos.y, output_size.x, output_size.y);
+        if(cursor_pos.x < target_pos.x || cursor_pos.x + self->cursor.size.x > target_pos.x + output_size.x || cursor_pos.y < target_pos.y || cursor_pos.y + self->cursor.size.y > target_pos.y + output_size.y)
+            self->clear_background = true;
 
         gsr_color_conversion_draw(color_conversion, self->cursor.texture_id,
             cursor_pos, (vec2i){self->cursor.size.x * scale.x, self->cursor.size.y * scale.y},
             (vec2i){0, 0}, self->cursor.size,
             GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
-
-        self->params.egl->glDisable(GL_SCISSOR_TEST);
     }
 
     //self->params.egl->glFlush();
