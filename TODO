@@ -253,4 +253,6 @@ When webcam support is added also support v4l2loopback? this is done by using av
 
 Do proper exit, to call gsr_capture_destroy which will properly stop gsr-kms-server. Otherwise there can be zombie gsr-kms-server on error.
 
-Replace all scissors with clearing textures if the cursor hits the outside of the frame image
+Replace all scissors with clearing textures if the cursor hits the outside of the frame image.
+
+Cursor position might be slightly wrong on rotated monitor.

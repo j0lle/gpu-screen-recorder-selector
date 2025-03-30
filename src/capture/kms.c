@@ -502,7 +502,7 @@ static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color
 
     gsr_color_conversion_draw(color_conversion, self->cursor_texture_id,
         cursor_pos, (vec2i){cursor_size.x * scale.x, cursor_size.y * scale.y},
-        (vec2i){0, 0}, cursor_size,
+        (vec2i){0, 0}, cursor_size, cursor_size,
         gsr_monitor_rotation_to_rotation(self->monitor_rotation), cursor_texture_id_is_external, GSR_SOURCE_COLOR_RGB);
 
     self->params.egl->glDisable(GL_SCISSOR_TEST);
@@ -530,7 +530,7 @@ static void render_x11_cursor(gsr_capture_kms *self, gsr_color_conversion *color
 
     gsr_color_conversion_draw(color_conversion, self->x11_cursor.texture_id,
         cursor_pos, (vec2i){self->x11_cursor.size.x * scale.x, self->x11_cursor.size.y * scale.y},
-        (vec2i){0, 0}, self->x11_cursor.size,
+        (vec2i){0, 0}, self->x11_cursor.size, self->x11_cursor.size,
         GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
 
     self->params.egl->glDisable(GL_SCISSOR_TEST);
@@ -616,6 +616,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
         gsr_kms_set_hdr_metadata(self, drm_fd);
 
     self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
+    const vec2i original_frame_size = self->capture_size;
     if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
         self->capture_size = self->params.region_size;
 
@@ -644,7 +645,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
 
     gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
         target_pos, output_size,
-        capture_pos, self->capture_size,
+        capture_pos, self->capture_size, original_frame_size,
         gsr_monitor_rotation_to_rotation(self->monitor_rotation), self->external_texture_fallback, GSR_SOURCE_COLOR_RGB);
 
     if(self->params.record_cursor) {

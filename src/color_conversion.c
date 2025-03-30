@@ -462,17 +462,17 @@ static void gsr_color_conversion_dispatch_compute_shader(gsr_color_conversion *s
     self->params.egl->glDispatchCompute(max_int(1, num_groups_x), max_int(1, num_groups_y), 1);
 }
 
-void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i texture_pos, vec2i texture_size, gsr_rotation rotation, bool external_texture, gsr_source_color source_color) {
+void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i source_pos, vec2i source_size, vec2i texture_size, gsr_rotation rotation, bool external_texture, gsr_source_color source_color) {
     vec2f scale = {0.0f, 0.0f};
-    if(texture_size.x > 0 && texture_size.y > 0)
-        scale = (vec2f){ (double)destination_size.x/(double)texture_size.x, (double)destination_size.y/(double)texture_size.y };
+    if(source_size.x > 0 && source_size.y > 0)
+        scale = (vec2f){ (double)destination_size.x/(double)source_size.x, (double)destination_size.y/(double)source_size.y };
 
     vec2i source_position = {0, 0};
     float rotation_matrix[2][2] = {{0, 0}, {0, 0}};
     gsr_color_conversion_apply_rotation(rotation, rotation_matrix, &source_position, texture_size, scale);
 
-    source_position.x -= (texture_pos.x * scale.x + 0.5);
-    source_position.y -= (texture_pos.y * scale.y + 0.5);
+    source_position.x -= (source_pos.x * scale.x + 0.5);
+    source_position.y -= (source_pos.y * scale.y + 0.5);
 
     const int texture_target = external_texture ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D;
     self->params.egl->glBindTexture(texture_target, texture_id);

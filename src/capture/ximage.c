@@ -159,7 +159,7 @@ static int gsr_capture_ximage_capture(gsr_capture *cap, gsr_capture_metadata *ca
 
     gsr_color_conversion_draw(color_conversion, self->texture_id,
         target_pos, output_size,
-        (vec2i){0, 0}, self->capture_size,
+        (vec2i){0, 0}, self->capture_size, self->capture_size,
         GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
 
     if(self->params.record_cursor && self->cursor.visible) {
@@ -180,7 +180,7 @@ static int gsr_capture_ximage_capture(gsr_capture *cap, gsr_capture_metadata *ca
 
         gsr_color_conversion_draw(color_conversion, self->cursor.texture_id,
             cursor_pos, (vec2i){self->cursor.size.x * scale.x, self->cursor.size.y * scale.y},
-            (vec2i){0, 0}, self->cursor.size,
+            (vec2i){0, 0}, self->cursor.size, self->cursor.size,
             GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
 
         self->params.egl->glDisable(GL_SCISSOR_TEST);

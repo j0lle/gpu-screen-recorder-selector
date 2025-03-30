@@ -363,6 +363,7 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *cap
     }
 
     vec2i frame_size = (vec2i){self->width, self->height};
+    const vec2i original_frame_size = frame_size;
     if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
         frame_size = self->params.region_size;
 
@@ -395,7 +396,7 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *cap
 
     gsr_color_conversion_draw(color_conversion, self->setup_params.dwTextures[grab_params.dwTextureIndex],
         target_pos, (vec2i){output_size.x, output_size.y},
-        self->params.region_position, frame_size,
+        self->params.region_position, frame_size, original_frame_size,
         GSR_ROT_0, false, GSR_SOURCE_COLOR_BGR);
 
     //self->params.egl->glFlush();
