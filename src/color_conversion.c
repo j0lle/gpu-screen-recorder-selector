@@ -474,7 +474,7 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
             self->params.egl->glUniform2i(uniform->source_position, source_position.x, source_position.y);
             self->params.egl->glUniform2i(uniform->target_position, destination_pos.x, destination_pos.y);
             self->params.egl->glUniform2f(uniform->scale, scale.x, scale.y);
-            self->params.egl->glBindImageTexture(0, self->params.destination_textures[0], 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA8);
+            self->params.egl->glBindImageTexture(0, self->params.destination_textures[0], 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
             const double num_groups_x = ceil((double)texture_size.x/(double)self->max_local_size_dim);
             const double num_groups_y = ceil((double)texture_size.y/(double)self->max_local_size_dim);
             self->params.egl->glDispatchCompute(max_int(1, num_groups_x), max_int(1, num_groups_y), 1);
