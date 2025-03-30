@@ -915,7 +915,7 @@ static void video_hardware_set_qp(AVCodecContext *codec_context, VideoQuality vi
                     av_dict_set_int(options, "qp", 30 * qp_multiply, 0);
                     break;
                 case VideoQuality::VERY_HIGH:
-                    av_dict_set_int(options, "qp", 27 * qp_multiply, 0);
+                    av_dict_set_int(options, "qp", 25 * qp_multiply, 0);
                     break;
                 case VideoQuality::ULTRA:
                     av_dict_set_int(options, "qp", 22 * qp_multiply, 0);
@@ -930,7 +930,7 @@ static void video_hardware_set_qp(AVCodecContext *codec_context, VideoQuality vi
                     av_dict_set_int(options, "qp", 30 * qp_multiply, 0);
                     break;
                 case VideoQuality::VERY_HIGH:
-                    av_dict_set_int(options, "qp", 27 * qp_multiply, 0);
+                    av_dict_set_int(options, "qp", 25 * qp_multiply, 0);
                     break;
                 case VideoQuality::ULTRA:
                     av_dict_set_int(options, "qp", 22 * qp_multiply, 0);
@@ -945,7 +945,7 @@ static void video_hardware_set_qp(AVCodecContext *codec_context, VideoQuality vi
                     av_dict_set_int(options, "qp", 30 * qp_multiply, 0);
                     break;
                 case VideoQuality::VERY_HIGH:
-                    av_dict_set_int(options, "qp", 27 * qp_multiply, 0);
+                    av_dict_set_int(options, "qp", 25 * qp_multiply, 0);
                     break;
                 case VideoQuality::ULTRA:
                     av_dict_set_int(options, "qp", 22 * qp_multiply, 0);
@@ -960,7 +960,7 @@ static void video_hardware_set_qp(AVCodecContext *codec_context, VideoQuality vi
                     av_dict_set_int(options, "qp", 30 * qp_multiply, 0);
                     break;
                 case VideoQuality::VERY_HIGH:
-                    av_dict_set_int(options, "qp", 27 * qp_multiply, 0);
+                    av_dict_set_int(options, "qp", 25 * qp_multiply, 0);
                     break;
                 case VideoQuality::ULTRA:
                     av_dict_set_int(options, "qp", 22 * qp_multiply, 0);
@@ -979,7 +979,7 @@ static void video_hardware_set_qp(AVCodecContext *codec_context, VideoQuality vi
                     av_dict_set_int(options, "qp", 30 * qp_multiply, 0);
                     break;
                 case VideoQuality::VERY_HIGH:
-                    av_dict_set_int(options, "qp", 27 * qp_multiply, 0);
+                    av_dict_set_int(options, "qp", 25 * qp_multiply, 0);
                     break;
                 case VideoQuality::ULTRA:
                     av_dict_set_int(options, "qp", 22 * qp_multiply, 0);
@@ -994,7 +994,7 @@ static void video_hardware_set_qp(AVCodecContext *codec_context, VideoQuality vi
                     av_dict_set_int(options, "qp", 30 * qp_multiply, 0);
                     break;
                 case VideoQuality::VERY_HIGH:
-                    av_dict_set_int(options, "qp", 27 * qp_multiply, 0);
+                    av_dict_set_int(options, "qp", 25 * qp_multiply, 0);
                     break;
                 case VideoQuality::ULTRA:
                     av_dict_set_int(options, "qp", 22 * qp_multiply, 0);
@@ -1009,7 +1009,7 @@ static void video_hardware_set_qp(AVCodecContext *codec_context, VideoQuality vi
                     av_dict_set_int(options, "qp", 30 * qp_multiply, 0);
                     break;
                 case VideoQuality::VERY_HIGH:
-                    av_dict_set_int(options, "qp", 27 * qp_multiply, 0);
+                    av_dict_set_int(options, "qp", 25 * qp_multiply, 0);
                     break;
                 case VideoQuality::ULTRA:
                     av_dict_set_int(options, "qp", 22 * qp_multiply, 0);
