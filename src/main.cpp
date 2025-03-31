@@ -1296,7 +1296,7 @@ static void usage_full() {
     printf("NOTES:\n");
     printf("  Send signal SIGINT to gpu-screen-recorder (Ctrl+C, or killall -SIGINT gpu-screen-recorder) to stop and save the recording. When in replay mode this stops recording without saving.\n");
     printf("  Send signal SIGUSR1 to gpu-screen-recorder (killall -SIGUSR1 gpu-screen-recorder) to save a replay (when in replay mode).\n");
-    printf("  Send signal SIGUSR2 to gpu-screen-recorder (killall -SIGUSR2 gpu-screen-recorder) to pause/unpause recording. Only applicable and useful when recording (not streaming nor replay).\n");
+    printf("  Send signal SIGUSR2 to gpu-screen-recorder (killall -SIGUSR2 gpu-screen-recorder) to pause/unpause recording. Only applicable when recording (not streaming nor replay).\n");
     printf("\n");
     printf("EXAMPLES:\n");
     printf("  %s -w screen -f 60 -a default_output -o video.mp4\n", program_name);
