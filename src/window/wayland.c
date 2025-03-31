@@ -130,6 +130,7 @@ static void registry_remove_object(void *data, struct wl_registry *registry, uin
     (void)data;
     (void)registry;
     (void)name;
+    // TODO: Remove output
 }
 
 static struct wl_registry_listener registry_listener = {

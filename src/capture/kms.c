@@ -574,6 +574,7 @@ static void gsr_capture_kms_update_connector_ids(gsr_capture_kms *self) {
 
     monitor.name = self->params.display_to_capture;
     vec2i monitor_position = {0, 0};
+    // TODO: This is cached. We need it updated.
     drm_monitor_get_display_server_data(self->params.egl->window, &monitor, &self->monitor_rotation, &monitor_position);
 
     self->capture_pos = monitor.pos;

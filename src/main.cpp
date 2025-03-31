@@ -1308,7 +1308,7 @@ static void usage_full() {
     printf("  %s -w screen -f 60 -a default_output -bm cbr -q 15000 -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a \"app:firefox|app:csgo\" -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a \"app-inverse:firefox|app-inverse:csgo\" -o video.mp4\n", program_name);
-    printf("  %s -w screen -f 60 -a \"default-input|app-inverse:Brave\" -o video.mp4\n", program_name);
+    printf("  %s -w screen -f 60 -a \"default_input|app-inverse:Brave\" -o video.mp4\n", program_name);
     printf("  %s -w screen -o image.jpg\n", program_name);
     printf("  %s -w screen -q medium -o image.jpg\n", program_name);
     printf("  %s -w region -region 640x480+100+100 -o video.mp4\n", program_name);
