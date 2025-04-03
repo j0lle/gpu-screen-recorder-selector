@@ -503,7 +503,7 @@ static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color
     gsr_color_conversion_draw(color_conversion, self->cursor_texture_id,
         cursor_pos, (vec2i){cursor_size.x * scale.x, cursor_size.y * scale.y},
         (vec2i){0, 0}, cursor_size, cursor_size,
-        gsr_monitor_rotation_to_rotation(self->monitor_rotation), cursor_texture_id_is_external, GSR_SOURCE_COLOR_RGB);
+        gsr_monitor_rotation_to_rotation(self->monitor_rotation), GSR_SOURCE_COLOR_RGB, cursor_texture_id_is_external, true);
 
     self->params.egl->glDisable(GL_SCISSOR_TEST);
 }
@@ -531,7 +531,7 @@ static void render_x11_cursor(gsr_capture_kms *self, gsr_color_conversion *color
     gsr_color_conversion_draw(color_conversion, self->x11_cursor.texture_id,
         cursor_pos, (vec2i){self->x11_cursor.size.x * scale.x, self->x11_cursor.size.y * scale.y},
         (vec2i){0, 0}, self->x11_cursor.size, self->x11_cursor.size,
-        GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
+        GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false, true);
 
     self->params.egl->glDisable(GL_SCISSOR_TEST);
 }
@@ -647,7 +647,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
         target_pos, output_size,
         capture_pos, self->capture_size, original_frame_size,
-        gsr_monitor_rotation_to_rotation(self->monitor_rotation), self->external_texture_fallback, GSR_SOURCE_COLOR_RGB);
+        gsr_monitor_rotation_to_rotation(self->monitor_rotation), GSR_SOURCE_COLOR_RGB, self->external_texture_fallback, false);
 
     if(self->params.record_cursor) {
         gsr_kms_response_item *cursor_drm_fd = find_cursor_drm_if_on_monitor(self, drm_fd->connector_id, capture_is_combined_plane);

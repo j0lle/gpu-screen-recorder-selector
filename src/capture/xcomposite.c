@@ -259,7 +259,7 @@ static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata
     gsr_color_conversion_draw(color_conversion, window_texture_get_opengl_texture_id(&self->window_texture),
         target_pos, output_size,
         (vec2i){0, 0}, self->texture_size, self->texture_size,
-        GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
+        GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false, false);
 
     if(self->params.record_cursor && self->cursor.visible) {
         const vec2d scale = {
@@ -280,7 +280,7 @@ static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata
         gsr_color_conversion_draw(color_conversion, self->cursor.texture_id,
             cursor_pos, (vec2i){self->cursor.size.x * scale.x, self->cursor.size.y * scale.y},
             (vec2i){0, 0}, self->cursor.size, self->cursor.size,
-            GSR_ROT_0, false, GSR_SOURCE_COLOR_RGB);
+            GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false, true);
     }
 
     //self->params.egl->glFlush();

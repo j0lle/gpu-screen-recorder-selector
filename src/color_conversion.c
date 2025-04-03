@@ -5,15 +5,18 @@
 #include <string.h>
 #include <assert.h>
 
-#define SHADER_INDEX_Y            0
-#define SHADER_INDEX_UV           1
-#define SHADER_INDEX_Y_EXTERNAL   2
-#define SHADER_INDEX_UV_EXTERNAL  3
-#define SHADER_INDEX_RGB          4
-#define SHADER_INDEX_RGB_EXTERNAL 5
-
-// TODO: Scissor doesn't work with compute shader. In the compute shader this can be implemented with two step calls, and using the result
-// with a call to mix to choose source/output color.
+#define SHADER_INDEX_Y                  0
+#define SHADER_INDEX_UV                 1
+#define SHADER_INDEX_Y_EXTERNAL         2
+#define SHADER_INDEX_UV_EXTERNAL        3
+#define SHADER_INDEX_RGB                4
+#define SHADER_INDEX_RGB_EXTERNAL       5
+#define SHADER_INDEX_Y_BLEND            6
+#define SHADER_INDEX_UV_BLEND           7
+#define SHADER_INDEX_Y_EXTERNAL_BLEND   8
+#define SHADER_INDEX_UV_EXTERNAL_BLEND  9
+#define SHADER_INDEX_RGB_BLEND          10
+#define SHADER_INDEX_RGB_EXTERNAL_BLEND 11
 
 /* https://en.wikipedia.org/wiki/YCbCr, see study/color_space_transform_matrix.png */
 
@@ -75,9 +78,7 @@ static const char* color_format_range_get_transform_matrix(gsr_destination_color
     return NULL;
 }
 
-// TODO: Make alpha blending optional
-// TODO: Optimize these shaders.
-static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, int max_local_size_dim, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture) {
+static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, int max_local_size_dim, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture, bool alpha_blending) {
     const char *color_transform_matrix = color_format_range_get_transform_matrix(color_format, color_range);
 
     char compute_shader[2048];
@@ -98,16 +99,17 @@ static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uni
         "void main() {\n"
         "    ivec2 texel_coord = ivec2(gl_GlobalInvocationID.xy);\n"
         "    ivec2 size = ivec2(vec2(textureSize(img_input, 0)) * scale + 0.5);\n"
+        "    ivec2 size_shift = size >> 1;\n" // size/2
         "    ivec2 output_size = textureSize(img_background, 0);\n"
-        "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size/2) * rotation_matrix + vec2(size/2) + 0.5;\n"
+        "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size_shift) * rotation_matrix + vec2(size_shift) + 0.5;\n"
         "    vec2 output_texel_coord = vec2(texel_coord - source_position + target_position) + 0.5;\n"
-        "    vec2 tex_coord = vec2(rotated_texel_coord)/vec2(size);\n"
-        "    vec4 source_color = texture(img_input, tex_coord);\n"
+        "    vec4 source_color = texelFetch(img_input, ivec2(rotated_texel_coord), 0);\n"
         "    vec4 source_color_yuv = RGBtoYUV * vec4(source_color.rgb, 1.0);\n"
-        "    vec4 output_color_yuv = texture(img_background, output_texel_coord/vec2(output_size));\n"
+        "    vec4 output_color_yuv = %s;\n"
         "    float y_color = mix(output_color_yuv.r, source_color_yuv.r, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(y_color, 1.0, 1.0, 1.0));\n"
-        "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D", color_transform_matrix);
+        "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D", color_transform_matrix,
+            alpha_blending ? "texelFetch(img_background, ivec2(output_texel_coord), 0)" : "source_color_yuv");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
         return -1;
@@ -119,7 +121,7 @@ static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uni
     return 0;
 }
 
-static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, int max_local_size_dim, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture) {
+static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, int max_local_size_dim, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture, bool alpha_blending) {
     const char *color_transform_matrix = color_format_range_get_transform_matrix(color_format, color_range);
 
     char compute_shader[2048];
@@ -140,16 +142,17 @@ static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_un
         "void main() {\n"
         "    ivec2 texel_coord = ivec2(gl_GlobalInvocationID.xy);\n"
         "    ivec2 size = ivec2(vec2(textureSize(img_input, 0)) * scale + 0.5);\n"
+        "    ivec2 size_shift = size >> 2;\n" // size/4
         "    ivec2 output_size = textureSize(img_background, 0);\n"
-        "    vec2 rotated_texel_coord = vec2(texel_coord - source_position/2 - size/4) * rotation_matrix + vec2(size/4) + 0.5;\n"
-        "    vec2 output_texel_coord = vec2(texel_coord - source_position/2 + target_position/2) + 0.5;\n"
-        "    vec2 tex_coord = vec2(rotated_texel_coord)/vec2(size);\n"
-        "    vec4 source_color = texture(img_input, tex_coord * 2.0);\n"
+        "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size_shift) * rotation_matrix + vec2(size_shift) + 0.5;\n"
+        "    vec2 output_texel_coord = vec2(texel_coord - source_position + target_position) + 0.5;\n"
+        "    vec4 source_color = texelFetch(img_input, ivec2(rotated_texel_coord) << 1, 0);\n"
         "    vec4 source_color_yuv = RGBtoYUV * vec4(source_color.rgb, 1.0);\n"
-        "    vec4 output_color_yuv = texture(img_background, output_texel_coord/vec2(output_size));\n"
+        "    vec4 output_color_yuv = %s;\n"
         "    vec2 uv_color = mix(output_color_yuv.rg, source_color_yuv.gb, source_color.a);\n"
-        "    imageStore(img_output, texel_coord + target_position/2, vec4(uv_color, 1.0, 1.0));\n"
-        "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D", color_transform_matrix);
+        "    imageStore(img_output, texel_coord + target_position, vec4(uv_color, 1.0, 1.0));\n"
+        "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D", color_transform_matrix,
+            alpha_blending ? "texelFetch(img_background, ivec2(output_texel_coord), 0)" : "source_color_yuv");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
         return -1;
@@ -161,7 +164,7 @@ static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_un
     return 0;
 }
 
-static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, int max_local_size_dim, bool external_texture) {
+static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, int max_local_size_dim, bool external_texture, bool alpha_blending) {
     char compute_shader[2048];
     snprintf(compute_shader, sizeof(compute_shader),
         "#version 310 es\n"
@@ -179,15 +182,16 @@ static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_u
         "void main() {\n"
         "    ivec2 texel_coord = ivec2(gl_GlobalInvocationID.xy);\n"
         "    ivec2 size = ivec2(vec2(textureSize(img_input, 0)) * scale + 0.5);\n"
+        "    ivec2 size_shift = size >> 1;\n" // size/2
         "    ivec2 output_size = textureSize(img_background, 0);\n"
-        "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size/2) * rotation_matrix + vec2(size/2) + 0.5;\n"
+        "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size_shift) * rotation_matrix + vec2(size_shift) + 0.5;\n"
         "    vec2 output_texel_coord = vec2(texel_coord - source_position + target_position) + 0.5;\n"
-        "    vec2 tex_coord = vec2(rotated_texel_coord)/vec2(size);\n"
-        "    vec4 source_color = texture(img_input, tex_coord);\n"
-        "    vec4 output_color = texture(img_background, output_texel_coord/vec2(output_size));\n"
+        "    vec4 source_color = texelFetch(img_input, ivec2(rotated_texel_coord), 0);\n"
+        "    vec4 output_color = %s;\n"
         "    vec3 color = mix(output_color.rgb, source_color.rgb, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(color, 1.0));\n"
-        "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D");
+        "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D",
+            alpha_blending ? "texelFetch(img_background, ivec2(output_texel_coord), 0)" : "source_color");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
         return -1;
@@ -267,23 +271,43 @@ int gsr_color_conversion_init(gsr_color_conversion *self, const gsr_color_conver
                 return -1;
             }
 
-            if(load_compute_shader_y(&self->shaders[SHADER_INDEX_Y], self->params.egl, &self->uniforms[SHADER_INDEX_Y], self->max_local_size_dim, params->destination_color, params->color_range, false) != 0) {
+            if(load_compute_shader_y(&self->shaders[SHADER_INDEX_Y], self->params.egl, &self->uniforms[SHADER_INDEX_Y], self->max_local_size_dim, params->destination_color, params->color_range, false, false) != 0) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y compute shader\n");
                 goto err;
             }
 
-            if(load_compute_shader_uv(&self->shaders[SHADER_INDEX_UV], self->params.egl, &self->uniforms[SHADER_INDEX_UV], self->max_local_size_dim, params->destination_color, params->color_range, false) != 0) {
+            if(load_compute_shader_uv(&self->shaders[SHADER_INDEX_UV], self->params.egl, &self->uniforms[SHADER_INDEX_UV], self->max_local_size_dim, params->destination_color, params->color_range, false, false) != 0) {
+                fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load UV compute shader\n");
+                goto err;
+            }
+
+            if(load_compute_shader_y(&self->shaders[SHADER_INDEX_Y_BLEND], self->params.egl, &self->uniforms[SHADER_INDEX_Y_BLEND], self->max_local_size_dim, params->destination_color, params->color_range, false, true) != 0) {
+                fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y compute shader\n");
+                goto err;
+            }
+
+            if(load_compute_shader_uv(&self->shaders[SHADER_INDEX_UV_BLEND], self->params.egl, &self->uniforms[SHADER_INDEX_UV_BLEND], self->max_local_size_dim, params->destination_color, params->color_range, false, true) != 0) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load UV compute shader\n");
                 goto err;
             }
 
             if(self->params.load_external_image_shader) {
-                if(load_compute_shader_y(&self->shaders[SHADER_INDEX_Y_EXTERNAL], self->params.egl, &self->uniforms[SHADER_INDEX_Y_EXTERNAL], self->max_local_size_dim, params->destination_color, params->color_range, true) != 0) {
+                if(load_compute_shader_y(&self->shaders[SHADER_INDEX_Y_EXTERNAL], self->params.egl, &self->uniforms[SHADER_INDEX_Y_EXTERNAL], self->max_local_size_dim, params->destination_color, params->color_range, true, false) != 0) {
                     fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y compute shader\n");
                     goto err;
                 }
 
-                if(load_compute_shader_uv(&self->shaders[SHADER_INDEX_UV_EXTERNAL], self->params.egl, &self->uniforms[SHADER_INDEX_UV_EXTERNAL], self->max_local_size_dim, params->destination_color, params->color_range, true) != 0) {
+                if(load_compute_shader_uv(&self->shaders[SHADER_INDEX_UV_EXTERNAL], self->params.egl, &self->uniforms[SHADER_INDEX_UV_EXTERNAL], self->max_local_size_dim, params->destination_color, params->color_range, true, false) != 0) {
+                    fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load UV compute shader\n");
+                    goto err;
+                }
+
+                if(load_compute_shader_y(&self->shaders[SHADER_INDEX_Y_EXTERNAL_BLEND], self->params.egl, &self->uniforms[SHADER_INDEX_Y_EXTERNAL_BLEND], self->max_local_size_dim, params->destination_color, params->color_range, true, true) != 0) {
+                    fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y compute shader\n");
+                    goto err;
+                }
+
+                if(load_compute_shader_uv(&self->shaders[SHADER_INDEX_UV_EXTERNAL_BLEND], self->params.egl, &self->uniforms[SHADER_INDEX_UV_EXTERNAL_BLEND], self->max_local_size_dim, params->destination_color, params->color_range, true, true) != 0) {
                     fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load UV compute shader\n");
                     goto err;
                 }
@@ -296,13 +320,23 @@ int gsr_color_conversion_init(gsr_color_conversion *self, const gsr_color_conver
                 return -1;
             }
 
-            if(load_compute_shader_rgb(&self->shaders[SHADER_INDEX_RGB], self->params.egl, &self->uniforms[SHADER_INDEX_RGB], self->max_local_size_dim, false) != 0) {
+            if(load_compute_shader_rgb(&self->shaders[SHADER_INDEX_RGB], self->params.egl, &self->uniforms[SHADER_INDEX_RGB], self->max_local_size_dim, false, false) != 0) {
+                fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y compute shader\n");
+                goto err;
+            }
+
+            if(load_compute_shader_rgb(&self->shaders[SHADER_INDEX_RGB_BLEND], self->params.egl, &self->uniforms[SHADER_INDEX_RGB_BLEND], self->max_local_size_dim, false, true) != 0) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y compute shader\n");
                 goto err;
             }
 
             if(self->params.load_external_image_shader) {
-                if(load_compute_shader_rgb(&self->shaders[SHADER_INDEX_RGB_EXTERNAL], self->params.egl, &self->uniforms[SHADER_INDEX_RGB_EXTERNAL], self->max_local_size_dim, true) != 0) {
+                if(load_compute_shader_rgb(&self->shaders[SHADER_INDEX_RGB_EXTERNAL], self->params.egl, &self->uniforms[SHADER_INDEX_RGB_EXTERNAL], self->max_local_size_dim, true, false) != 0) {
+                    fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y compute shader\n");
+                    goto err;
+                }
+
+                if(load_compute_shader_rgb(&self->shaders[SHADER_INDEX_RGB_EXTERNAL_BLEND], self->params.egl, &self->uniforms[SHADER_INDEX_RGB_EXTERNAL_BLEND], self->max_local_size_dim, true, true) != 0) {
                     fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load Y compute shader\n");
                     goto err;
                 }
@@ -411,7 +445,7 @@ typedef enum {
     GSR_COLOR_COMP_RGB
 } gsr_color_component;
 
-static int color_component_get_texture_index(gsr_color_component color_component) {
+static int color_component_get_destination_texture_index(gsr_color_component color_component) {
     switch(color_component) {
         case GSR_COLOR_COMP_Y:   return 0;
         case GSR_COLOR_COMP_UV:  return 1;
@@ -431,23 +465,38 @@ static unsigned int color_component_get_color_format(gsr_color_component color_c
     return GL_RGBA8;
 }
 
-static int color_component_get_shader_index(gsr_color_component color_component, bool external_texture) {
+static int color_component_get_shader_index(gsr_color_component color_component, bool external_texture, bool alpha_blending) {
     switch(color_component) {
-        case GSR_COLOR_COMP_Y:   return external_texture ? SHADER_INDEX_Y_EXTERNAL : SHADER_INDEX_Y;
-        case GSR_COLOR_COMP_UV:  return external_texture ? SHADER_INDEX_UV_EXTERNAL : SHADER_INDEX_UV;
-        case GSR_COLOR_COMP_RGB: return external_texture ? SHADER_INDEX_RGB_EXTERNAL : SHADER_INDEX_RGB;
+        case GSR_COLOR_COMP_Y: {
+            if(external_texture)
+                return alpha_blending ? SHADER_INDEX_Y_EXTERNAL_BLEND : SHADER_INDEX_Y_EXTERNAL;
+            else
+                return alpha_blending ? SHADER_INDEX_Y_BLEND : SHADER_INDEX_Y;
+        }
+        case GSR_COLOR_COMP_UV: {
+            if(external_texture)
+                return alpha_blending ? SHADER_INDEX_UV_EXTERNAL_BLEND : SHADER_INDEX_UV_EXTERNAL;
+            else
+                return alpha_blending ? SHADER_INDEX_UV_BLEND : SHADER_INDEX_UV;
+        }
+        case GSR_COLOR_COMP_RGB: {
+            if(external_texture)
+                return alpha_blending ? SHADER_INDEX_RGB_EXTERNAL_BLEND : SHADER_INDEX_RGB_EXTERNAL;
+            else
+                return alpha_blending ? SHADER_INDEX_RGB_BLEND : SHADER_INDEX_RGB;
+        }
     }
     assert(false);
     return SHADER_INDEX_RGB;
 }
 
-static void gsr_color_conversion_dispatch_compute_shader(gsr_color_conversion *self, bool external_texture, float rotation_matrix[2][2], vec2i source_position, vec2i destination_pos, vec2i destination_size, vec2f scale, bool use_16bit_colors, gsr_color_component color_component) {
-    const int shader_index = color_component_get_shader_index(color_component, external_texture);
-    const int texture_index = color_component_get_texture_index(color_component);
+static void gsr_color_conversion_dispatch_compute_shader(gsr_color_conversion *self, bool external_texture, bool alpha_blending, float rotation_matrix[2][2], vec2i source_position, vec2i destination_pos, vec2i destination_size, vec2f scale, bool use_16bit_colors, gsr_color_component color_component) {
+    const int shader_index = color_component_get_shader_index(color_component, external_texture, alpha_blending);
+    const int destination_texture_index = color_component_get_destination_texture_index(color_component);
     const unsigned int color_format = color_component_get_color_format(color_component, use_16bit_colors);
 
     self->params.egl->glActiveTexture(GL_TEXTURE1);
-    self->params.egl->glBindTexture(GL_TEXTURE_2D, self->params.destination_textures[texture_index]);
+    self->params.egl->glBindTexture(GL_TEXTURE_2D, self->params.destination_textures[destination_texture_index]);
     self->params.egl->glActiveTexture(GL_TEXTURE0);
 
     gsr_color_uniforms *uniform = &self->uniforms[shader_index];
@@ -456,13 +505,13 @@ static void gsr_color_conversion_dispatch_compute_shader(gsr_color_conversion *s
     self->params.egl->glUniform2i(uniform->source_position, source_position.x, source_position.y);
     self->params.egl->glUniform2i(uniform->target_position, destination_pos.x, destination_pos.y);
     self->params.egl->glUniform2f(uniform->scale, scale.x, scale.y);
-    self->params.egl->glBindImageTexture(0, self->params.destination_textures[texture_index], 0, GL_FALSE, 0, GL_WRITE_ONLY, color_format);
+    self->params.egl->glBindImageTexture(0, self->params.destination_textures[destination_texture_index], 0, GL_FALSE, 0, GL_WRITE_ONLY, color_format);
     const double num_groups_x = ceil((double)destination_size.x/(double)self->max_local_size_dim);
     const double num_groups_y = ceil((double)destination_size.y/(double)self->max_local_size_dim);
     self->params.egl->glDispatchCompute(max_int(1, num_groups_x), max_int(1, num_groups_y), 1);
 }
 
-void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i source_pos, vec2i source_size, vec2i texture_size, gsr_rotation rotation, bool external_texture, gsr_source_color source_color) {
+void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i source_pos, vec2i source_size, vec2i texture_size, gsr_rotation rotation, gsr_source_color source_color, bool external_texture, bool alpha_blending) {
     vec2f scale = {0.0f, 0.0f};
     if(source_size.x > 0 && source_size.y > 0)
         scale = (vec2f){ (double)destination_size.x/(double)source_size.x, (double)destination_size.y/(double)source_size.y };
@@ -482,12 +531,13 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
         case GSR_DESTINATION_COLOR_NV12:
         case GSR_DESTINATION_COLOR_P010: {
             const bool use_16bit_colors = self->params.destination_color == GSR_DESTINATION_COLOR_P010;
-            gsr_color_conversion_dispatch_compute_shader(self, external_texture, rotation_matrix, source_position, destination_pos, destination_size, scale, use_16bit_colors, GSR_COLOR_COMP_Y);
-            gsr_color_conversion_dispatch_compute_shader(self, external_texture, rotation_matrix, source_position, destination_pos, (vec2i){destination_size.x/2, destination_size.y/2}, scale, use_16bit_colors, GSR_COLOR_COMP_UV);
+            gsr_color_conversion_dispatch_compute_shader(self, external_texture, alpha_blending, rotation_matrix, source_position, destination_pos, destination_size, scale, use_16bit_colors, GSR_COLOR_COMP_Y);
+            gsr_color_conversion_dispatch_compute_shader(self, external_texture, alpha_blending, rotation_matrix, (vec2i){source_position.x/2, source_position.y/2},
+                (vec2i){destination_pos.x/2, destination_pos.y/2}, (vec2i){destination_size.x/2, destination_size.y/2}, scale, use_16bit_colors, GSR_COLOR_COMP_UV);
             break;
         }
         case GSR_DESTINATION_COLOR_RGB8: {
-            gsr_color_conversion_dispatch_compute_shader(self, external_texture, rotation_matrix, source_position, destination_pos, destination_size, scale, false, GSR_COLOR_COMP_RGB);
+            gsr_color_conversion_dispatch_compute_shader(self, external_texture, alpha_blending, rotation_matrix, source_position, destination_pos, destination_size, scale, false, GSR_COLOR_COMP_RGB);
             break;
         }
     }

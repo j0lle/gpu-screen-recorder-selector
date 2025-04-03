@@ -4,7 +4,6 @@ See https://trac.ffmpeg.org/wiki/EncodingForStreamingSites for optimizing stream
 Look at VK_EXT_external_memory_dma_buf.
 Use mov+faststart.
 Allow recording all monitors/selected monitor without nvfbc by recording the compositor proxy window and only recording the part that matches the monitor(s).
-Allow recording a region by recording the compositor proxy window / nvfbc window and copying part of it.
 Support amf and qsv.
 Disable flipping on nvidia? this might fix some stuttering issues on some setups. See NvCtrlGetAttribute/NvCtrlSetAttributeAndGetStatus NV_CTRL_SYNC_TO_VBLANK https://github.com/NVIDIA/nvidia-settings/blob/d5f022976368cbceb2f20b838ddb0bf992f0cfb9/src/gtk%2B-2.x/ctkopengl.c.
 Replays seem to have some issues with audio/video. Why?
@@ -256,3 +255,9 @@ Do proper exit, to call gsr_capture_destroy which will properly stop gsr-kms-ser
 Replace all scissors with clearing textures if the cursor hits the outside of the frame image.
 
 Cursor position might be slightly wrong on rotated monitor.
+
+External texture doesn't work on nvidia x11, probably because of glx context (requires gles es). External texture is not used on nvidia x11 right now so it's not an issue.
+
+Add option to save replay buffer on disk instead of ram.
+
+nvfbc capture cursor with cursor.h instead and composite that on top. This allows us to also always get a cursor in direct capture mode. This could possible give better performance as well.
