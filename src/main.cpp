@@ -3859,7 +3859,7 @@ int main(int argc, char **argv) {
     const char *preset_str = args["-preset"].value();
     if(preset_str) {
         if(!validate_preset(preset_str)) {
-            fprintf(stderr, "Error: -preset should either be 'p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6' or 'p7', got: '%s'\n", preset_str);
+            fprintf(stderr, "Error: -preset should either be 'p1', 'p2', 'p3', 'p4', 'p5', 'p6' or 'p7', got: '%s'\n", preset_str);
             usage();
         }
     }
