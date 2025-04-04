@@ -41,6 +41,9 @@ src = [
     'src/main.cpp',
 ]
 
+subdir('protocol')
+src += protocol_src
+
 dep = [
     dependency('threads'),
     dependency('libavcodec'),

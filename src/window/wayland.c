@@ -7,14 +7,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <assert.h>
 #include <wayland-client.h>
 #include <wayland-egl.h>
+#include "xdg-output-unstable-v1-client-protocol.h"
 
 #define GSR_MAX_OUTPUTS 32
 
+typedef struct gsr_window_wayland gsr_window_wayland;
+
 typedef struct {
     uint32_t wl_name;
-    void *output;
+    struct wl_output *output;
     vec2i pos;
     vec2i size;
     int32_t transform;
@@ -22,6 +26,11 @@ typedef struct {
 } gsr_wayland_output;
 
 typedef struct {
+    gsr_wayland_output *gsr_output;
+    struct zxdg_output_v1 *output;
+} gsr_wayland_xdg_output;
+
+struct gsr_window_wayland {
     void *display;
     void *window;
     void *registry;
@@ -29,7 +38,10 @@ typedef struct {
     void *compositor;
     gsr_wayland_output outputs[GSR_MAX_OUTPUTS];
     int num_outputs;
-} gsr_window_wayland;
+    gsr_wayland_xdg_output xdg_outputs[GSR_MAX_OUTPUTS];
+    int num_xdg_outputs;
+    struct zxdg_output_manager_v1 *xdg_output_manager;
+};
 
 static void output_handle_geometry(void *data, struct wl_output *wl_output,
         int32_t x, int32_t y, int32_t phys_width, int32_t phys_height,
@@ -95,7 +107,7 @@ static const struct wl_output_listener output_listener = {
 static void registry_add_object(void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
     (void)version;
     gsr_window_wayland *window_wayland = data;
-    if (strcmp(interface, "wl_compositor") == 0) {
+    if(strcmp(interface, "wl_compositor") == 0) {
         if(window_wayland->compositor) {
             wl_compositor_destroy(window_wayland->compositor);
             window_wayland->compositor = NULL;
@@ -103,7 +115,7 @@ static void registry_add_object(void *data, struct wl_registry *registry, uint32
         window_wayland->compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 1);
     } else if(strcmp(interface, wl_output_interface.name) == 0) {
         if(version < 4) {
-            fprintf(stderr, "gsr warning: wl output interface version is < 4, expected >= 4 to capture a monitor. Using KMS capture instead\n");
+            fprintf(stderr, "gsr warning: wl output interface version is < 4, expected >= 4 to capture a monitor\n");
             return;
         }
 
@@ -123,6 +135,17 @@ static void registry_add_object(void *data, struct wl_registry *registry, uint32
             .name = NULL,
         };
         wl_output_add_listener(gsr_output->output, &output_listener, gsr_output);
+    } else if(strcmp(interface, zxdg_output_manager_v1_interface.name) == 0) {
+        if(version < 1) {
+            fprintf(stderr, "gsr warning: xdg output interface version is < 1, expected >= 1 to capture a monitor\n");
+            return;
+        }
+
+        if(window_wayland->xdg_output_manager) {
+            zxdg_output_manager_v1_destroy(window_wayland->xdg_output_manager);
+            window_wayland->xdg_output_manager = NULL;
+        }
+        window_wayland->xdg_output_manager = wl_registry_bind(registry, name, &zxdg_output_manager_v1_interface, 1);
     }
 }
 
@@ -137,6 +160,66 @@ static struct wl_registry_listener registry_listener = {
     .global = registry_add_object,
     .global_remove = registry_remove_object,
 };
+
+static void xdg_output_logical_position(void *data, struct zxdg_output_v1 *zxdg_output_v1, int32_t x, int32_t y) {
+    (void)zxdg_output_v1;
+    gsr_wayland_xdg_output *gsr_xdg_output = data;
+    gsr_xdg_output->gsr_output->pos.x = x;
+    gsr_xdg_output->gsr_output->pos.y = y;
+}
+
+static void xdg_output_handle_logical_size(void *data, struct zxdg_output_v1 *xdg_output, int32_t width, int32_t height) {
+    (void)data;
+    (void)xdg_output;
+    (void)width;
+    (void)height;
+}
+
+static void xdg_output_handle_done(void *data, struct zxdg_output_v1 *xdg_output) {
+    (void)data;
+    (void)xdg_output;
+}
+
+static void xdg_output_handle_name(void *data, struct zxdg_output_v1 *xdg_output, const char *name) {
+    (void)data;
+    (void)xdg_output;
+    (void)name;
+}
+
+static void xdg_output_handle_description(void *data, struct zxdg_output_v1 *xdg_output, const char *description)
+{
+    (void)data;
+    (void)xdg_output;
+    (void)description;
+}
+
+static const struct zxdg_output_v1_listener xdg_output_listener = {
+    .logical_position = xdg_output_logical_position,
+    .logical_size = xdg_output_handle_logical_size,
+    .done = xdg_output_handle_done,
+    .name = xdg_output_handle_name,
+    .description = xdg_output_handle_description,
+};
+
+static void gsr_window_wayland_set_monitor_outputs_from_xdg_output(gsr_window_wayland *self) {
+    if(!self->xdg_output_manager) {
+        fprintf(stderr, "gsr warning: zxdg_output_manager not found. registered monitor positions might be incorrect\n");
+        return;
+    }
+
+    assert(self->num_xdg_outputs == 0);
+    self->num_xdg_outputs = self->num_outputs;
+    for(int i = 0; i < self->num_outputs; ++i) {
+        self->xdg_outputs[i] = (gsr_wayland_xdg_output) {
+            .gsr_output = &self->outputs[i],
+            .output = zxdg_output_manager_v1_get_xdg_output(self->xdg_output_manager, self->outputs[i].output),
+        };
+        zxdg_output_v1_add_listener(self->xdg_outputs[i].output, &xdg_output_listener, &self->xdg_outputs[i]);
+    }
+
+    // Fetch xdg_output
+    wl_display_roundtrip(self->display);
+}
 
 static void gsr_window_wayland_deinit(gsr_window_wayland *self) {
     if(self->window) {
@@ -161,6 +244,19 @@ static void gsr_window_wayland_deinit(gsr_window_wayland *self) {
         }
     }
     self->num_outputs = 0;
+
+    for(int i = 0; i < self->num_xdg_outputs; ++i) {
+        if(self->xdg_outputs[i].output) {
+            zxdg_output_v1_destroy(self->xdg_outputs[i].output);
+            self->xdg_outputs[i].output = NULL;
+        }
+    }
+    self->num_xdg_outputs = 0;
+
+    if(self->xdg_output_manager) {
+        zxdg_output_manager_v1_destroy(self->xdg_output_manager);
+        self->xdg_output_manager = NULL;
+    }
 
     if(self->compositor) {
         wl_compositor_destroy(self->compositor);
@@ -193,6 +289,8 @@ static bool gsr_window_wayland_init(gsr_window_wayland *self) {
 
     // Fetch wl_output
     wl_display_roundtrip(self->display);
+
+    gsr_window_wayland_set_monitor_outputs_from_xdg_output(self);
 
     if(!self->compositor) {
         fprintf(stderr, "gsr error: gsr_window_wayland_init failed: failed to find compositor\n");

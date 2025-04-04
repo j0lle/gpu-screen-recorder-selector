@@ -87,6 +87,7 @@ These are the dependencies needed to build GPU Screen Recorder:
 * libcap
 * wayland-client
 * wayland-egl
+* wayland-scanner
 
 ## Runtime dependencies
 There are also additional dependencies needed at runtime depending on your GPU vendor:
