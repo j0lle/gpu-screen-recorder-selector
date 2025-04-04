@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <assert.h>
 #include <wayland-client.h>
 #include <wayland-egl.h>
 #include "xdg-output-unstable-v1-client-protocol.h"
@@ -19,16 +18,12 @@ typedef struct gsr_window_wayland gsr_window_wayland;
 typedef struct {
     uint32_t wl_name;
     struct wl_output *output;
+    struct zxdg_output_v1 *xdg_output;
     vec2i pos;
     vec2i size;
     int32_t transform;
     char *name;
 } gsr_wayland_output;
-
-typedef struct {
-    gsr_wayland_output *gsr_output;
-    struct zxdg_output_v1 *output;
-} gsr_wayland_xdg_output;
 
 struct gsr_window_wayland {
     void *display;
@@ -38,8 +33,6 @@ struct gsr_window_wayland {
     void *compositor;
     gsr_wayland_output outputs[GSR_MAX_OUTPUTS];
     int num_outputs;
-    gsr_wayland_xdg_output xdg_outputs[GSR_MAX_OUTPUTS];
-    int num_xdg_outputs;
     struct zxdg_output_manager_v1 *xdg_output_manager;
 };
 
@@ -163,9 +156,9 @@ static struct wl_registry_listener registry_listener = {
 
 static void xdg_output_logical_position(void *data, struct zxdg_output_v1 *zxdg_output_v1, int32_t x, int32_t y) {
     (void)zxdg_output_v1;
-    gsr_wayland_xdg_output *gsr_xdg_output = data;
-    gsr_xdg_output->gsr_output->pos.x = x;
-    gsr_xdg_output->gsr_output->pos.y = y;
+    gsr_wayland_output *gsr_xdg_output = data;
+    gsr_xdg_output->pos.x = x;
+    gsr_xdg_output->pos.y = y;
 }
 
 static void xdg_output_handle_logical_size(void *data, struct zxdg_output_v1 *xdg_output, int32_t width, int32_t height) {
@@ -207,14 +200,9 @@ static void gsr_window_wayland_set_monitor_outputs_from_xdg_output(gsr_window_wa
         return;
     }
 
-    assert(self->num_xdg_outputs == 0);
-    self->num_xdg_outputs = self->num_outputs;
     for(int i = 0; i < self->num_outputs; ++i) {
-        self->xdg_outputs[i] = (gsr_wayland_xdg_output) {
-            .gsr_output = &self->outputs[i],
-            .output = zxdg_output_manager_v1_get_xdg_output(self->xdg_output_manager, self->outputs[i].output),
-        };
-        zxdg_output_v1_add_listener(self->xdg_outputs[i].output, &xdg_output_listener, &self->xdg_outputs[i]);
+        self->outputs[i].xdg_output = zxdg_output_manager_v1_get_xdg_output(self->xdg_output_manager, self->outputs[i].output);
+        zxdg_output_v1_add_listener(self->outputs[i].xdg_output, &xdg_output_listener, &self->outputs[i]);
     }
 
     // Fetch xdg_output
@@ -242,16 +230,13 @@ static void gsr_window_wayland_deinit(gsr_window_wayland *self) {
             free(self->outputs[i].name);
             self->outputs[i].name = NULL;
         }
-    }
-    self->num_outputs = 0;
 
-    for(int i = 0; i < self->num_xdg_outputs; ++i) {
-        if(self->xdg_outputs[i].output) {
-            zxdg_output_v1_destroy(self->xdg_outputs[i].output);
-            self->xdg_outputs[i].output = NULL;
+        if(self->outputs[i].output) {
+            zxdg_output_v1_destroy(self->outputs[i].xdg_output);
+            self->outputs[i].output = NULL;
         }
     }
-    self->num_xdg_outputs = 0;
+    self->num_outputs = 0;
 
     if(self->xdg_output_manager) {
         zxdg_output_manager_v1_destroy(self->xdg_output_manager);
