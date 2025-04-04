@@ -1063,6 +1063,7 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
             case Tune::QUALITY:
                 av_dict_set(&options, "multipass", "fullres", 0);
                 av_dict_set(&options, "preset", "p6", 0);
+                av_dict_set_int(&options, "rc-lookahead", 0, 0);
                 break;
         }
 
