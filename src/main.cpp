@@ -181,6 +181,11 @@ enum class BitrateMode {
     CBR
 };
 
+enum class Tune {
+    PERFORMANCE,
+    QUALITY
+};
+
 static int x11_error_handler(Display*, XErrorEvent*) {
     return 0;
 }
@@ -1027,7 +1032,7 @@ static void video_hardware_set_qp(AVCodecContext *codec_context, VideoQuality vi
     }
 }
 
-static void open_video_hardware(AVCodecContext *codec_context, VideoQuality video_quality, bool very_old_gpu, gsr_gpu_vendor vendor, PixelFormat pixel_format, bool hdr, gsr_color_depth color_depth, BitrateMode bitrate_mode, VideoCodec video_codec, bool low_power, const char *preset, const char *multipass) {
+static void open_video_hardware(AVCodecContext *codec_context, VideoQuality video_quality, bool very_old_gpu, gsr_gpu_vendor vendor, PixelFormat pixel_format, bool hdr, gsr_color_depth color_depth, BitrateMode bitrate_mode, VideoCodec video_codec, bool low_power, Tune tune) {
     (void)very_old_gpu;
     AVDictionary *options = nullptr;
 
@@ -1051,11 +1056,15 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
         // }
         av_dict_set(&options, "tune", "hq", 0);
 
-        if(preset)
-            av_dict_set(&options, "preset", preset, 0);
-
-        if(multipass)
-            av_dict_set(&options, "multipass", multipass, 0);
+        switch(tune) {
+            case Tune::PERFORMANCE:
+                //av_dict_set(&options, "multipass", "qres", 0);
+                break;
+            case Tune::QUALITY:
+                av_dict_set(&options, "multipass", "fullres", 0);
+                av_dict_set(&options, "preset", "p6", 0);
+                break;
+        }
 
         dict_set_profile(codec_context, vendor, color_depth, &options);
 
@@ -1119,7 +1128,7 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
 static void usage_header() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-preset <preset>] [-multipass disabled|half|full] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path] [vendor]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -1224,13 +1233,9 @@ static void usage_full() {
     printf("        Note that some buggy video players (such as vlc) are unable to correctly display videos in full color range and when upload the video to websites the website\n");
     printf("        might re-encoder the video to make the video limited color range.\n");
     printf("\n");
-    printf("  -preset\n");
-    printf("        Set the video encoding preset. Nvidia only option. Should either be 'p1', 'p2', 'p3', 'p4', 'p5', 'p6' or 'p7'. Higher value give higher quality but slower encoding speed.\n");
-    printf("        Changing this value from the default value may cause driver issues depending on your GPU and driver version. Optional, set to 'p4' by default.\n");
-    printf("\n");
-    printf("  -multipass\n");
-    printf("        Set multipass encoding video encoding option. Nvidia only option. Should either be 'disabled', 'half' or 'full'.\n");
-    printf("        'half' and 'full' give higher quality but slower encoding speed. Optional, set to 'disabled' by default.\n");
+    printf("  -tune\n");
+    printf("        Tune for performance or quality. Should be either 'performance' or 'quality'. At the moment this option only has an effect on Nvidia where setting this to quality\n");
+    printf("        sets options such as preset, multipass and b frames. Optional, set to 'performance' by default.\n");
     printf("\n");
     printf("  -df   Organise replays in folders based on the current date.\n");
     printf("\n");
@@ -3259,17 +3264,6 @@ static AudioDeviceData create_application_audio_audio_input(const MergedAudioInp
 }
 #endif
 
-static bool validate_preset(const char *preset) {
-    if(strlen(preset) != 2)
-        return false;
-
-    for(int i = 1; i <= 7; ++i) {
-        if(preset[0] == 'p' && preset[1] == '0' + i)
-            return true;
-    }
-    return false;
-}
-
 static bool get_image_format_from_filename(const char *filename, gsr_image_format *image_format) {
     if(string_ends_with(filename, ".jpg") || string_ends_with(filename, ".jpeg")) {
         *image_format = GSR_IMAGE_FORMAT_JPEG;
@@ -3399,8 +3393,7 @@ int main(int argc, char **argv) {
         { "-df",                            Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
         { "-sc",                            Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-cr",                            Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
-        { "-preset",                        Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
-        { "-multipass",                     Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
+        { "-tune",                          Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-cursor",                        Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
         { "-keyint",                        Arg { {},  is_optional,  !is_list,  ArgType::STRING,  {false} } },
         { "-restore-portal-session",        Arg { {},  is_optional,  !is_list,  ArgType::BOOLEAN, {false} } },
@@ -3856,26 +3849,18 @@ int main(int argc, char **argv) {
         usage();
     }
 
-    const char *preset_str = args["-preset"].value();
-    if(preset_str) {
-        if(!validate_preset(preset_str)) {
-            fprintf(stderr, "Error: -preset should either be 'p1', 'p2', 'p3', 'p4', 'p5', 'p6' or 'p7', got: '%s'\n", preset_str);
-            usage();
-        }
-    }
+    Tune tune = Tune::PERFORMANCE;
+    const char *tune_str = args["-tune"].value();
+    if(!tune_str)
+        tune_str = "performance";
 
-    const char *multipass_str = args["-multipass"].value();
-    if(multipass_str) {
-        if(strcmp(multipass_str, "disabled") == 0) {
-            multipass_str = nullptr;
-        } else if(strcmp(multipass_str, "half") == 0) {
-            multipass_str = "qres";
-        } else if(strcmp(multipass_str, "full") == 0) {
-            multipass_str = "fullres";
-        } else {
-            fprintf(stderr, "Error: -multipass should either be 'disabled', 'half' or 'full', got: '%s'\n", multipass_str);
-            usage();
-        }
+    if(strcmp(tune_str, "performance") == 0) {
+        tune = Tune::PERFORMANCE;
+    } else if(strcmp(tune_str, "quality") == 0) {
+        tune = Tune::QUALITY;
+    } else {
+        fprintf(stderr, "Error: -tune should either be 'performance' or 'quality', got: '%s'\n", tune_str);
+        usage();
     }
 
     const char *output_resolution_str = args["-s"].value();
@@ -4039,6 +4024,9 @@ int main(int argc, char **argv) {
     if(replay_buffer_size_secs == -1)
         video_stream = create_stream(av_format_context, video_codec_context);
 
+    if(tune == Tune::QUALITY)
+        video_codec_context->max_b_frames = 2;
+
     AVFrame *video_frame = av_frame_alloc();
     if(!video_frame) {
         fprintf(stderr, "Error: Failed to allocate video frame\n");
@@ -4103,7 +4091,7 @@ int main(int argc, char **argv) {
     if(use_software_video_encoder) {
         open_video_software(video_codec_context, quality, pixel_format, hdr, color_depth, bitrate_mode);
     } else {
-        open_video_hardware(video_codec_context, quality, very_old_gpu, egl.gpu_info.vendor, pixel_format, hdr, color_depth, bitrate_mode, video_codec, low_power, preset_str, multipass_str);
+        open_video_hardware(video_codec_context, quality, very_old_gpu, egl.gpu_info.vendor, pixel_format, hdr, color_depth, bitrate_mode, video_codec, low_power, tune);
     }
     if(video_stream)
         avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
