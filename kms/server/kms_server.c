@@ -207,7 +207,7 @@ static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *x, int *
     return property_mask;
 }
 
-/* Returns 0 if not found */
+/* Returns NULL if not found */
 static const connector_crtc_pair* get_connector_pair_by_crtc_id(const connector_to_crtc_map *c2crtc_map, uint32_t crtc_id) {
     for(int i = 0; i < c2crtc_map->num_maps; ++i) {
         if(c2crtc_map->maps[i].crtc_id == crtc_id)
