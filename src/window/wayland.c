@@ -179,8 +179,7 @@ static void xdg_output_handle_name(void *data, struct zxdg_output_v1 *xdg_output
     (void)name;
 }
 
-static void xdg_output_handle_description(void *data, struct zxdg_output_v1 *xdg_output, const char *description)
-{
+static void xdg_output_handle_description(void *data, struct zxdg_output_v1 *xdg_output, const char *description) {
     (void)data;
     (void)xdg_output;
     (void)description;
@@ -231,7 +230,7 @@ static void gsr_window_wayland_deinit(gsr_window_wayland *self) {
             self->outputs[i].name = NULL;
         }
 
-        if(self->outputs[i].output) {
+        if(self->outputs[i].xdg_output) {
             zxdg_output_v1_destroy(self->outputs[i].xdg_output);
             self->outputs[i].output = NULL;
         }
