@@ -103,13 +103,13 @@ static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uni
         "    ivec2 output_size = textureSize(img_background, 0);\n"
         "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size_shift) * rotation_matrix + vec2(size_shift) + 0.5;\n"
         "    vec2 output_texel_coord = vec2(texel_coord - source_position + target_position) + 0.5;\n"
-        "    vec4 source_color = texelFetch(img_input, ivec2(rotated_texel_coord), 0);\n"
+        "    vec4 source_color = texture(img_input, rotated_texel_coord/vec2(size));\n"
         "    vec4 source_color_yuv = RGBtoYUV * vec4(source_color.rgb, 1.0);\n"
         "    vec4 output_color_yuv = %s;\n"
         "    float y_color = mix(output_color_yuv.r, source_color_yuv.r, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(y_color, 1.0, 1.0, 1.0));\n"
         "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D", color_transform_matrix,
-            alpha_blending ? "texelFetch(img_background, ivec2(output_texel_coord), 0)" : "source_color_yuv");
+            alpha_blending ? "texture(img_background, output_texel_coord/vec2(output_size))" : "source_color_yuv");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
         return -1;
@@ -146,13 +146,13 @@ static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_un
         "    ivec2 output_size = textureSize(img_background, 0);\n"
         "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size_shift) * rotation_matrix + vec2(size_shift) + 0.5;\n"
         "    vec2 output_texel_coord = vec2(texel_coord - source_position + target_position) + 0.5;\n"
-        "    vec4 source_color = texelFetch(img_input, ivec2(rotated_texel_coord) << 1, 0);\n"
+        "    vec4 source_color = texture(img_input, rotated_texel_coord/vec2(size>>1));\n" // size/2
         "    vec4 source_color_yuv = RGBtoYUV * vec4(source_color.rgb, 1.0);\n"
         "    vec4 output_color_yuv = %s;\n"
         "    vec2 uv_color = mix(output_color_yuv.rg, source_color_yuv.gb, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(uv_color, 1.0, 1.0));\n"
         "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D", color_transform_matrix,
-            alpha_blending ? "texelFetch(img_background, ivec2(output_texel_coord), 0)" : "source_color_yuv");
+            alpha_blending ? "texture(img_background, output_texel_coord/vec2(output_size))" : "source_color_yuv");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
         return -1;
@@ -186,12 +186,12 @@ static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_u
         "    ivec2 output_size = textureSize(img_background, 0);\n"
         "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size_shift) * rotation_matrix + vec2(size_shift) + 0.5;\n"
         "    vec2 output_texel_coord = vec2(texel_coord - source_position + target_position) + 0.5;\n"
-        "    vec4 source_color = texelFetch(img_input, ivec2(rotated_texel_coord), 0);\n"
+        "    vec4 source_color = texture(img_input, rotated_texel_coord/vec2(size));\n"
         "    vec4 output_color = %s;\n"
         "    vec3 color = mix(output_color.rgb, source_color.rgb, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(color, 1.0));\n"
         "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D",
-            alpha_blending ? "texelFetch(img_background, ivec2(output_texel_coord), 0)" : "source_color");
+            alpha_blending ? "texture(img_background, output_texel_coord/vec2(output_size))" : "source_color");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
         return -1;
