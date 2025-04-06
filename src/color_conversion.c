@@ -78,18 +78,35 @@ static const char* color_format_range_get_transform_matrix(gsr_destination_color
     return NULL;
 }
 
+static void get_compute_shader_header(char *header, size_t header_size, bool external_texture) {
+    if(external_texture) {
+        snprintf(header, header_size,
+            "#version 310 es\n"
+            "#extension GL_ARB_compute_shader: enable\n"
+            "#extension GL_OES_EGL_image_external : enable\n"
+            "#extension GL_OES_EGL_image_external_essl3 : require\n"
+            "layout(binding = 0) uniform highp samplerExternalOES img_input;\n"
+            "layout(binding = 1) uniform highp sampler2D img_background;\n");
+    } else {
+        snprintf(header, header_size,
+            "#version 420\n"
+            "#extension GL_ARB_compute_shader: enable\n"
+            "layout(binding = 0) uniform highp sampler2D img_input;\n"
+            "layout(binding = 1) uniform highp sampler2D img_background;\n");
+    }
+}
+
 static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, int max_local_size_dim, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture, bool alpha_blending) {
     const char *color_transform_matrix = color_format_range_get_transform_matrix(color_format, color_range);
 
+    char header[512];
+    get_compute_shader_header(header, sizeof(header), external_texture);
+
     char compute_shader[2048];
     snprintf(compute_shader, sizeof(compute_shader),
-        "#version 310 es\n"
-        "#extension GL_OES_EGL_image_external : enable\n"
-        "#extension GL_OES_EGL_image_external_essl3 : require\n"
-        "precision highp float;\n"
+        "%s"
         "layout (local_size_x = %d, local_size_y = %d, local_size_z = 1) in;\n"
-        "layout(binding = 0) uniform highp %s img_input;\n"
-        "layout(binding = 1) uniform highp sampler2D img_background;\n"
+        "precision highp float;\n"
         "uniform ivec2 source_position;\n"
         "uniform ivec2 target_position;\n"
         "uniform vec2 scale;\n"
@@ -108,7 +125,7 @@ static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uni
         "    vec4 output_color_yuv = %s;\n"
         "    float y_color = mix(output_color_yuv.r, source_color_yuv.r, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(y_color, 1.0, 1.0, 1.0));\n"
-        "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D", color_transform_matrix,
+        "}\n", header, max_local_size_dim, max_local_size_dim, color_transform_matrix,
             alpha_blending ? "texture(img_background, output_texel_coord/vec2(output_size))" : "source_color_yuv");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
@@ -124,15 +141,14 @@ static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_uni
 static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, int max_local_size_dim, gsr_destination_color color_format, gsr_color_range color_range, bool external_texture, bool alpha_blending) {
     const char *color_transform_matrix = color_format_range_get_transform_matrix(color_format, color_range);
 
+    char header[512];
+    get_compute_shader_header(header, sizeof(header), external_texture);
+
     char compute_shader[2048];
     snprintf(compute_shader, sizeof(compute_shader),
-        "#version 310 es\n"
-        "#extension GL_OES_EGL_image_external : enable\n"
-        "#extension GL_OES_EGL_image_external_essl3 : require\n"
-        "precision highp float;\n"
+        "%s"
         "layout (local_size_x = %d, local_size_y = %d, local_size_z = 1) in;\n"
-        "layout(binding = 0) uniform highp %s img_input;\n"
-        "layout(binding = 1) uniform highp sampler2D img_background;\n"
+        "precision highp float;\n"
         "uniform ivec2 source_position;\n"
         "uniform ivec2 target_position;\n"
         "uniform vec2 scale;\n"
@@ -151,7 +167,7 @@ static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_un
         "    vec4 output_color_yuv = %s;\n"
         "    vec2 uv_color = mix(output_color_yuv.rg, source_color_yuv.gb, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(uv_color, 1.0, 1.0));\n"
-        "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D", color_transform_matrix,
+        "}\n", header, max_local_size_dim, max_local_size_dim, color_transform_matrix,
             alpha_blending ? "texture(img_background, output_texel_coord/vec2(output_size))" : "source_color_yuv");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
@@ -165,15 +181,13 @@ static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_un
 }
 
 static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_uniforms *uniforms, int max_local_size_dim, bool external_texture, bool alpha_blending) {
+    char header[512];
+    get_compute_shader_header(header, sizeof(header), external_texture);
+
     char compute_shader[2048];
     snprintf(compute_shader, sizeof(compute_shader),
-        "#version 310 es\n"
-        "#extension GL_OES_EGL_image_external : enable\n"
-        "#extension GL_OES_EGL_image_external_essl3 : require\n"
-        "precision highp float;\n"
+        "%s"
         "layout (local_size_x = %d, local_size_y = %d, local_size_z = 1) in;\n"
-        "layout(binding = 0) uniform highp %s img_input;\n"
-        "layout(binding = 1) uniform highp sampler2D img_background;\n"
         "uniform ivec2 source_position;\n"
         "uniform ivec2 target_position;\n"
         "uniform vec2 scale;\n"
@@ -190,7 +204,7 @@ static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_u
         "    vec4 output_color = %s;\n"
         "    vec3 color = mix(output_color.rgb, source_color.rgb, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(color, 1.0));\n"
-        "}\n", max_local_size_dim, max_local_size_dim, external_texture ? "samplerExternalOES" : "sampler2D",
+        "}\n", header, max_local_size_dim, max_local_size_dim,
             alpha_blending ? "texture(img_background, output_texel_coord/vec2(output_size))" : "source_color");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
@@ -405,8 +419,8 @@ static void gsr_color_conversion_apply_rotation(gsr_rotation rotation, float rot
             rotation_matrix[0][1] = -1.0f;
             rotation_matrix[1][0] =  1.0f;
             rotation_matrix[1][1] =  0.0f;
-            source_position->x += (((double)texture_size.x*0.5 - (double)texture_size.y*0.5) * scale.x + 0.5);
-            source_position->y += (((double)texture_size.y*0.5 - (double)texture_size.x*0.5) * scale.y + 0.5);
+            source_position->x += (((double)texture_size.x*0.5 - (double)texture_size.y*0.5) * scale.x);
+            source_position->y += (((double)texture_size.y*0.5 - (double)texture_size.x*0.5) * scale.y);
             break;
         case GSR_ROT_180:
             rotation_matrix[0][0] = -1.0f;
@@ -419,8 +433,8 @@ static void gsr_color_conversion_apply_rotation(gsr_rotation rotation, float rot
             rotation_matrix[0][1] =  1.0f;
             rotation_matrix[1][0] = -1.0f;
             rotation_matrix[1][1] =  0.0f;
-            source_position->x += (((double)texture_size.x*0.5 - (double)texture_size.y*0.5) * scale.x + 0.5);
-            source_position->y += (((double)texture_size.y*0.5 - (double)texture_size.x*0.5) * scale.y + 0.5);
+            source_position->x += (((double)texture_size.x*0.5 - (double)texture_size.y*0.5) * scale.x);
+            source_position->y += (((double)texture_size.y*0.5 - (double)texture_size.x*0.5) * scale.y);
             break;
     }
 }
