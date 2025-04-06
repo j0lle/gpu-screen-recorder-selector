@@ -1,6 +1,8 @@
 #ifndef GSR_SHADER_H
 #define GSR_SHADER_H
 
+#include <stdbool.h>
+
 typedef struct gsr_egl gsr_egl;
 
 typedef struct {
@@ -15,5 +17,7 @@ void gsr_shader_deinit(gsr_shader *self);
 int gsr_shader_bind_attribute_location(gsr_shader *self, const char *attribute, int location);
 void gsr_shader_use(gsr_shader *self);
 void gsr_shader_use_none(gsr_shader *self);
+
+void gsr_shader_enable_debug_output(bool enable);
 
 #endif /* GSR_SHADER_H */

@@ -6,7 +6,8 @@
 #include "vec2.h"
 #include <stdbool.h>
 
-#define GSR_COLOR_CONVERSION_MAX_SHADERS 12
+#define GSR_COLOR_CONVERSION_MAX_COMPUTE_SHADERS 12
+#define GSR_COLOR_CONVERSION_MAX_GRAPHICS_SHADERS 6
 #define GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS 2
 
 typedef enum {
@@ -39,10 +40,15 @@ typedef enum {
 
 typedef struct {
     int rotation_matrix;
+    int offset;
+} gsr_color_graphics_uniforms;
+
+typedef struct {
+    int rotation_matrix;
     int source_position;
     int target_position;
     int scale;
-} gsr_color_uniforms;
+} gsr_color_compute_uniforms;
 
 typedef struct {
     gsr_egl *egl;
@@ -58,8 +64,15 @@ typedef struct {
 
 typedef struct {
     gsr_color_conversion_params params;
-    gsr_color_uniforms uniforms[GSR_COLOR_CONVERSION_MAX_SHADERS];
-    gsr_shader shaders[GSR_COLOR_CONVERSION_MAX_SHADERS];
+    gsr_color_compute_uniforms compute_uniforms[GSR_COLOR_CONVERSION_MAX_COMPUTE_SHADERS];
+    gsr_shader compute_shaders[GSR_COLOR_CONVERSION_MAX_COMPUTE_SHADERS];
+
+    /* These are only loader if compute shaders (of the same type) fail to load */
+    gsr_color_graphics_uniforms graphics_uniforms[GSR_COLOR_CONVERSION_MAX_GRAPHICS_SHADERS];
+    gsr_shader graphics_shaders[GSR_COLOR_CONVERSION_MAX_GRAPHICS_SHADERS];
+
+    bool compute_shaders_failed_to_load;
+    bool external_compute_shaders_failed_to_load;
 
     unsigned int framebuffers[GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS];
 

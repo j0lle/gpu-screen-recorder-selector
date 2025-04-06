@@ -3706,6 +3706,11 @@ int main(int argc, char **argv) {
         _exit(1);
     }
 
+    gsr_shader_enable_debug_output(gl_debug);
+#ifndef NDEBUG
+    gsr_shader_enable_debug_output(true);
+#endif
+
     if(egl.gpu_info.is_steam_deck) {
         fprintf(stderr, "gsr warning: steam deck has multiple driver issues. One of them has been reported here: https://github.com/ValveSoftware/SteamOS/issues/1609\n"
             "If you have issues with GPU Screen Recorder on steam deck that you don't have on a desktop computer then report the issue to Valve and/or AMD.\n");

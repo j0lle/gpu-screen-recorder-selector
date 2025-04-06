@@ -3,14 +3,16 @@
 #include <stdio.h>
 #include <assert.h>
 
+static bool print_compile_errors = false;
+
 static int min_int(int a, int b) {
     return a < b ? a : b;
 }
 
-static unsigned int loader_shader(gsr_egl *egl, unsigned int type, const char *source) {
+static unsigned int load_shader(gsr_egl *egl, unsigned int type, const char *source) {
     unsigned int shader_id = egl->glCreateShader(type);
     if(shader_id == 0) {
-        fprintf(stderr, "gsr error: loader_shader: failed to create shader, error: %d\n", egl->glGetError());
+        fprintf(stderr, "gsr error: load_shader: failed to create shader, error: %d\n", egl->glGetError());
         return 0;
     }
 
@@ -23,7 +25,7 @@ static unsigned int loader_shader(gsr_egl *egl, unsigned int type, const char *s
         int info_length = 0;
         egl->glGetShaderiv(shader_id, GL_INFO_LOG_LENGTH, &info_length);
         
-        if(info_length > 1) {
+        if(info_length > 1 && print_compile_errors) {
             char info_log[4096];
             egl->glGetShaderInfoLog(shader_id, min_int(4096, info_length), NULL, info_log);
             fprintf(stderr, "gsr error: loader shader: failed to compile shader, error:\n%s\nshader source:\n%s\n", info_log, source);
@@ -45,19 +47,19 @@ static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const 
     bool success = false;
 
     if(vertex_shader) {
-        vertex_shader_id = loader_shader(egl, GL_VERTEX_SHADER, vertex_shader);
+        vertex_shader_id = load_shader(egl, GL_VERTEX_SHADER, vertex_shader);
         if(vertex_shader_id == 0)
             goto done;
     }
 
     if(fragment_shader) {
-        fragment_shader_id = loader_shader(egl, GL_FRAGMENT_SHADER, fragment_shader);
+        fragment_shader_id = load_shader(egl, GL_FRAGMENT_SHADER, fragment_shader);
         if(fragment_shader_id == 0)
             goto done;
     }
 
     if(compute_shader) {
-        compute_shader_id = loader_shader(egl, GL_COMPUTE_SHADER, compute_shader);
+        compute_shader_id = load_shader(egl, GL_COMPUTE_SHADER, compute_shader);
         if(compute_shader_id == 0)
             goto done;
     }
@@ -150,4 +152,8 @@ void gsr_shader_use(gsr_shader *self) {
 
 void gsr_shader_use_none(gsr_shader *self) {
     self->egl->glUseProgram(0);
+}
+
+void gsr_shader_enable_debug_output(bool enable) {
+    print_compile_errors = enable;
 }

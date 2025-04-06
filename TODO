@@ -261,3 +261,5 @@ External texture doesn't work on nvidia x11, probably because of glx context (re
 Add option to save replay buffer on disk instead of ram.
 
 nvfbc capture cursor with cursor.h instead and composite that on top. This allows us to also always get a cursor in direct capture mode. This could possible give better performance as well.
+
+Maybe remove external shader code and make a simple external to internal texture converter (compute shader), to reduce texture sampling. Maybe this is faster?
