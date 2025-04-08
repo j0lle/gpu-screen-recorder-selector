@@ -28,7 +28,7 @@ static unsigned int load_shader(gsr_egl *egl, unsigned int type, const char *sou
         if(info_length > 1 && print_compile_errors) {
             char info_log[4096];
             egl->glGetShaderInfoLog(shader_id, min_int(4096, info_length), NULL, info_log);
-            fprintf(stderr, "gsr error: loader shader: failed to compile shader, error:\n%s\nshader source:\n%s\n", info_log, source);
+            fprintf(stderr, "gsr error: load_shader: failed to compile shader, error:\n%s\nshader source:\n%s\n", info_log, source);
         }
 
         egl->glDeleteShader(shader_id);

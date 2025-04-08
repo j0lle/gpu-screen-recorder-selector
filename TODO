@@ -263,3 +263,5 @@ Add option to save replay buffer on disk instead of ram.
 nvfbc capture cursor with cursor.h instead and composite that on top. This allows us to also always get a cursor in direct capture mode. This could possible give better performance as well.
 
 Maybe remove external shader code and make a simple external to internal texture converter (compute shader), to reduce texture sampling. Maybe this is faster?
+
+Fix opengl context broken after suspend on nvidia by using this: https://registry.khronos.org/OpenGL/extensions/NV/NV_robustness_video_memory_purge.txt requires glx context creation flags and GetGraphicsResetStatusARB() == PURGED_CONTEXT_RESET_NV check to recreate all graphics.
