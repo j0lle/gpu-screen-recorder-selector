@@ -225,6 +225,14 @@ static bool gsr_egl_proc_load_egl(gsr_egl *self) {
     self->eglQueryDeviceStringEXT = (FUNC_eglQueryDeviceStringEXT)self->eglGetProcAddress("eglQueryDeviceStringEXT");
     self->eglQueryDmaBufModifiersEXT = (FUNC_eglQueryDmaBufModifiersEXT)self->eglGetProcAddress("eglQueryDmaBufModifiersEXT");
 
+    self->glCreateMemoryObjectsEXT = (FUNC_glCreateMemoryObjectsEXT)self->eglGetProcAddress("glCreateMemoryObjectsEXT");
+    self->glImportMemoryFdEXT = (FUNC_glImportMemoryFdEXT)self->eglGetProcAddress("glImportMemoryFdEXT");
+    self->glIsMemoryObjectEXT = (FUNC_glIsMemoryObjectEXT)self->eglGetProcAddress("glIsMemoryObjectEXT");
+    self->glTexStorageMem2DEXT = (FUNC_glTexStorageMem2DEXT)self->eglGetProcAddress("glTexStorageMem2DEXT");
+    self->glBufferStorageMemEXT = (FUNC_glBufferStorageMemEXT)self->eglGetProcAddress("glBufferStorageMemEXT");
+    self->glNamedBufferStorageMemEXT = (FUNC_glNamedBufferStorageMemEXT)self->eglGetProcAddress("glNamedBufferStorageMemEXT");
+    self->glMemoryObjectParameterivEXT = (FUNC_glMemoryObjectParameterivEXT)self->eglGetProcAddress("glMemoryObjectParameterivEXT");
+
     if(!self->eglExportDMABUFImageQueryMESA) {
         fprintf(stderr, "gsr error: gsr_egl_load failed: could not find eglExportDMABUFImageQueryMESA\n");
         return false;

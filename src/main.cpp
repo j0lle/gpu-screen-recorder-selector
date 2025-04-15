@@ -634,16 +634,16 @@ static AVCodecContext *create_video_codec_context(AVPixelFormat pix_fmt,
         if(codec_context->codec_id == AV_CODEC_ID_AV1 || codec_context->codec_id == AV_CODEC_ID_H264 || codec_context->codec_id == AV_CODEC_ID_HEVC) {
             switch(video_quality) {
                 case VideoQuality::MEDIUM:
-                    codec_context->global_quality = 150 * quality_multiply;
+                    codec_context->global_quality = 130 * quality_multiply;
                     break;
                 case VideoQuality::HIGH:
-                    codec_context->global_quality = 120 * quality_multiply;
+                    codec_context->global_quality = 110 * quality_multiply;
                     break;
                 case VideoQuality::VERY_HIGH:
-                    codec_context->global_quality = 115 * quality_multiply;
+                    codec_context->global_quality = 95 * quality_multiply;
                     break;
                 case VideoQuality::ULTRA:
-                    codec_context->global_quality = 90 * quality_multiply;
+                    codec_context->global_quality = 85 * quality_multiply;
                     break;
             }
         } else if(codec_context->codec_id == AV_CODEC_ID_VP8) {
@@ -763,7 +763,7 @@ static AVFrame* create_audio_frame(AVCodecContext *audio_codec_context) {
     return frame;
 }
 
-static void dict_set_profile(AVCodecContext *codec_context, gsr_gpu_vendor vendor, gsr_color_depth color_depth, AVDictionary **options) {
+static void dict_set_profile(AVCodecContext *codec_context, gsr_gpu_vendor vendor, gsr_color_depth color_depth, VideoCodec video_codec, AVDictionary **options) {
     #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(61, 17, 100)
     if(codec_context->codec_id == AV_CODEC_ID_H264) {
         // TODO: Only for vaapi
@@ -785,14 +785,15 @@ static void dict_set_profile(AVCodecContext *codec_context, gsr_gpu_vendor vendo
             av_dict_set(options, "profile", "main", 0);
     }
     #else
+    const bool use_nvidia_values = vendor == GSR_GPU_VENDOR_NVIDIA && !video_codec_is_vulkan(video_codec);
     if(codec_context->codec_id == AV_CODEC_ID_H264) {
         // TODO: Only for vaapi
         //if(color_depth == GSR_COLOR_DEPTH_10_BITS)
         //    av_dict_set_int(options, "profile", AV_PROFILE_H264_HIGH_10, 0);
         //else
-        av_dict_set_int(options, "profile", vendor == GSR_GPU_VENDOR_NVIDIA ? 2 : AV_PROFILE_H264_HIGH, 0);
+        av_dict_set_int(options, "profile", use_nvidia_values ? 2 : AV_PROFILE_H264_HIGH, 0);
     } else if(codec_context->codec_id == AV_CODEC_ID_AV1) {
-        if(vendor == GSR_GPU_VENDOR_NVIDIA) {
+        if(use_nvidia_values) {
             if(color_depth == GSR_COLOR_DEPTH_10_BITS)
                 av_dict_set_int(options, "highbitdepth", 1, 0);
         } else {
@@ -800,9 +801,9 @@ static void dict_set_profile(AVCodecContext *codec_context, gsr_gpu_vendor vendo
         }
     } else if(codec_context->codec_id == AV_CODEC_ID_HEVC) {
         if(color_depth == GSR_COLOR_DEPTH_10_BITS)
-            av_dict_set_int(options, "profile", vendor == GSR_GPU_VENDOR_NVIDIA ? 1 : AV_PROFILE_HEVC_MAIN_10, 0);
+            av_dict_set_int(options, "profile", use_nvidia_values ? 1 : AV_PROFILE_HEVC_MAIN_10, 0);
         else
-            av_dict_set_int(options, "profile", vendor == GSR_GPU_VENDOR_NVIDIA ? 0 : AV_PROFILE_HEVC_MAIN, 0);
+            av_dict_set_int(options, "profile", use_nvidia_values ? 0 : AV_PROFILE_HEVC_MAIN, 0);
     }
     #endif
 }
@@ -867,7 +868,7 @@ static void open_video_software(AVCodecContext *codec_context, VideoQuality vide
 
     av_dict_set(&options, "preset", "veryfast", 0);
     av_dict_set(&options, "tune", "film", 0);
-    dict_set_profile(codec_context, GSR_GPU_VENDOR_INTEL, color_depth, &options);
+    dict_set_profile(codec_context, GSR_GPU_VENDOR_INTEL, color_depth, VideoCodec::H264, &options);
 
     if(codec_context->codec_id == AV_CODEC_ID_H264) {
         av_dict_set(&options, "coder", "cabac", 0); // TODO: cavlc is faster than cabac but worse compression. Which to use?
@@ -1043,9 +1044,14 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
 
     // TODO: Enable multipass
 
-    // TODO: Set "usage" option to "record"/"stream" and "content" option to "rendered" for vulkan encoding
+    dict_set_profile(codec_context, vendor, color_depth, video_codec, &options);
 
-    if(vendor == GSR_GPU_VENDOR_NVIDIA) {
+    if(video_codec_is_vulkan(video_codec)) {
+        av_dict_set_int(&options, "async_depth", 3, 0);
+        av_dict_set(&options, "tune", "hq", 0);
+        av_dict_set(&options, "usage", "record", 0); // TODO: Set to stream when streaming
+        av_dict_set(&options, "content", "rendered", 0);
+    } else if(vendor == GSR_GPU_VENDOR_NVIDIA) {
         // TODO: These dont seem to be necessary
         // av_dict_set_int(&options, "zerolatency", 1, 0);
         // if(codec_context->codec_id == AV_CODEC_ID_AV1) {
@@ -1066,8 +1072,6 @@ static void open_video_hardware(AVCodecContext *codec_context, VideoQuality vide
                 av_dict_set_int(&options, "rc-lookahead", 0, 0);
                 break;
         }
-
-        dict_set_profile(codec_context, vendor, color_depth, &options);
 
         if(codec_context->codec_id == AV_CODEC_ID_H264) {
             // TODO: h264 10bit?
@@ -3465,9 +3469,9 @@ int main(int argc, char **argv) {
         video_codec = VideoCodec::VP8;
     } else if(strcmp(video_codec_to_use, "vp9") == 0) {
         video_codec = VideoCodec::VP9;
-    //} else if(strcmp(video_codec_to_use, "h264_vulkan") == 0) {
+    // } else if(strcmp(video_codec_to_use, "h264_vulkan") == 0) {
     //    video_codec = VideoCodec::H264_VULKAN;
-    //} else if(strcmp(video_codec_to_use, "hevc_vulkan") == 0) {
+    // } else if(strcmp(video_codec_to_use, "hevc_vulkan") == 0) {
     //    video_codec = VideoCodec::HEVC_VULKAN;
     } else if(strcmp(video_codec_to_use, "auto") != 0) {
         fprintf(stderr, "Error: -k should either be 'auto', 'h264', 'hevc', 'av1', 'vp8', 'vp9', 'hevc_hdr', 'av1_hdr', 'hevc_10bit' or 'av1_10bit', got: '%s'\n", video_codec_to_use);

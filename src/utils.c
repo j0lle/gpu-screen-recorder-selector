@@ -362,13 +362,9 @@ bool gl_get_gpu_info(gsr_egl *egl, gsr_gpu_info *info) {
     bool supported = true;
     const unsigned char *gl_vendor = egl->glGetString(GL_VENDOR);
     const unsigned char *gl_renderer = egl->glGetString(GL_RENDERER);
-    const unsigned char *gl_version = egl->glGetString(GL_VERSION);
 
     info->gpu_version = 0;
     info->is_steam_deck = false;
-    info->driver_major = 0;
-    info->driver_minor = 0;
-    info->driver_patch = 0;
 
     if(!gl_vendor) {
         fprintf(stderr, "gsr error: failed to get gpu vendor\n");
@@ -406,21 +402,6 @@ bool gl_get_gpu_info(gsr_egl *egl, gsr_gpu_info *info) {
         if(info->vendor == GSR_GPU_VENDOR_NVIDIA)
             sscanf((const char*)gl_renderer, "%*s %*s %*s %d", &info->gpu_version);
         info->is_steam_deck = strstr((const char*)gl_renderer, "vangogh") != NULL;
-    }
-
-    if(gl_version) {
-        const char *mesa_p = strstr((const char*)gl_version, "Mesa ");
-        if(mesa_p) {
-            mesa_p += 5;
-            int major = 0;
-            int minor = 0;
-            int patch = 0;
-            if(sscanf(mesa_p, "%d.%d.%d", &major, &minor, &patch) == 3) {
-                info->driver_major = major;
-                info->driver_minor = minor;
-                info->driver_patch = patch;
-            }
-        }
     }
 
     end:

@@ -169,6 +169,13 @@ typedef void (*GLDEBUGPROC)(unsigned int source, unsigned int type, unsigned int
 typedef int (*FUNC_eglQueryDisplayAttribEXT)(EGLDisplay dpy, int32_t attribute, intptr_t *value);
 typedef const char* (*FUNC_eglQueryDeviceStringEXT)(void *device, int32_t name);
 typedef int (*FUNC_eglQueryDmaBufModifiersEXT)(EGLDisplay dpy, int32_t format, int32_t max_modifiers, uint64_t *modifiers, int *external_only, int32_t *num_modifiers);
+typedef void (*FUNC_glCreateMemoryObjectsEXT)(int n, unsigned int *memoryObjects);
+typedef void (*FUNC_glImportMemoryFdEXT)(unsigned int memory, uint64_t size, unsigned int handleType, int fd);
+typedef unsigned char (*FUNC_glIsMemoryObjectEXT)(unsigned int memoryObject);
+typedef void (*FUNC_glTexStorageMem2DEXT)(unsigned int target, int levels, unsigned int internalFormat, int width, int height, unsigned int memory, uint64_t offset);
+typedef void (*FUNC_glBufferStorageMemEXT)(unsigned int target, ssize_t size, unsigned int memory, uint64_t offset);
+typedef void (*FUNC_glNamedBufferStorageMemEXT)(unsigned int buffer, ssize_t size, unsigned int memory, uint64_t offset);
+typedef void (*FUNC_glMemoryObjectParameterivEXT)(unsigned int memoryObject, unsigned int pname, const int *params);
 
 typedef enum {
     GSR_GL_CONTEXT_TYPE_EGL,
@@ -219,6 +226,13 @@ struct gsr_egl {
     FUNC_eglQueryDisplayAttribEXT eglQueryDisplayAttribEXT;
     FUNC_eglQueryDeviceStringEXT eglQueryDeviceStringEXT;
     FUNC_eglQueryDmaBufModifiersEXT eglQueryDmaBufModifiersEXT;
+    FUNC_glCreateMemoryObjectsEXT glCreateMemoryObjectsEXT;
+    FUNC_glImportMemoryFdEXT glImportMemoryFdEXT;
+    FUNC_glIsMemoryObjectEXT glIsMemoryObjectEXT;
+    FUNC_glTexStorageMem2DEXT glTexStorageMem2DEXT;
+    FUNC_glBufferStorageMemEXT glBufferStorageMemEXT;
+    FUNC_glNamedBufferStorageMemEXT glNamedBufferStorageMemEXT;
+    FUNC_glMemoryObjectParameterivEXT glMemoryObjectParameterivEXT;
 
     __GLXextFuncPtr (*glXGetProcAddress)(const unsigned char *procName);
     GLXFBConfig* (*glXChooseFBConfig)(Display *dpy, int screen, const int *attribList, int *nitems);
@@ -298,6 +312,7 @@ struct gsr_egl {
     void (*glUniformMatrix2fv)(int location, int count, unsigned char transpose, const float *value);
     void (*glDebugMessageCallback)(GLDEBUGPROC callback, const void *userParam);
     void (*glScissor)(int x, int y, int width, int height);
+    void (*glCreateBuffers)(int n, unsigned int *buffers);
     void (*glReadPixels)(int x, int y, int width, int height, unsigned int format, unsigned int type, void *pixels);
     void* (*glMapBuffer)(unsigned int target, unsigned int access);
     unsigned char (*glUnmapBuffer)(unsigned int target);

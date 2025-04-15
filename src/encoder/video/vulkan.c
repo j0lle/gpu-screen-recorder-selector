@@ -8,26 +8,15 @@
 
 //#include <vulkan/vulkan_core.h>
 
+#define GL_HANDLE_TYPE_OPAQUE_FD_EXT      0x9586
 #define GL_TEXTURE_TILING_EXT             0x9580
 #define GL_OPTIMAL_TILING_EXT             0x9584
 #define GL_LINEAR_TILING_EXT              0x9585
-
-#define GL_PIXEL_PACK_BUFFER              0x88EB
-#define GL_PIXEL_UNPACK_BUFFER            0x88EC
-#define GL_STREAM_READ                    0x88E1
-#define GL_STREAM_DRAW                    0x88E0
-#define GL_READ_ONLY                      0x88B8
-#define GL_WRITE_ONLY                     0x88B9
-#define GL_READ_FRAMEBUFFER               0x8CA8
 
 typedef struct {
     gsr_video_encoder_vulkan_params params;
     unsigned int target_textures[2];
     AVBufferRef *device_ctx;
-    AVVulkanDeviceContext* vv;
-    unsigned int pbo_y[2];
-    unsigned int pbo_uv[2];
-    AVFrame *sw_frame;
 } gsr_video_encoder_vulkan;
 
 static bool gsr_video_encoder_vulkan_setup_context(gsr_video_encoder_vulkan *self, AVCodecContext *video_codec_context) {
@@ -84,6 +73,24 @@ static AVVulkanDeviceContext* video_codec_context_get_vulkan_data(AVCodecContext
     return (AVVulkanDeviceContext*)device_context->hwctx;
 }
 
+static uint32_t get_memory_type_idx(VkPhysicalDevice pdev, const VkMemoryRequirements *mem_reqs, VkMemoryPropertyFlagBits prop_flags, PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties) {
+    VkPhysicalDeviceMemoryProperties pdev_mem_props;
+    uint32_t i;
+
+    vkGetPhysicalDeviceMemoryProperties(pdev, &pdev_mem_props);
+
+    for (i = 0; i < pdev_mem_props.memoryTypeCount; i++) {
+        const VkMemoryType *type = &pdev_mem_props.memoryTypes[i];
+
+        if ((mem_reqs->memoryTypeBits & (1 << i)) &&
+            (type->propertyFlags & prop_flags) == prop_flags) {
+            return i;
+            break;
+        }
+    }
+    return UINT32_MAX;
+}
+
 static bool gsr_video_encoder_vulkan_setup_textures(gsr_video_encoder_vulkan *self, AVCodecContext *video_codec_context, AVFrame *frame) {
     const int res = av_hwframe_get_buffer(video_codec_context->hw_frames_ctx, frame, 0);
     if(res < 0) {
@@ -91,56 +98,133 @@ static bool gsr_video_encoder_vulkan_setup_textures(gsr_video_encoder_vulkan *se
         return false;
     }
 
-    //AVVkFrame *target_surface_id = (AVVkFrame*)frame->data[0];
-    self->vv = video_codec_context_get_vulkan_data(video_codec_context);
+    while(self->params.egl->glGetError()) {}
 
-    const unsigned int internal_formats_nv12[2] = { GL_RGBA8, GL_RGBA8 }; // TODO: GL_R8, GL_R16
-    const unsigned int internal_formats_p010[2] = { GL_R16, GL_RG16 };
-    const unsigned int formats[2] = { GL_RED, GL_RG };
-    const int div[2] = {1, 2}; // divide UV texture size by 2 because chroma is half size
+    AVVkFrame *target_surface_id = (AVVkFrame*)frame->data[0];
+    AVVulkanDeviceContext* vv = video_codec_context_get_vulkan_data(video_codec_context);
+    const size_t luma_size = frame->width * frame->height;
+    if(vv) {
+        PFN_vkGetImageMemoryRequirements vkGetImageMemoryRequirements = (PFN_vkGetImageMemoryRequirements)vv->get_proc_addr(vv->inst, "vkGetImageMemoryRequirements");
+        PFN_vkAllocateMemory vkAllocateMemory = (PFN_vkAllocateMemory)vv->get_proc_addr(vv->inst, "vkAllocateMemory");
+        PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties = (PFN_vkGetPhysicalDeviceMemoryProperties)vv->get_proc_addr(vv->inst, "vkGetPhysicalDeviceMemoryProperties");
+        PFN_vkGetMemoryFdKHR vkGetMemoryFdKHR = (PFN_vkGetMemoryFdKHR)vv->get_proc_addr(vv->inst, "vkGetMemoryFdKHR");
 
-    for(int i = 0; i < 2; ++i) {
-        self->target_textures[i] = gl_create_texture(self->params.egl, video_codec_context->width / div[i], video_codec_context->height / div[i], self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? internal_formats_nv12[i] : internal_formats_p010[i], formats[i], GL_NEAREST);
-        if(self->target_textures[i] == 0) {
-            fprintf(stderr, "gsr error: gsr_video_encoder_cuda_setup_textures: failed to create opengl texture\n");
-            return false;
+        VkMemoryRequirements mem_reqs = {0};
+        vkGetImageMemoryRequirements(vv->act_dev, target_surface_id->img[0], &mem_reqs);
+
+        fprintf(stderr, "size: %lu, alignment: %lu, memory bits: 0x%08x\n", mem_reqs.size, mem_reqs.alignment, mem_reqs.memoryTypeBits);
+        VkDeviceMemory mem;
+        {
+            VkExportMemoryAllocateInfo exp_mem_info;
+            VkMemoryAllocateInfo mem_alloc_info;
+            VkMemoryDedicatedAllocateInfoKHR ded_info;
+
+            memset(&exp_mem_info, 0, sizeof(exp_mem_info));
+            exp_mem_info.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO;
+            exp_mem_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+            
+            memset(&ded_info, 0, sizeof(ded_info));
+            ded_info.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
+            ded_info.image = target_surface_id->img[0];
+
+            exp_mem_info.pNext = &ded_info;
+
+            memset(&mem_alloc_info, 0, sizeof(mem_alloc_info));
+            mem_alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            mem_alloc_info.pNext = &exp_mem_info;
+            mem_alloc_info.allocationSize = target_surface_id->size[0];
+            mem_alloc_info.memoryTypeIndex = get_memory_type_idx(vv->phys_dev, &mem_reqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vkGetPhysicalDeviceMemoryProperties);
+
+            if (mem_alloc_info.memoryTypeIndex == UINT32_MAX) {
+                fprintf(stderr, "No suitable memory type index found.\n");
+                return VK_NULL_HANDLE;
+            }
+
+            if (vkAllocateMemory(vv->act_dev, &mem_alloc_info, 0, &mem) !=
+                VK_SUCCESS)
+                return VK_NULL_HANDLE;
+ 
+            fprintf(stderr, "memory: %p\n", (void*)mem);
+
         }
-    }
 
-    self->params.egl->glGenBuffers(2, self->pbo_y);
+        fprintf(stderr, "target surface id: %p, %zu, %zu\n", (void*)target_surface_id->mem[0], target_surface_id->offset[0], target_surface_id->offset[1]);
+        fprintf(stderr, "vkGetMemoryFdKHR: %p\n", (void*)vkGetMemoryFdKHR);
 
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_y[0]);
-    self->params.egl->glBufferData(GL_PIXEL_PACK_BUFFER, frame->width * frame->height, 0, GL_STREAM_READ);
+        int fd = 0;
+        VkMemoryGetFdInfoKHR fd_info;
+        memset(&fd_info, 0, sizeof(fd_info));
+        fd_info.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR;
+        fd_info.memory = target_surface_id->mem[0];
+        fd_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+        if(vkGetMemoryFdKHR(vv->act_dev, &fd_info, &fd) != VK_SUCCESS) {
+            fprintf(stderr, "failed!\n");
+        } else {
+            fprintf(stderr, "fd: %d\n", fd);
+        }
 
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_y[1]);
-    self->params.egl->glBufferData(GL_PIXEL_PACK_BUFFER, frame->width * frame->height, 0, GL_STREAM_READ);
+        fprintf(stderr, "glImportMemoryFdEXT: %p, size: %zu\n", (void*)self->params.egl->glImportMemoryFdEXT, target_surface_id->size[0]);
+        const int tiling = target_surface_id->tiling == VK_IMAGE_TILING_LINEAR ? GL_LINEAR_TILING_EXT : GL_OPTIMAL_TILING_EXT;
 
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        if(tiling != GL_OPTIMAL_TILING_EXT) {
+            fprintf(stderr, "tiling %d is not supported, only GL_OPTIMAL_TILING_EXT (%d) is supported\n", tiling, GL_OPTIMAL_TILING_EXT);
+        }
 
-    self->params.egl->glGenBuffers(2, self->pbo_uv);
 
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_uv[0]);
-    self->params.egl->glBufferData(GL_PIXEL_PACK_BUFFER, (frame->width/2 * frame->height/2) * 2, 0, GL_STREAM_READ);
+        unsigned int gl_memory_obj = 0;
+        self->params.egl->glCreateMemoryObjectsEXT(1, &gl_memory_obj);
 
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_uv[1]);
-    self->params.egl->glBufferData(GL_PIXEL_PACK_BUFFER, (frame->width/2 * frame->height/2) * 2, 0, GL_STREAM_READ);
+        //const int dedicated = GL_TRUE;
+        //self->params.egl->glMemoryObjectParameterivEXT(gl_memory_obj, GL_DEDICATED_MEMORY_OBJECT_EXT, &dedicated);
 
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        self->params.egl->glImportMemoryFdEXT(gl_memory_obj, target_surface_id->size[0], GL_HANDLE_TYPE_OPAQUE_FD_EXT, fd);
+        if(!self->params.egl->glIsMemoryObjectEXT(gl_memory_obj))
+            fprintf(stderr, "failed to create object!\n");
 
-    self->sw_frame = av_frame_alloc();
-    self->sw_frame->format = AV_PIX_FMT_NV12;
-    self->sw_frame->width = frame->width;
-    self->sw_frame->height = frame->height;
+        fprintf(stderr, "gl memory obj: %u, error: %d\n", gl_memory_obj, self->params.egl->glGetError());
 
-    // TODO: Remove
-    if(av_frame_get_buffer(self->sw_frame, 0) < 0) {
-        fprintf(stderr, "failed to allocate sw frame\n");
-    }
+        // fprintf(stderr, "0 gl error: %d\n", self->params.egl->glGetError());
+        // unsigned int vertex_buffer = 0;
+        // self->params.egl->glGenBuffers(1, &vertex_buffer);
+        // self->params.egl->glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+        // self->params.egl->glBufferStorageMemEXT(GL_ARRAY_BUFFER, target_surface_id->size[0], gl_memory_obj, target_surface_id->offset[0]);
+        // fprintf(stderr, "1 gl error: %d\n", self->params.egl->glGetError());
 
-    // TODO: Remove
-    if(av_frame_make_writable(self->sw_frame) < 0) {
-        fprintf(stderr, "failed to make writable\n");
-    }
+        // fprintf(stderr, "0 gl error: %d\n", self->params.egl->glGetError());
+        // unsigned int buffer = 0;
+        // self->params.egl->glCreateBuffers(1, &buffer);
+        // self->params.egl->glNamedBufferStorageMemEXT(buffer, target_surface_id->size[0], gl_memory_obj, target_surface_id->offset[0]);
+        // fprintf(stderr, "1 gl error: %d\n", self->params.egl->glGetError());
+
+        self->params.egl->glGenTextures(1, &self->target_textures[0]);
+        self->params.egl->glBindTexture(GL_TEXTURE_2D, self->target_textures[0]);
+
+        fprintf(stderr, "1 gl error: %d\n", self->params.egl->glGetError());
+        self->params.egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_TILING_EXT, tiling);
+
+        fprintf(stderr, "tiling: %d\n", tiling);
+
+        fprintf(stderr, "2 gl error: %d\n", self->params.egl->glGetError());
+        self->params.egl->glTexStorageMem2DEXT(GL_TEXTURE_2D, 1, GL_R8, frame->width, frame->height, gl_memory_obj, target_surface_id->offset[0]);
+
+        fprintf(stderr, "3 gl error: %d\n", self->params.egl->glGetError());
+        self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
+
+        self->params.egl->glGenTextures(1, &self->target_textures[1]);
+        self->params.egl->glBindTexture(GL_TEXTURE_2D, self->target_textures[1]);
+
+        fprintf(stderr, "1 gl error: %d\n", self->params.egl->glGetError());
+        self->params.egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_TILING_EXT, tiling);
+
+        fprintf(stderr, "tiling: %d\n", tiling);
+
+        fprintf(stderr, "2 gl error: %d\n", self->params.egl->glGetError());
+        self->params.egl->glTexStorageMem2DEXT(GL_TEXTURE_2D, 1, GL_RG8, frame->width/2, frame->height/2, gl_memory_obj, target_surface_id->offset[0] + luma_size);
+
+        fprintf(stderr, "3 gl error: %d\n", self->params.egl->glGetError());
+        self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
+     }
+
     return true;
 }
 
@@ -185,91 +269,6 @@ void gsr_video_encoder_vulkan_stop(gsr_video_encoder_vulkan *self, AVCodecContex
         av_buffer_unref(&self->device_ctx);
 }
 
-static void nop_free(void *opaque, uint8_t *data) {
-
-}
-
-static void gsr_video_encoder_vulkan_copy_textures_to_frame(gsr_video_encoder *encoder, AVFrame *frame, gsr_color_conversion *color_conversion) {
-    gsr_video_encoder_vulkan *self = encoder->priv;
-
-    static int counter = 0;
-    ++counter;
-
-    // AVBufferRef *av_buffer_create(uint8_t *data, size_t size,
-    //                           void (*free)(void *opaque, uint8_t *data),
-    //                           void *opaque, int flags);
-
-    while(self->params.egl->glGetError()){}
-    self->params.egl->glBindFramebuffer(GL_READ_FRAMEBUFFER, color_conversion->framebuffers[0]);
-    //fprintf(stderr, "1 gl err: %d\n", self->params.egl->glGetError());
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_y[counter % 2]);
-    self->params.egl->glBufferData(GL_PIXEL_PACK_BUFFER, frame->width * frame->height, 0, GL_STREAM_READ);
-    self->params.egl->glReadPixels(0, 0, frame->width, frame->height, GL_RED, GL_UNSIGNED_BYTE, 0);
-    //fprintf(stderr, "2 gl err: %d\n", self->params.egl->glGetError());
-
-    const int next_pbo_y = (counter + 1) % 2;
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_y[next_pbo_y]);
-    self->params.egl->glBufferData(GL_PIXEL_PACK_BUFFER, frame->width * frame->height, 0, GL_STREAM_READ);
-    //fprintf(stderr, "3 gl err: %d\n", self->params.egl->glGetError());
-    uint8_t *ptr_y = (uint8_t*)self->params.egl->glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-    //fprintf(stderr, "4 gl err: %d\n", self->params.egl->glGetError());
-    if(!ptr_y) {
-        fprintf(stderr, "failed to map buffer y!\n");
-    }
-
-    while(self->params.egl->glGetError()){}
-    self->params.egl->glBindFramebuffer(GL_READ_FRAMEBUFFER, color_conversion->framebuffers[1]);
-    //fprintf(stderr, "5 gl err: %d\n", self->params.egl->glGetError());
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_uv[counter % 2]);
-    self->params.egl->glBufferData(GL_PIXEL_PACK_BUFFER, (frame->width/2 * frame->height/2) * 2, 0, GL_STREAM_READ);
-    //fprintf(stderr, "5.5 gl err: %d\n", self->params.egl->glGetError());
-    self->params.egl->glReadPixels(0, 0, frame->width/2, frame->height/2, GL_RG, GL_UNSIGNED_BYTE, 0);
-    //fprintf(stderr, "6 gl err: %d\n", self->params.egl->glGetError());
-
-    const int next_pbo_uv = (counter + 1) % 2;
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_uv[next_pbo_uv]);
-    self->params.egl->glBufferData(GL_PIXEL_PACK_BUFFER, (frame->width/2 * frame->height/2) * 2, 0, GL_STREAM_READ);
-    //fprintf(stderr, "7 gl err: %d\n", self->params.egl->glGetError());
-    uint8_t *ptr_uv = (uint8_t*)self->params.egl->glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-    //fprintf(stderr, "8 gl err: %d\n", self->params.egl->glGetError());
-    if(!ptr_uv) {
-        fprintf(stderr, "failed to map buffer uv!\n");
-    }
-
-    //self->sw_frame->buf[0] = av_buffer_create(ptr_y, 3840 * 2160, nop_free, NULL, 0);
-    //self->sw_frame->buf[1] = av_buffer_create(ptr_uv, 1920 * 1080 * 2, nop_free, NULL, 0);
-    //self->sw_frame->data[0] = self->sw_frame->buf[0]->data;
-    //self->sw_frame->data[1] = self->sw_frame->buf[1]->data;
-    //self->sw_frame->extended_data[0] = self->sw_frame->data[0];
-    //self->sw_frame->extended_data[1] = self->sw_frame->data[1];
-
-    self->sw_frame->data[0] = ptr_y;
-    self->sw_frame->data[1] = ptr_uv;
-
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-    self->params.egl->glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-
-    //self->params.egl->glBindTexture(GL_TEXTURE_2D, self->target_textures[1]);
-    //self->params.egl->glGetTexImage(GL_TEXTURE_2D, 0, GL_RG, GL_UNSIGNED_BYTE, sw_frame->data[1]);
-
-    //self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
-
-    int ret = av_hwframe_transfer_data(frame, self->sw_frame, 0);
-    if(ret < 0) {
-        fprintf(stderr, "transfer data failed, error: %s\n", av_err2str(ret));
-    }
-
-    //av_buffer_unref(&self->sw_frame->buf[0]);
-    //av_buffer_unref(&self->sw_frame->buf[1]);
-
-    //av_frame_free(&sw_frame);
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_y[next_pbo_y]);
-    self->params.egl->glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, self->pbo_y[next_pbo_uv]);
-    self->params.egl->glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-    self->params.egl->glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-}
-
 static void gsr_video_encoder_vulkan_get_textures(gsr_video_encoder *encoder, unsigned int *textures, int *num_textures, gsr_destination_color *destination_color) {
     gsr_video_encoder_vulkan *self = encoder->priv;
     textures[0] = self->target_textures[0];
@@ -299,7 +298,7 @@ gsr_video_encoder* gsr_video_encoder_vulkan_create(const gsr_video_encoder_vulka
 
     *encoder = (gsr_video_encoder) {
         .start = gsr_video_encoder_vulkan_start,
-        .copy_textures_to_frame = gsr_video_encoder_vulkan_copy_textures_to_frame,
+        .copy_textures_to_frame = NULL,
         .get_textures = gsr_video_encoder_vulkan_get_textures,
         .destroy = gsr_video_encoder_vulkan_destroy,
         .priv = encoder_vulkan
