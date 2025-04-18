@@ -26,11 +26,11 @@ typedef struct {
 } gsr_wayland_output;
 
 struct gsr_window_wayland {
-    void *display;
-    void *window;
-    void *registry;
-    void *surface;
-    void *compositor;
+    struct wl_display *display;
+    struct wl_egl_window *window;
+    struct wl_registry *registry;
+    struct wl_surface *surface;
+    struct wl_compositor *compositor;
     gsr_wayland_output outputs[GSR_MAX_OUTPUTS];
     int num_outputs;
     struct zxdg_output_manager_v1 *xdg_output_manager;
