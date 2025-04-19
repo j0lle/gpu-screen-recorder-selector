@@ -117,7 +117,7 @@ There is also a gui for the gpu screen recorder called [GPU Screen Recorder GTK]
 There is also a new alternative UI for GPU Screen Recorder in the style of ShadowPlay called [GPU Screen Recorder UI](https://git.dec05eba.com/gpu-screen-recorder-ui/).
 ## Recording
 Here is an example of how to record your monitor and the default audio output: `gpu-screen-recorder -w screen -f 60 -a default_output -o ~/Videos/test_video.mp4`.
-Yyou can stop and save the recording with `Ctrl+C` or by running `killall -SIGINT gpu-screen-recorder`.
+Yyou can stop and save the recording with `Ctrl+C` or by running `pkill -SIGINT -f gpu-screen-recorder`.
 You can see a list of capture options to record if you run `gpu-screen-recorder --list-capture-options`. This will list possible capture options and monitor names, for example:\
 ```
   window
@@ -134,9 +134,10 @@ You can also use the `-sc` option to specify a script that should be run (asynch
 This can be used for example to show a notification when a replay has been saved, to rename the video with a title that matches the game played (see `scripts/record-save-application-name.sh` as an example on how to do this on X11) or to re-encode the video.\
 The replay buffer is stored in ram (as encoded video), so don't use a too large replay time and/or video quality unless you have enough ram to store it.
 ## Controlling GPU Screen Recorder remotely
-To save a video in replay mode, you need to send signal SIGUSR1 to gpu screen recorder. You can do this by running `killall -SIGUSR1 gpu-screen-recorder`.\
-To stop recording send SIGINT to gpu screen recorder. You can do this by running `killall -SIGINT gpu-screen-recorder` or pressing `Ctrl-C` in the terminal that runs gpu screen recorder. When recording a regular non-replay video this will also save the video.\
-To pause/unpause recording send SIGUSR2 to gpu screen recorder. You can do this by running `killall -SIGUSR2 gpu-screen-recorder`. This is only applicable and useful when recording (not streaming nor replay).\
+To save a video in replay mode, you need to send signal SIGUSR1 to gpu screen recorder. You can do this by running `pkill -SIGUSR1 -f gpu-screen-recorder`.\
+To stop recording send SIGINT to gpu screen recorder. You can do this by running `pkill -SIGINT -f gpu-screen-recorder` or pressing `Ctrl-C` in the terminal that runs gpu screen recorder. When recording a regular non-replay video this will also save the video.\
+To pause/unpause recording send SIGUSR2 to gpu screen recorder. You can do this by running `pkill -SIGUSR2 -f gpu-screen-recorder`. This is only applicable and useful when recording (not streaming nor replay).\
+There are more signals to control GPU Screen Recorder. Run `gpu-screen-recorder --help` to list them all (under `NOTES` section).
 ## Simple way to run replay without gui
 Run the script `scripts/start-replay.sh` to start replay and then `scripts/save-replay.sh` to save a replay and `scripts/stop-replay.sh` to stop the replay. The videos are saved to `$HOME/Videos`.
 You can use these scripts to start replay at system startup if you add `scripts/start-replay.sh` to startup (this can be done differently depending on your desktop environment / window manager) and then go into

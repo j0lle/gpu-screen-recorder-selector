@@ -101,10 +101,9 @@ static void registry_add_object(void *data, struct wl_registry *registry, uint32
     (void)version;
     gsr_window_wayland *window_wayland = data;
     if(strcmp(interface, "wl_compositor") == 0) {
-        if(window_wayland->compositor) {
-            wl_compositor_destroy(window_wayland->compositor);
-            window_wayland->compositor = NULL;
-        }
+        if(window_wayland->compositor)
+            return;
+
         window_wayland->compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 1);
     } else if(strcmp(interface, wl_output_interface.name) == 0) {
         if(version < 4) {
@@ -134,10 +133,9 @@ static void registry_add_object(void *data, struct wl_registry *registry, uint32
             return;
         }
 
-        if(window_wayland->xdg_output_manager) {
-            zxdg_output_manager_v1_destroy(window_wayland->xdg_output_manager);
-            window_wayland->xdg_output_manager = NULL;
-        }
+        if(window_wayland->xdg_output_manager)
+            return;
+
         window_wayland->xdg_output_manager = wl_registry_bind(registry, name, &zxdg_output_manager_v1_interface, 1);
     }
 }

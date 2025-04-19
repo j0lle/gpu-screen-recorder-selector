@@ -274,6 +274,7 @@ struct PacketData {
     }
 
     AVPacket data;
+    double timestamp = 0.0;
 };
 
 // |stream| is only required for non-replay mode
@@ -284,7 +285,10 @@ static void receive_frames(AVCodecContext *av_codec_context, int stream_index, A
                            int replay_buffer_size_secs,
                            bool &frames_erased,
                            std::mutex &write_output_mutex,
-                           double paused_time_offset) {
+                           double paused_time_offset,
+                           bool record_to_file,
+                           int64_t recording_pts_offset,
+                           const std::function<bool(const AVPacket &packet)> &record_condition_handler) {
     for (;;) {
         AVPacket *av_packet = av_packet_alloc();
         if(!av_packet)
@@ -300,6 +304,7 @@ static void receive_frames(AVCodecContext *av_codec_context, int stream_index, A
 
             std::lock_guard<std::mutex> lock(write_output_mutex);
             if(replay_buffer_size_secs != -1) {
+                const double time_now = clock_get_monotonic_seconds();
                 // TODO: Preallocate all frames data and use those instead.
                 // Why are we doing this you ask? there is a new ffmpeg bug that causes cpu usage to increase over time when you have
                 // packets that are not being free'd until later. So we copy the packet data, free the packet and then reconstruct
@@ -308,16 +313,22 @@ static void receive_frames(AVCodecContext *av_codec_context, int stream_index, A
                 new_packet->data = *av_packet;
                 new_packet->data.data = (uint8_t*)av_malloc(av_packet->size);
                 memcpy(new_packet->data.data, av_packet->data, av_packet->size);
+                new_packet->timestamp = time_now;
 
-                double time_now = clock_get_monotonic_seconds() - paused_time_offset;
-                double replay_time_elapsed = time_now - replay_start_time;
+                const double record_passed_time = time_now - paused_time_offset;
+                double replay_time_elapsed = record_passed_time - replay_start_time;
 
                 frame_data_queue.push_back(std::move(new_packet));
                 if(replay_time_elapsed >= replay_buffer_size_secs) {
                     frame_data_queue.pop_front();
                     frames_erased = true;
                 }
-            } else {
+            }
+
+            if(record_to_file && record_condition_handler(*av_packet)) {
+                av_packet->pts -= recording_pts_offset;
+                av_packet->dts -= recording_pts_offset;
+
                 av_packet_rescale_ts(av_packet, av_codec_context->time_base, stream->time_base);
                 av_packet->stream_index = stream->index;
                 // TODO: Is av_interleaved_write_frame needed?. Answer: might be needed for mkv but dont use it! it causes frames to be inconsistent, skipping frames and duplicating frames
@@ -1205,6 +1216,7 @@ static void usage_full() {
     printf("        Restart replay on save. For example if this is set to 'no' and replay time (-r) is set to 60 seconds and a replay is saved once then the first replay video is 60 seconds long\n");
     printf("        and if a replay is saved 10 seconds later then the second replay video will also be 60 seconds long and contain 50 seconds of the previous video as well.\n");
     printf("        If this is set to 'yes' then after a replay is saved the replay buffer data is cleared and the second replay will start from that point onward.\n");
+    printf("        The replay is only restarted when saving a full replay (SIGUSR1 signal)\n");
     printf("        Optional, set to 'no' by default.\n");
     printf("\n");
     printf("  -k    Video codec to use. Should be either 'auto', 'h264', 'hevc', 'av1', 'vp8', 'vp9', 'hevc_hdr', 'av1_hdr', 'hevc_10bit' or 'av1_10bit'.\n");
@@ -1318,9 +1330,16 @@ static void usage_full() {
     printf("        Show this help.\n");
     printf("\n");
     printf("NOTES:\n");
-    printf("  Send signal SIGINT to gpu-screen-recorder (Ctrl+C, or killall -SIGINT gpu-screen-recorder) to stop and save the recording. When in replay mode this stops recording without saving.\n");
-    printf("  Send signal SIGUSR1 to gpu-screen-recorder (killall -SIGUSR1 gpu-screen-recorder) to save a replay (when in replay mode).\n");
-    printf("  Send signal SIGUSR2 to gpu-screen-recorder (killall -SIGUSR2 gpu-screen-recorder) to pause/unpause recording. Only applicable when recording (not streaming nor replay).\n");
+    printf("  Send signal SIGINT to gpu-screen-recorder (Ctrl+C, or pkill -SIGINT -f gpu-screen-recorder) to stop and save the recording. When in replay mode this stops recording without saving.\n");
+    printf("  Send signal SIGUSR2 to gpu-screen-recorder (pkill -SIGUSR2 -f gpu-screen-recorder) to pause/unpause recording. Only applicable when recording (not streaming nor replay).\n");
+    printf("  Send signal SIGUSR1 to gpu-screen-recorder (pkill -SIGUSR1 -f gpu-screen-recorder) to save a replay (when in replay mode).\n");
+    printf("  Send signal SIGRTMIN+1 to gpu-screen-recorder (pkill -SIGRTMIN+1 -f gpu-screen-recorder) to save a replay of the last 10 seconds (when in replay mode).\n");
+    printf("  Send signal SIGRTMIN+2 to gpu-screen-recorder (pkill -SIGRTMIN+2 -f gpu-screen-recorder) to save a replay of the last 30 seconds (when in replay mode).\n");
+    printf("  Send signal SIGRTMIN+3 to gpu-screen-recorder (pkill -SIGRTMIN+3 -f gpu-screen-recorder) to save a replay of the last 60 seconds (when in replay mode).\n");
+    printf("  Send signal SIGRTMIN+4 to gpu-screen-recorder (pkill -SIGRTMIN+4 -f gpu-screen-recorder) to save a replay of the last 5 minutes (when in replay mode).\n");
+    printf("  Send signal SIGRTMIN+5 to gpu-screen-recorder (pkill -SIGRTMIN+5 -f gpu-screen-recorder) to save a replay of the last 10 minutes (when in replay mode).\n");
+    printf("  Send signal SIGRTMIN+6 to gpu-screen-recorder (pkill -SIGRTMIN+6 -f gpu-screen-recorder) to save a replay of the last 30 minutes (when in replay mode).\n");
+    printf("  Send signal SIGRTMIN to gpu-screen-recorder (pkill -SIGRTMIN -f gpu-screen-recorder) to start/stop recording a regular video when in replay mode.\n");
     printf("\n");
     printf("EXAMPLES:\n");
     printf("  %s -w screen -f 60 -a default_output -o video.mp4\n", program_name);
@@ -1348,20 +1367,51 @@ static void usage() {
     _exit(1);
 }
 
+static const int save_replay_seconds_full = -1;
+
 static sig_atomic_t running = 1;
-static sig_atomic_t save_replay = 0;
 static sig_atomic_t toggle_pause = 0;
+static sig_atomic_t toggle_replay_recording = 0;
+static sig_atomic_t save_replay_seconds = 0;
 
 static void stop_handler(int) {
     running = 0;
 }
 
-static void save_replay_handler(int) {
-    save_replay = 1;
-}
-
 static void toggle_pause_handler(int) {
     toggle_pause = 1;
+}
+
+static void toggle_replay_recording_handler(int) {
+    toggle_replay_recording = 1;
+}
+
+static void save_replay_handler(int) {
+    save_replay_seconds = save_replay_seconds_full;
+}
+
+static void save_replay_10_seconds_handler(int) {
+    save_replay_seconds = 10;
+}
+
+static void save_replay_30_seconds_handler(int) {
+    save_replay_seconds = 30;
+}
+
+static void save_replay_1_minute_handler(int) {
+    save_replay_seconds = 60;
+}
+
+static void save_replay_5_minutes_handler(int) {
+    save_replay_seconds = 60*5;
+}
+
+static void save_replay_10_minutes_handler(int) {
+    save_replay_seconds = 60*10;
+}
+
+static void save_replay_30_minutes_handler(int) {
+    save_replay_seconds = 60*30;
 }
 
 static bool is_hex_num(char c) {
@@ -1562,11 +1612,101 @@ static bool add_hdr_metadata_to_video_stream(gsr_capture *cap, AVStream *video_s
     return true;
 }
 
+struct RecordingStartResult {
+    AVFormatContext *av_format_context = nullptr;
+    AVStream *video_stream = nullptr;
+    std::unordered_map<int, AudioTrack*> stream_index_to_audio_track_map;
+};
+
+static RecordingStartResult start_recording_create_streams(const char *filename, const char *container_format, AVCodecContext *video_codec_context, std::vector<AudioTrack> &audio_tracks, bool hdr, gsr_capture *capture) {
+    AVFormatContext *av_format_context;
+    avformat_alloc_output_context2(&av_format_context, nullptr, container_format, filename);
+
+    AVStream *video_stream = create_stream(av_format_context, video_codec_context);
+    avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
+
+    RecordingStartResult result;
+
+    for(AudioTrack &audio_track : audio_tracks) {
+        result.stream_index_to_audio_track_map[audio_track.stream_index] = &audio_track;
+        AVStream *audio_stream = create_stream(av_format_context, audio_track.codec_context);
+        if(!audio_track.name.empty())
+            av_dict_set(&audio_stream->metadata, "title", audio_track.name.c_str(), 0);
+        avcodec_parameters_from_context(audio_stream->codecpar, audio_track.codec_context);
+        audio_track.stream = audio_stream;
+    }
+
+    const int open_ret = avio_open(&av_format_context->pb, filename, AVIO_FLAG_WRITE);
+    if(open_ret < 0) {
+        fprintf(stderr, "gsr error: start: could not open '%s': %s\n", filename, av_error_to_string(open_ret));
+        result.stream_index_to_audio_track_map.clear();
+        return result;
+    }
+
+    AVDictionary *options = nullptr;
+    av_dict_set(&options, "strict", "experimental", 0);
+
+    const int header_write_ret = avformat_write_header(av_format_context, &options);
+    av_dict_free(&options);
+    if(header_write_ret < 0) {
+        fprintf(stderr, "gsr error: start: error occurred when writing header to output file: %s\n", av_error_to_string(header_write_ret));
+        avio_close(av_format_context->pb);
+        avformat_free_context(av_format_context);
+        result.stream_index_to_audio_track_map.clear();
+        return result;
+    }
+
+    if(hdr)
+        add_hdr_metadata_to_video_stream(capture, video_stream);
+
+    result.av_format_context = av_format_context;
+    result.video_stream = video_stream;
+    return result;
+}
+
+static bool stop_recording_close_streams(AVFormatContext *av_format_context) {
+    bool trailer_written = true;
+    if(av_write_trailer(av_format_context) != 0) {
+        fprintf(stderr, "gsr error: end: failed to write trailer\n");
+        trailer_written = false;
+    }
+
+    const bool closed = avio_close(av_format_context->pb) == 0;
+    avformat_free_context(av_format_context);
+    return trailer_written && closed;
+}
+
 static std::future<void> save_replay_thread;
 static std::vector<std::shared_ptr<PacketData>> save_replay_packets;
 static std::string save_replay_output_filepath;
 
-static void save_replay_async(AVCodecContext *video_codec_context, int video_stream_index, std::vector<AudioTrack> &audio_tracks, std::deque<std::shared_ptr<PacketData>> &frame_data_queue, bool frames_erased, std::string output_dir, const char *container_format, const std::string &file_extension, std::mutex &write_output_mutex, bool date_folders, bool hdr, gsr_capture *capture) {
+// Binary search. Returns 0 if input is empty
+static size_t find_frame_data_index_by_time_passed(const std::deque<std::shared_ptr<PacketData>> &frame_data_queue, int seconds) {
+    const double now = clock_get_monotonic_seconds();
+    if(frame_data_queue.empty())
+        return 0;
+
+    size_t lower_bound = 0;
+    size_t upper_bound = frame_data_queue.size();
+    size_t index = 0;
+    for(;;) {
+        index = lower_bound + (upper_bound - lower_bound) / 2;
+        const PacketData &packet_data = *frame_data_queue[index];
+        const double time_passed_since_packet = now - packet_data.timestamp;
+        if(time_passed_since_packet >= seconds) {
+            if(lower_bound == index)
+                break;
+            lower_bound = index;
+        } else {
+            if(upper_bound == index)
+                break;
+            upper_bound = index;
+        }
+    }
+    return index;
+}
+
+static void save_replay_async(AVCodecContext *video_codec_context, int video_stream_index, std::vector<AudioTrack> &audio_tracks, std::deque<std::shared_ptr<PacketData>> &frame_data_queue, bool frames_erased, std::string output_dir, const char *container_format, const std::string &file_extension, std::mutex &write_output_mutex, bool date_folders, bool hdr, gsr_capture *capture, int current_save_replay_seconds) {
     if(save_replay_thread.valid())
         return;
 
@@ -1576,8 +1716,9 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
 
     {
         std::lock_guard<std::mutex> lock(write_output_mutex);
+        const size_t search_start_index = current_save_replay_seconds == save_replay_seconds_full ? 0 : find_frame_data_index_by_time_passed(frame_data_queue, current_save_replay_seconds);
         start_index = (size_t)-1;
-        for(size_t i = 0; i < frame_data_queue.size(); ++i) {
+        for(size_t i = search_start_index; i < frame_data_queue.size(); ++i) {
             const AVPacket &av_packet = frame_data_queue[i]->data;
             if((av_packet.flags & AV_PKT_FLAG_KEY) && av_packet.stream_index == video_stream_index) {
                 start_index = i;
@@ -1588,19 +1729,16 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
         if(start_index == (size_t)-1)
             return;
 
-        if(frames_erased) {
-            video_pts_offset = frame_data_queue[start_index]->data.pts;
+        video_pts_offset = frame_data_queue[start_index]->data.pts;
 
-            // Find the next audio packet to use as audio pts offset
-            for(size_t i = start_index; i < frame_data_queue.size(); ++i) {
-                const AVPacket &av_packet = frame_data_queue[i]->data;
-                if(av_packet.stream_index != video_stream_index) {
-                    audio_pts_offset = av_packet.pts;
-                    break;
-                }
+        // Find the next audio packet to use as audio pts offset.
+        // TODO: Also search backwards, if an earlier audio packet is closer
+        for(size_t i = start_index; i < frame_data_queue.size(); ++i) {
+            const AVPacket &av_packet = frame_data_queue[i]->data;
+            if(av_packet.stream_index != video_stream_index) {
+                audio_pts_offset = av_packet.pts;
+                break;
             }
-        } else {
-            start_index = 0;
         }
 
         save_replay_packets.resize(frame_data_queue.size());
@@ -1609,7 +1747,7 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
         }
     }
 
-    if (date_folders) {
+    if(date_folders) {
         std::string output_folder = output_dir + '/' + get_date_only_str();
         create_directory_recursive(&output_folder[0]);
         save_replay_output_filepath = output_folder + "/Replay_" + get_time_only_str() + "." + file_extension;
@@ -1618,44 +1756,11 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
         save_replay_output_filepath = output_dir + "/Replay_" + get_date_str() + "." + file_extension;
     }
 
-    AVFormatContext *av_format_context;
-    avformat_alloc_output_context2(&av_format_context, nullptr, container_format, nullptr);
-
-    AVStream *video_stream = create_stream(av_format_context, video_codec_context);
-    avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
-
-    std::unordered_map<int, AudioTrack*> stream_index_to_audio_track_map;
-    for(AudioTrack &audio_track : audio_tracks) {
-        stream_index_to_audio_track_map[audio_track.stream_index] = &audio_track;
-        AVStream *audio_stream = create_stream(av_format_context, audio_track.codec_context);
-        if(!audio_track.name.empty())
-            av_dict_set(&audio_stream->metadata, "title", audio_track.name.c_str(), 0);
-        avcodec_parameters_from_context(audio_stream->codecpar, audio_track.codec_context);
-        audio_track.stream = audio_stream;
-    }
-
-    const int open_ret = avio_open(&av_format_context->pb, save_replay_output_filepath.c_str(), AVIO_FLAG_WRITE);
-    if (open_ret < 0) {
-        fprintf(stderr, "Error: Could not open '%s': %s. Make sure %s is an existing directory with write access\n", save_replay_output_filepath.c_str(), av_error_to_string(open_ret), save_replay_output_filepath.c_str());
+    RecordingStartResult recording_start_result = start_recording_create_streams(save_replay_output_filepath.c_str(), container_format, video_codec_context, audio_tracks, hdr, capture);
+    if(!recording_start_result.av_format_context)
         return;
-    }
 
-    AVDictionary *options = nullptr;
-    av_dict_set(&options, "strict", "experimental", 0);
-
-    const int header_write_ret = avformat_write_header(av_format_context, &options);
-    if (header_write_ret < 0) {
-        fprintf(stderr, "Error occurred when writing header to output file: %s\n", av_error_to_string(header_write_ret));
-        avio_close(av_format_context->pb);
-        avformat_free_context(av_format_context);
-        av_dict_free(&options);
-        return;
-    }
-
-    if(hdr)
-        add_hdr_metadata_to_video_stream(capture, video_stream);
-
-    save_replay_thread = std::async(std::launch::async, [video_stream_index, video_stream, start_index, video_pts_offset, audio_pts_offset, video_codec_context, &audio_tracks, stream_index_to_audio_track_map, av_format_context, options]() mutable {
+    save_replay_thread = std::async(std::launch::async, [video_stream_index, recording_start_result, start_index, video_pts_offset, audio_pts_offset, video_codec_context, &audio_tracks]() mutable {
         for(size_t i = start_index; i < save_replay_packets.size(); ++i) {
             // TODO: Check if successful
             AVPacket av_packet;
@@ -1669,14 +1774,14 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
             av_packet.flags = save_replay_packets[i]->data.flags;
             //av_packet.duration = save_replay_packets[i]->data.duration;
 
-            AVStream *stream = video_stream;
+            AVStream *stream = recording_start_result.video_stream;
             AVCodecContext *codec_context = video_codec_context;
 
             if(av_packet.stream_index == video_stream_index) {
                 av_packet.pts -= video_pts_offset;
                 av_packet.dts -= video_pts_offset;
             } else {
-                AudioTrack *audio_track = stream_index_to_audio_track_map[av_packet.stream_index];
+                AudioTrack *audio_track = recording_start_result.stream_index_to_audio_track_map[av_packet.stream_index];
                 stream = audio_track->stream;
                 codec_context = audio_track->codec_context;
 
@@ -1687,19 +1792,14 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
             av_packet.stream_index = stream->index;
             av_packet_rescale_ts(&av_packet, codec_context->time_base, stream->time_base);
 
-            const int ret = av_write_frame(av_format_context, &av_packet);
+            const int ret = av_write_frame(recording_start_result.av_format_context, &av_packet);
             if(ret < 0)
                 fprintf(stderr, "Error: Failed to write frame index %d to muxer, reason: %s (%d)\n", stream->index, av_error_to_string(ret), ret);
 
             //av_packet_free(&av_packet);
         }
 
-        if (av_write_trailer(av_format_context) != 0)
-            fprintf(stderr, "Failed to write trailer\n");
-
-        avio_close(av_format_context->pb);
-        avformat_free_context(av_format_context);
-        av_dict_free(&options);
+        stop_recording_close_streams(recording_start_result.av_format_context);
 
         for(AudioTrack &audio_track : audio_tracks) {
             audio_track.stream = nullptr;
@@ -3291,12 +3391,43 @@ static bool arg_get_boolean_value(std::map<std::string, Arg> &args, const char *
     }
 }
 
+// TODO: replace this with start_recording_create_steams
+static bool av_open_file_write_header(AVFormatContext *av_format_context, const char *filename) {
+    int ret = avio_open(&av_format_context->pb, filename, AVIO_FLAG_WRITE);
+    if(ret < 0) {
+        fprintf(stderr, "Error: Could not open '%s': %s\n", filename, av_error_to_string(ret));
+        return false;
+    }
+
+    AVDictionary *options = nullptr;
+    av_dict_set(&options, "strict", "experimental", 0);
+    //av_dict_set_int(&av_format_context->metadata, "video_full_range_flag", 1, 0);
+
+    ret = avformat_write_header(av_format_context, &options);
+    if(ret < 0)
+        fprintf(stderr, "Error occurred when writing header to output file: %s\n", av_error_to_string(ret));
+
+    const bool success = ret >= 0;
+    if(!success)
+        avio_close(av_format_context->pb);
+
+    av_dict_free(&options);
+    return success;
+}
+
 int main(int argc, char **argv) {
     setlocale(LC_ALL, "C"); // Sigh... stupid C
 
     signal(SIGINT, stop_handler);
     signal(SIGUSR1, save_replay_handler);
     signal(SIGUSR2, toggle_pause_handler);
+    signal(SIGRTMIN, toggle_replay_recording_handler);
+    signal(SIGRTMIN+1, save_replay_10_seconds_handler);
+    signal(SIGRTMIN+2, save_replay_30_seconds_handler);
+    signal(SIGRTMIN+3, save_replay_1_minute_handler);
+    signal(SIGRTMIN+4, save_replay_5_minutes_handler);
+    signal(SIGRTMIN+5, save_replay_10_minutes_handler);
+    signal(SIGRTMIN+6, save_replay_30_minutes_handler);
 
     // Stop nvidia driver from buffering frames
     setenv("__GL_MaxFramesAllowed", "1", true);
@@ -3653,6 +3784,7 @@ int main(int argc, char **argv) {
         }
         replay_buffer_size_secs += std::ceil(keyint); // Add a few seconds to account of lost packets because of non-keyframe packets skipped
     }
+    const bool is_replaying = replay_buffer_size_secs != -1;
 
     std::string window_str = args["-w"].value();
     const bool is_portal_capture = strcmp(window_str.c_str(), "portal") == 0;
@@ -3922,12 +4054,12 @@ int main(int argc, char **argv) {
     if(filename) {
         is_livestream = is_livestream_path(filename);
         if(is_livestream) {
-            if(replay_buffer_size_secs != -1) {
+            if(is_replaying) {
                 fprintf(stderr, "Error: replay mode is not applicable to live streaming\n");
                 _exit(1);
             }
         } else {
-            if(replay_buffer_size_secs == -1) {
+            if(!is_replaying) {
                 char directory_buf[PATH_MAX];
                 snprintf(directory_buf, sizeof(directory_buf), "%s", filename);
                 char *directory = dirname(directory_buf);
@@ -3951,7 +4083,7 @@ int main(int argc, char **argv) {
             }
         }
     } else {
-        if(replay_buffer_size_secs == -1) {
+        if(!is_replaying) {
             filename = "/dev/stdout";
         } else {
             fprintf(stderr, "Error: Option -o is required when using option -r\n");
@@ -4031,7 +4163,7 @@ int main(int argc, char **argv) {
 
     const enum AVPixelFormat video_pix_fmt = get_pixel_format(video_codec, egl.gpu_info.vendor, use_software_video_encoder);
     AVCodecContext *video_codec_context = create_video_codec_context(video_pix_fmt, quality, fps, video_codec_f, low_latency_recording, egl.gpu_info.vendor, framerate_mode, hdr, color_range, keyint, use_software_video_encoder, bitrate_mode, video_codec, video_bitrate);
-    if(replay_buffer_size_secs == -1)
+    if(!is_replaying)
         video_stream = create_stream(av_format_context, video_codec_context);
 
     if(tune == Tune::QUALITY)
@@ -4113,7 +4245,7 @@ int main(int argc, char **argv) {
         AVCodecContext *audio_codec_context = create_audio_codec_context(fps, audio_codec, use_amix, audio_bitrate);
 
         AVStream *audio_stream = nullptr;
-        if(replay_buffer_size_secs == -1)
+        if(!is_replaying)
             audio_stream = create_stream(av_format_context, audio_codec_context);
 
         if(audio_stream && !merged_audio_inputs.track_name.empty())
@@ -4177,26 +4309,9 @@ int main(int argc, char **argv) {
 
     //av_dump_format(av_format_context, 0, filename, 1);
 
-    if (replay_buffer_size_secs == -1 && !(output_format->flags & AVFMT_NOFILE)) {
-        int ret = avio_open(&av_format_context->pb, filename, AVIO_FLAG_WRITE);
-        if (ret < 0) {
-            fprintf(stderr, "Error: Could not open '%s': %s\n", filename, av_error_to_string(ret));
+    if(!is_replaying) {
+        if(!av_open_file_write_header(av_format_context, filename))
             _exit(1);
-        }
-    }
-
-    if(replay_buffer_size_secs == -1) {
-        AVDictionary *options = nullptr;
-        av_dict_set(&options, "strict", "experimental", 0);
-        //av_dict_set_int(&av_format_context->metadata, "video_full_range_flag", 1, 0);
-
-        int ret = avformat_write_header(av_format_context, &options);
-        if (ret < 0) {
-            fprintf(stderr, "Error occurred when writing header to output file: %s\n", av_error_to_string(ret));
-            _exit(1);
-        }
-
-        av_dict_free(&options);
     }
 
     double fps_start_time = clock_get_monotonic_seconds();
@@ -4207,6 +4322,25 @@ int main(int argc, char **argv) {
     bool paused = false;
     double paused_time_offset = 0.0;
     double paused_time_start = 0.0;
+    bool replay_recording = false;
+    RecordingStartResult replay_recording_start_result;
+    int64_t video_frame_pts_start = 0;
+    bool force_iframe_frame = false;
+
+    bool replay_recording_keyframe_found = false;
+    auto record_condition_handler = [is_replaying, &replay_recording_keyframe_found](const AVPacket &av_packet) {
+        if(!is_replaying)
+            return true;
+
+        if(replay_recording_keyframe_found)
+            return true;
+
+        if(av_packet.flags & AV_PKT_FLAG_KEY) {
+            replay_recording_keyframe_found = true;
+            return true;
+        }
+        return false;
+    };
 
     std::mutex write_output_mutex;
     std::mutex audio_filter_mutex;
@@ -4331,7 +4465,7 @@ int main(int argc, char **argv) {
                                 ret = avcodec_send_frame(audio_track.codec_context, audio_device.frame);
                                 if(ret >= 0) {
                                     // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                                    receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, audio_device.frame->pts, av_format_context, replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
+                                    receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, audio_device.frame->pts, av_format_context, replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset, replay_buffer_size_secs == -1, 0, record_condition_handler);
                                 } else {
                                     fprintf(stderr, "Failed to encode audio!\n");
                                 }
@@ -4363,7 +4497,7 @@ int main(int argc, char **argv) {
                             ret = avcodec_send_frame(audio_track.codec_context, audio_device.frame);
                             if(ret >= 0) {
                                 // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                                receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, audio_device.frame->pts, av_format_context, replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
+                                receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, audio_device.frame->pts, av_format_context, replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset, replay_buffer_size_secs == -1, 0, record_condition_handler);
                             } else {
                                 fprintf(stderr, "Failed to encode audio!\n");
                             }
@@ -4397,7 +4531,7 @@ int main(int argc, char **argv) {
                             err = avcodec_send_frame(audio_track.codec_context, aframe);
                             if(err >= 0){
                                 // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                                receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, aframe->pts, av_format_context, replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
+                                receive_frames(audio_track.codec_context, audio_track.stream_index, audio_track.stream, aframe->pts, av_format_context, replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset, replay_buffer_size_secs == -1, 0, record_condition_handler);
                             } else {
                                 fprintf(stderr, "Failed to encode audio!\n");
                             }
@@ -4520,11 +4654,16 @@ int main(int argc, char **argv) {
             gsr_egl_swap_buffers(&egl);
             gsr_video_encoder_copy_textures_to_frame(video_encoder, video_frame, &color_conversion);
 
-            if(hdr && !hdr_metadata_set && replay_buffer_size_secs == -1 && add_hdr_metadata_to_video_stream(capture, video_stream))
+            if(hdr && !hdr_metadata_set && !is_replaying && add_hdr_metadata_to_video_stream(capture, video_stream))
                 hdr_metadata_set = true;
 
             const int64_t expected_frames = std::round((this_video_frame_time - record_start_time) / target_fps);
             const int num_missed_frames = std::max((int64_t)1LL, expected_frames - video_pts_counter);
+
+            if(force_iframe_frame) {
+                video_frame->pict_type = AV_PICTURE_TYPE_I;
+                video_frame->flags |= AV_FRAME_FLAG_KEY;
+            }
 
             // TODO: Check if duplicate frame can be saved just by writing it with a different pts instead of sending it again
             const int num_frames_to_encode = framerate_mode == FramerateMode::CONSTANT ? num_missed_frames : 1;
@@ -4541,18 +4680,28 @@ int main(int argc, char **argv) {
 
                 int ret = avcodec_send_frame(video_codec_context, video_frame);
                 if(ret == 0) {
+                    const bool record_to_file = replay_buffer_size_secs == -1 || replay_recording_start_result.av_format_context != nullptr;
+                    AVFormatContext *recording_format_context = replay_recording_start_result.av_format_context ? replay_recording_start_result.av_format_context : av_format_context;
+                    AVStream *recording_video_stream = replay_recording_start_result.video_stream ? replay_recording_start_result.video_stream : video_stream;
                     // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                    receive_frames(video_codec_context, VIDEO_STREAM_INDEX, video_stream, video_frame->pts, av_format_context,
-                        replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset);
+                    receive_frames(video_codec_context, VIDEO_STREAM_INDEX, recording_video_stream, video_frame->pts, recording_format_context,
+                        replay_start_time, frame_data_queue, replay_buffer_size_secs, frames_erased, write_output_mutex, paused_time_offset, record_to_file, video_frame_pts_start, record_condition_handler);
+                    // TODO: Also update replay recording for audio, with record to file, recording format context, recording audio stream and pts offset
                 } else {
                     fprintf(stderr, "Error: avcodec_send_frame failed, error: %s\n", av_error_to_string(ret));
                 }
             }
 
+            if(force_iframe_frame) {
+                force_iframe_frame = false;
+                video_frame->pict_type = AV_PICTURE_TYPE_NONE;
+                video_frame->flags &= ~AV_FRAME_FLAG_KEY;
+            }
+
             video_pts_counter += num_frames_to_encode;
         }
 
-        if(toggle_pause == 1) {
+        if(toggle_pause == 1 && !is_replaying) {
             const bool new_paused_state = !paused;
             if(new_paused_state) {
                 paused_time_start = clock_get_monotonic_seconds();
@@ -4566,6 +4715,38 @@ int main(int argc, char **argv) {
             paused = !paused;
         }
 
+        if(toggle_replay_recording && is_replaying) {
+            const bool new_replay_recording_state = !replay_recording;
+            if(new_replay_recording_state) {
+                // TODO: Filename
+                replay_recording_start_result = start_recording_create_streams("video.mp4", container_format, video_codec_context, audio_tracks, hdr, capture);
+                if(replay_recording_start_result.av_format_context) {
+                    replay_recording_keyframe_found = false;
+                    replay_recording = true;
+                    video_frame_pts_start = video_frame->pts;
+                    force_iframe_frame = true;
+                    fprintf(stderr, "Started recording\n");
+                } else {
+                    // TODO: Output "Error: failed to start recording" to stdout, catch in gsr-ui. Catch all That starts with Error:
+                    fprintf(stderr, "Failed to start recording\n");
+                }
+            } else if(replay_recording_start_result.av_format_context) {
+                if(stop_recording_close_streams(replay_recording_start_result.av_format_context)) {
+                    // TODO: Output saved filepath to stdout
+                    fprintf(stderr, "Saved recording\n");
+                    // TODO: run this, with correct filename
+                    //run_recording_saved_script_async(recording_saved_script, filename, "regular");
+                } else {
+                    // TODO: Output "Error: failed to start recording" to stdout, catch in gsr-ui. Catch all That starts with Error:
+                    fprintf(stderr, "Failed to save recording\n");
+                }
+                replay_recording_start_result = RecordingStartResult{};
+                replay_recording = false;
+            }
+
+            toggle_replay_recording = 0;
+        }
+
         if(save_replay_thread.valid() && save_replay_thread.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             save_replay_thread.get();
             puts(save_replay_output_filepath.c_str());
@@ -4577,12 +4758,13 @@ int main(int argc, char **argv) {
             save_replay_packets.clear();
         }
 
-        if(save_replay == 1 && !save_replay_thread.valid() && replay_buffer_size_secs != -1) {
-            save_replay = 0;
-            save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, frame_data_queue, frames_erased, filename, container_format, file_extension, write_output_mutex, date_folders, hdr, capture);
+        if(save_replay_seconds != 0 && !save_replay_thread.valid() && is_replaying) {
+            const int current_save_replay_seconds = save_replay_seconds;
+            save_replay_seconds = 0;
+            save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, frame_data_queue, frames_erased, filename, container_format, file_extension, write_output_mutex, date_folders, hdr, capture, current_save_replay_seconds);
 
             std::lock_guard<std::mutex> lock(write_output_mutex);
-            if(restart_replay_on_save) {
+            if(restart_replay_on_save && current_save_replay_seconds == save_replay_seconds_full) {
                 frame_data_queue.clear();
                 frames_erased = true;
                 replay_start_time = clock_get_monotonic_seconds() - paused_time_offset;
@@ -4637,13 +4819,21 @@ int main(int argc, char **argv) {
     if(amix_thread.joinable())
         amix_thread.join();
 
-    if (replay_buffer_size_secs == -1 && av_write_trailer(av_format_context) != 0) {
+    // TODO: Replace this with start_recording_create_steams
+    if(!is_replaying && av_write_trailer(av_format_context) != 0) {
         fprintf(stderr, "Failed to write trailer\n");
     }
 
-    if(replay_buffer_size_secs == -1 && !(output_format->flags & AVFMT_NOFILE)) {
+    if(!is_replaying) {
         avio_close(av_format_context->pb);
         avformat_free_context(av_format_context);
+    }
+
+    if(replay_recording_start_result.av_format_context) {
+        if(stop_recording_close_streams(replay_recording_start_result.av_format_context)) {
+            // TODO: run this, with correct filename
+            //run_recording_saved_script_async(recording_saved_script, filename, "regular");
+        }
     }
 
     gsr_damage_deinit(&damage);
@@ -4654,7 +4844,7 @@ int main(int argc, char **argv) {
     gsr_pipewire_audio_deinit(&pipewire_audio);
 #endif
 
-    if(replay_buffer_size_secs == -1 && recording_saved_script)
+    if(!is_replaying && recording_saved_script)
         run_recording_saved_script_async(recording_saved_script, filename, "regular");
 
     if(dpy) {

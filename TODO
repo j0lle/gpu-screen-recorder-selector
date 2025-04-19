@@ -269,3 +269,5 @@ Fix opengl context broken after suspend on nvidia by using this: https://registr
 HDR looks incorrect, brightest point gets cut off.
 
 Make "screen" capture the preferred monitor.
+
+When webcam support is added add the option to add it as a second video track, to make it easier to edit in video editors.
