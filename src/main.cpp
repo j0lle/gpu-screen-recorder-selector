@@ -2989,6 +2989,7 @@ int main(int argc, char **argv) {
     setlocale(LC_ALL, "C"); // Sigh... stupid C
 
     signal(SIGINT, stop_handler);
+    signal(SIGTERM, stop_handler);
     signal(SIGUSR1, save_replay_handler);
     signal(SIGUSR2, toggle_pause_handler);
     signal(SIGRTMIN, toggle_replay_recording_handler);
