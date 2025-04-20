@@ -11,16 +11,6 @@
 #define GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS 2
 
 typedef enum {
-    GSR_COLOR_RANGE_LIMITED,
-    GSR_COLOR_RANGE_FULL
-} gsr_color_range;
-
-typedef enum {
-    GSR_COLOR_DEPTH_8_BITS,
-    GSR_COLOR_DEPTH_10_BITS
-} gsr_color_depth;
-
-typedef enum {
     GSR_SOURCE_COLOR_RGB,
     GSR_SOURCE_COLOR_BGR
 } gsr_source_color;

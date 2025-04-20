@@ -123,7 +123,9 @@ You can see a list of capture options to record if you run `gpu-screen-recorder 
   window
   DP-1|1920x1080
 ```
-in this case you could record a window or a monitor with the name `DP-1`.
+in this case you could record a window or a monitor with the name `DP-1`.\
+To list available audio devices that you can use you can run `gpu-screen-recorder --list-audio-devices` and the name to use is on the left size of the `|`.\
+To list available audio application names that you can use you can run `gpu-screen-recorder --list-application-audio`.
 ## Streaming
 Streaming works the same as recording, but the `-o` argument should be path to the live streaming service you want to use (including your live streaming key). Take a look at `scripts/twitch-stream.sh` to see an example of how to stream to twitch.
 ## Replay mode

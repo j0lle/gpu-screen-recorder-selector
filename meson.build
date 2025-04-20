@@ -37,6 +37,8 @@ src = [
     'src/cursor.c',
     'src/damage.c',
     'src/image_writer.c',
+    'src/args_parser.c',
+    'src/defs.c',
     'src/sound.cpp',
     'src/main.cpp',
 ]
