@@ -135,6 +135,9 @@ The file path to the saved replay is output to stdout. All other output from GPU
 You can also use the `-sc` option to specify a script that should be run (asynchronously) when the video has been saved and the script will have access to the location of the saved file as its first argument.
 This can be used for example to show a notification when a replay has been saved, to rename the video with a title that matches the game played (see `scripts/record-save-application-name.sh` as an example on how to do this on X11) or to re-encode the video.\
 The replay buffer is stored in ram (as encoded video), so don't use a too large replay time and/or video quality unless you have enough ram to store it.
+## Recording while using replay/streaming
+You can record a regular video while using replay/streaming by launching GPU Screen Recorder with the `-ro` option to specify a directory where to save the recording.\
+To start/stop (and save) recording use the SIGRTMIN signal, for example `pkill -SIGRTMIN -f gpu-screen-recorder`. The name of the video will be displayed in stdout when saving the video.
 ## Controlling GPU Screen Recorder remotely
 To save a video in replay mode, you need to send signal SIGUSR1 to gpu screen recorder. You can do this by running `pkill -SIGUSR1 -f gpu-screen-recorder`.\
 To stop recording send SIGINT to gpu screen recorder. You can do this by running `pkill -SIGINT -f gpu-screen-recorder` or pressing `Ctrl-C` in the terminal that runs gpu screen recorder. When recording a regular non-replay video this will also save the video.\
