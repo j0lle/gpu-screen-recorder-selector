@@ -39,6 +39,7 @@ src = [
     'src/image_writer.c',
     'src/args_parser.c',
     'src/defs.c',
+    'src/replay_buffer.c',
     'src/sound.cpp',
     'src/main.cpp',
 ]

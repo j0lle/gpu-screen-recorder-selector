@@ -17,7 +17,7 @@
 #endif
 
 static const ArgEnum video_codec_enums[] = {
-    { .name = "auto",        .value = -1                         },
+    { .name = "auto",        .value = GSR_VIDEO_CODEC_AUTO       },
     { .name = "h264",        .value = GSR_VIDEO_CODEC_H264       },
     { .name = "h265",        .value = GSR_VIDEO_CODEC_HEVC       },
     { .name = "hevc",        .value = GSR_VIDEO_CODEC_HEVC       },
@@ -53,7 +53,7 @@ static const ArgEnum framerate_mode_enums[] = {
 };
 
 static const ArgEnum bitrate_mode_enums[] = {
-    { .name = "auto", .value = -1                    },
+    { .name = "auto", .value = GSR_BITRATE_MODE_AUTO },
     { .name = "qp",   .value = GSR_BITRATE_MODE_QP   },
     { .name = "cbr",  .value = GSR_BITRATE_MODE_CBR  },
     { .name = "vbr",  .value = GSR_BITRATE_MODE_VBR  },
@@ -140,7 +140,8 @@ static const char* args_get_value_by_key(Arg *args, int num_args, const char *ke
 
 static bool args_get_boolean_by_key(Arg *args, int num_args, const char *key, bool default_value) {
     Arg *arg = args_get_by_key(args, num_args, key);
-    if(!arg || arg->num_values == 0) {
+    assert(arg);
+    if(arg->num_values == 0) {
         return default_value;
     } else {
         assert(arg->type == ARG_TYPE_BOOLEAN);
@@ -150,7 +151,8 @@ static bool args_get_boolean_by_key(Arg *args, int num_args, const char *key, bo
 
 static int args_get_enum_by_key(Arg *args, int num_args, const char *key, int default_value) {
     Arg *arg = args_get_by_key(args, num_args, key);
-    if(!arg || arg->num_values == 0) {
+    assert(arg);
+    if(arg->num_values == 0) {
         return default_value;
     } else {
         assert(arg->type == ARG_TYPE_ENUM);
@@ -160,7 +162,8 @@ static int args_get_enum_by_key(Arg *args, int num_args, const char *key, int de
 
 static int64_t args_get_i64_by_key(Arg *args, int num_args, const char *key, int64_t default_value) {
     Arg *arg = args_get_by_key(args, num_args, key);
-    if(!arg || arg->num_values == 0) {
+    assert(arg);
+    if(arg->num_values == 0) {
         return default_value;
     } else {
         assert(arg->type == ARG_TYPE_I64);
@@ -170,7 +173,8 @@ static int64_t args_get_i64_by_key(Arg *args, int num_args, const char *key, int
 
 static double args_get_double_by_key(Arg *args, int num_args, const char *key, double default_value) {
     Arg *arg = args_get_by_key(args, num_args, key);
-    if(!arg || arg->num_values == 0) {
+    assert(arg);
+    if(arg->num_values == 0) {
         return default_value;
     } else {
         assert(arg->type == ARG_TYPE_DOUBLE);
@@ -181,7 +185,7 @@ static double args_get_double_by_key(Arg *args, int num_args, const char *key, d
 static void usage_header() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [--list-capture-options [card_path]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -358,6 +362,9 @@ static void usage_full() {
     printf("        In replay mode this has to be a directory instead of a file.\n");
     printf("        Note: the directory to the file is created automatically if it doesn't already exist.\n");
     printf("\n");
+    printf("  -ro   The output directory for regular recordings in replay/streaming mode. Required to start recording in replay/streaming mode.\n");
+    printf("        Note: the directory to the file is created automatically if it doesn't already exist.\n");
+    printf("\n");
     printf("  -v    Prints fps and damage info once per second. Optional, set to 'yes' by default.\n");
     printf("\n");
     printf("  -gl-debug\n");
@@ -376,7 +383,7 @@ static void usage_full() {
     printf("  Send signal SIGRTMIN+4 to gpu-screen-recorder (pkill -SIGRTMIN+4 -f gpu-screen-recorder) to save a replay of the last 5 minutes (when in replay mode).\n");
     printf("  Send signal SIGRTMIN+5 to gpu-screen-recorder (pkill -SIGRTMIN+5 -f gpu-screen-recorder) to save a replay of the last 10 minutes (when in replay mode).\n");
     printf("  Send signal SIGRTMIN+6 to gpu-screen-recorder (pkill -SIGRTMIN+6 -f gpu-screen-recorder) to save a replay of the last 30 minutes (when in replay mode).\n");
-    printf("  Send signal SIGRTMIN to gpu-screen-recorder (pkill -SIGRTMIN -f gpu-screen-recorder) to start/stop recording a regular video when in replay mode.\n");
+    printf("  Send signal SIGRTMIN to gpu-screen-recorder (pkill -SIGRTMIN -f gpu-screen-recorder) to start/stop recording a regular video when in replay/streaming mode.\n");
     printf("\n");
     printf("EXAMPLES:\n");
     printf("  %s -w screen -f 60 -a default_output -o video.mp4\n", program_name);
@@ -634,6 +641,8 @@ static bool args_parser_set_values(args_parser *self) {
     self->is_output_piped = strcmp(self->filename, "/dev/stdout") == 0;
     self->low_latency_recording = self->is_livestream || self->is_output_piped;
 
+    self->replay_recording_directory = args_get_value_by_key(self->args, NUM_ARGS, "-ro");
+
     const bool is_portal_capture = strcmp(self->window, "portal") == 0;
     if(!self->restore_portal_session && is_portal_capture)
         fprintf(stderr, "Info: option '-w portal' was used without '-restore-portal-session yes'. The previous screencast session will be ignored\n");
@@ -646,8 +655,8 @@ static bool args_parser_set_values(args_parser *self) {
     return true;
 }
 
-bool args_parser_parse(args_parser *self, int argc, char **argv, const args_handlers *args_handlers, void *userdata) {
-    assert(args_handlers);
+bool args_parser_parse(args_parser *self, int argc, char **argv, const args_handlers *arg_handlers, void *userdata) {
+    assert(arg_handlers);
     memset(self, 0, sizeof(*self));
 
     if(argc <= 1) {
@@ -661,27 +670,27 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     }
 
     if(argc == 2 && strcmp(argv[1], "--info") == 0) {
-        args_handlers->info(userdata);
+        arg_handlers->info(userdata);
         return true;
     }
 
     if(argc == 2 && strcmp(argv[1], "--list-audio-devices") == 0) {
-        args_handlers->list_audio_devices(userdata);
+        arg_handlers->list_audio_devices(userdata);
         return true;
     }
 
     if(argc == 2 && strcmp(argv[1], "--list-application-audio") == 0) {
-        args_handlers->list_application_audio(userdata);
+        arg_handlers->list_application_audio(userdata);
         return true;
     }
 
     if(strcmp(argv[1], "--list-capture-options") == 0) {
         if(argc == 2) {
-            args_handlers->list_capture_options(NULL, userdata);
+            arg_handlers->list_capture_options(NULL, userdata);
             return true;
         } else if(argc == 3 || argc == 4) {
             const char *card_path = argv[2];
-            args_handlers->list_capture_options(card_path, userdata);
+            arg_handlers->list_capture_options(card_path, userdata);
             return true;
         } else {
             fprintf(stderr, "Error: expected --list-capture-options to be called with either no extra arguments or 1 extra argument (card path)\n");
@@ -690,7 +699,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     }
 
     if(argc == 2 && strcmp(argv[1], "--version") == 0) {
-        args_handlers->version(userdata);
+        arg_handlers->version(userdata);
         return true;
     }
 
@@ -703,6 +712,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     self->args[arg_index++] = (Arg){ .key = "-a",                             .optional = true,  .list = true,  .type = ARG_TYPE_STRING  };
     self->args[arg_index++] = (Arg){ .key = "-q",                             .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
     self->args[arg_index++] = (Arg){ .key = "-o",                             .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
+    self->args[arg_index++] = (Arg){ .key = "-ro",                            .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
     self->args[arg_index++] = (Arg){ .key = "-r",                             .optional = true,  .list = false, .type = ARG_TYPE_I64, .integer_value_min = 2, .integer_value_max = 10800 };
     self->args[arg_index++] = (Arg){ .key = "-restart-replay-on-save",        .optional = true,  .list = false, .type = ARG_TYPE_BOOLEAN };
     self->args[arg_index++] = (Arg){ .key = "-k",                             .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = video_codec_enums, .num_enum_values = sizeof(video_codec_enums)/sizeof(ArgEnum) };
@@ -723,6 +733,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     self->args[arg_index++] = (Arg){ .key = "-restore-portal-session",        .optional = true,  .list = false, .type = ARG_TYPE_BOOLEAN };
     self->args[arg_index++] = (Arg){ .key = "-portal-session-token-filepath", .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
     self->args[arg_index++] = (Arg){ .key = "-encoder",                       .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = video_encoder_enums, .num_enum_values = sizeof(video_encoder_enums)/sizeof(ArgEnum) };
+    assert(arg_index == NUM_ARGS);
 
     for(int i = 1; i < argc; i += 2) {
         const char *arg_name = argv[i];

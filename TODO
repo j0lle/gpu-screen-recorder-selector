@@ -248,7 +248,8 @@ Support high quality scaling with -s by using lanczos.
 
 Support spanning multiple monitors with region capture. This would also allow the user to record multiple monitors at the same time, the same way screen-direct works on nvidia x11.
 
-When webcam support is added also support v4l2loopback? this is done by using avdevice_register_all(); and -c v4l2 -o /dev/video0; but it needs to output raw data as well instead of h264 and possibly yuv420p. Maybe add a -k yuv420p option to do that.
+When webcam support is added also support v4l2loopback? this is done by using avdevice_register_all(); and -c v4l2 -o /dev/video0; but it needs to output raw data as well instead of h264 and possibly yuv420p. Maybe add a -k yuv420p option to do that or -k rgb.
+    This would be implemented by outputting the raw data directly into the output file, without using the video encoder.
 
 Do proper exit, to call gsr_capture_destroy which will properly stop gsr-kms-server. Otherwise there can be zombie gsr-kms-server on error.
 
@@ -276,5 +277,4 @@ Fix constant framerate not working properly on amd/intel because capture framera
     game framerate, which doesn't work well when you need to encode multiple duplicate frames (AMD/Intel is slow at encoding!).
     It also appears to skip audio frames on nvidia wayland? why? that should be fine, but it causes video stuttering because of audio/video sync.
 
-Add option to set replay recording directory.
-Add the option to record while live streaming (with the same way it's done for replay, but require setting streaming recording directory).
+Add option to pass a fd (from socketpair) to use for rpc. In the rpc have a common header, with protocol version, data type and data in an enum.

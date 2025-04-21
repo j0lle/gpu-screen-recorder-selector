@@ -8,7 +8,7 @@
 
 typedef struct gsr_egl gsr_egl;
 
-#define NUM_ARGS 28
+#define NUM_ARGS 29
 #define WINDOW_STR_MAX_SIZE 128
 
 typedef enum {
@@ -71,6 +71,7 @@ typedef struct {
     char window[WINDOW_STR_MAX_SIZE];
     const char *container_format;
     const char *filename;
+    const char *replay_recording_directory;
     const char *portal_session_token_filepath;
     const char *recording_saved_script;
     bool verbose;
