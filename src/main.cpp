@@ -3712,7 +3712,10 @@ int main(int argc, char **argv) {
         }
 
         if(save_replay_seconds != 0 && !save_replay_thread.valid() && is_replaying) {
-            const int current_save_replay_seconds = save_replay_seconds;
+            int current_save_replay_seconds = save_replay_seconds;
+            if(current_save_replay_seconds > 0)
+                current_save_replay_seconds += arg_parser.keyint;
+
             save_replay_seconds = 0;
             save_replay_output_filepath.clear();
             save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, &video_encoder->replay_buffer, arg_parser.filename, arg_parser.container_format, file_extension, arg_parser.date_folders, hdr, capture, current_save_replay_seconds);
@@ -3764,6 +3767,11 @@ int main(int argc, char **argv) {
     }
 
     if(replay_recording_start_result.av_format_context) {
+        for(size_t id : replay_recording_items) {
+            gsr_video_encoder_remove_recording_destination(video_encoder, id);
+        }
+        replay_recording_items.clear();
+
         if(stop_recording_close_streams(replay_recording_start_result.av_format_context)) {
             fprintf(stderr, "Stopped recording\n");
             puts(replay_recording_filepath.c_str());
