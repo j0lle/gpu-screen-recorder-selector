@@ -10,6 +10,7 @@ extern "C" {
 #ifdef GSR_APP_AUDIO
 #include "../include/pipewire_audio.h"
 #endif
+#include "../include/encoder/encoder.h"
 #include "../include/encoder/video/nvenc.h"
 #include "../include/encoder/video/vaapi.h"
 #include "../include/encoder/video/vulkan.h"
@@ -3143,14 +3144,20 @@ int main(int argc, char **argv) {
     video_frame->width = capture_metadata.width;
     video_frame->height = capture_metadata.height;
 
+    const size_t estimated_replay_buffer_packets = calculate_estimated_replay_buffer_packets(arg_parser.replay_buffer_size_secs, arg_parser.fps, arg_parser.audio_codec, requested_audio_inputs);
+    gsr_encoder encoder;
+    if(!gsr_encoder_init(&encoder, estimated_replay_buffer_packets)) {
+        fprintf(stderr, "Error: failed to create encoder\n");
+        _exit(1);
+    }
+
     gsr_video_encoder *video_encoder = create_video_encoder(&egl, arg_parser);
     if(!video_encoder) {
         fprintf(stderr, "Error: failed to create video encoder\n");
         _exit(1);
     }
 
-    const size_t estimated_replay_buffer_packets = calculate_estimated_replay_buffer_packets(arg_parser.replay_buffer_size_secs, arg_parser.fps, arg_parser.audio_codec, requested_audio_inputs);
-    if(!gsr_video_encoder_start(video_encoder, video_codec_context, video_frame, estimated_replay_buffer_packets)) {
+    if(!gsr_video_encoder_start(video_encoder, video_codec_context, video_frame)) {
         fprintf(stderr, "Error: failed to start video encoder\n");
         _exit(1);
     }
@@ -3181,7 +3188,7 @@ int main(int argc, char **argv) {
 
     if(video_stream) {
         avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
-        gsr_video_encoder_add_recording_destination(video_encoder, video_codec_context, av_format_context, video_stream, 0);
+        gsr_encoder_add_recording_destination(&encoder, video_codec_context, av_format_context, video_stream, 0);
     }
 
     int audio_max_frame_size = 1024;
@@ -3193,7 +3200,7 @@ int main(int argc, char **argv) {
         AVStream *audio_stream = nullptr;
         if(!is_replaying) {
             audio_stream = create_stream(av_format_context, audio_codec_context);
-            if(gsr_video_encoder_add_recording_destination(video_encoder, audio_codec_context, av_format_context, audio_stream, 0) == (size_t)-1)
+            if(gsr_encoder_add_recording_destination(&encoder, audio_codec_context, av_format_context, audio_stream, 0) == (size_t)-1)
                 fprintf(stderr, "gsr error: added too many audio sources\n");
         }
 
@@ -3396,7 +3403,7 @@ int main(int argc, char **argv) {
                                 ret = avcodec_send_frame(audio_track.codec_context, audio_device.frame);
                                 if(ret >= 0) {
                                     // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                                    gsr_video_encoder_receive_packets(video_encoder, audio_track.codec_context, audio_device.frame->pts, audio_track.stream_index);
+                                    gsr_encoder_receive_packets(&encoder, audio_track.codec_context, audio_device.frame->pts, audio_track.stream_index);
                                 } else {
                                     fprintf(stderr, "Failed to encode audio!\n");
                                 }
@@ -3430,7 +3437,7 @@ int main(int argc, char **argv) {
                             ret = avcodec_send_frame(audio_track.codec_context, audio_device.frame);
                             if(ret >= 0) {
                                 // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                                gsr_video_encoder_receive_packets(video_encoder, audio_track.codec_context, audio_device.frame->pts, audio_track.stream_index);
+                                gsr_encoder_receive_packets(&encoder, audio_track.codec_context, audio_device.frame->pts, audio_track.stream_index);
                             } else {
                                 fprintf(stderr, "Failed to encode audio!\n");
                             }
@@ -3465,7 +3472,7 @@ int main(int argc, char **argv) {
                             err = avcodec_send_frame(audio_track.codec_context, aframe);
                             if(err >= 0){
                                 // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                                gsr_video_encoder_receive_packets(video_encoder, audio_track.codec_context, aframe->pts, audio_track.stream_index);
+                                gsr_encoder_receive_packets(&encoder, audio_track.codec_context, aframe->pts, audio_track.stream_index);
                             } else {
                                 fprintf(stderr, "Failed to encode audio!\n");
                             }
@@ -3616,7 +3623,7 @@ int main(int argc, char **argv) {
                 int ret = avcodec_send_frame(video_codec_context, video_frame);
                 if(ret == 0) {
                     // TODO: Move to separate thread because this could write to network (for example when livestreaming)
-                    gsr_video_encoder_receive_packets(video_encoder, video_codec_context, video_frame->pts, VIDEO_STREAM_INDEX);
+                    gsr_encoder_receive_packets(&encoder, video_codec_context, video_frame->pts, VIDEO_STREAM_INDEX);
                 } else {
                     fprintf(stderr, "Error: avcodec_send_frame failed, error: %s\n", av_error_to_string(ret));
                 }
@@ -3659,12 +3666,12 @@ int main(int argc, char **argv) {
                 replay_recording_filepath = create_new_recording_filepath_from_timestamp(arg_parser.replay_recording_directory, "Recording", file_extension, arg_parser.date_folders);
                 replay_recording_start_result = start_recording_create_streams(replay_recording_filepath.c_str(), arg_parser.container_format, video_codec_context, audio_tracks, hdr, capture);
                 if(replay_recording_start_result.av_format_context) {
-                    const size_t video_recording_destination_id = gsr_video_encoder_add_recording_destination(video_encoder, video_codec_context, replay_recording_start_result.av_format_context, replay_recording_start_result.video_stream, video_frame->pts);
+                    const size_t video_recording_destination_id = gsr_encoder_add_recording_destination(&encoder, video_codec_context, replay_recording_start_result.av_format_context, replay_recording_start_result.video_stream, video_frame->pts);
                     if(video_recording_destination_id != (size_t)-1)
                         replay_recording_items.push_back(video_recording_destination_id);
 
                     for(const auto &audio_input : replay_recording_start_result.audio_inputs) {
-                        const size_t audio_recording_destination_id = gsr_video_encoder_add_recording_destination(video_encoder, audio_input.audio_track->codec_context, replay_recording_start_result.av_format_context, audio_input.stream, audio_input.audio_track->pts);
+                        const size_t audio_recording_destination_id = gsr_encoder_add_recording_destination(&encoder, audio_input.audio_track->codec_context, replay_recording_start_result.av_format_context, audio_input.stream, audio_input.audio_track->pts);
                         if(audio_recording_destination_id != (size_t)-1)
                             replay_recording_items.push_back(audio_recording_destination_id);
                     }
@@ -3678,7 +3685,7 @@ int main(int argc, char **argv) {
                 }
             } else if(replay_recording_start_result.av_format_context) {
                 for(size_t id : replay_recording_items) {
-                    gsr_video_encoder_remove_recording_destination(video_encoder, id);
+                    gsr_encoder_remove_recording_destination(&encoder, id);
                 }
                 replay_recording_items.clear();
 
@@ -3718,10 +3725,10 @@ int main(int argc, char **argv) {
 
             save_replay_seconds = 0;
             save_replay_output_filepath.clear();
-            save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, &video_encoder->replay_buffer, arg_parser.filename, arg_parser.container_format, file_extension, arg_parser.date_folders, hdr, capture, current_save_replay_seconds);
+            save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, &encoder.replay_buffer, arg_parser.filename, arg_parser.container_format, file_extension, arg_parser.date_folders, hdr, capture, current_save_replay_seconds);
 
             if(arg_parser.restart_replay_on_save && current_save_replay_seconds == save_replay_seconds_full) {
-                gsr_replay_buffer_clear(&video_encoder->replay_buffer);
+                gsr_replay_buffer_clear(&encoder.replay_buffer);
                 replay_start_time = clock_get_monotonic_seconds() - paused_time_offset;
             }
         }
@@ -3768,7 +3775,7 @@ int main(int argc, char **argv) {
 
     if(replay_recording_start_result.av_format_context) {
         for(size_t id : replay_recording_items) {
-            gsr_video_encoder_remove_recording_destination(video_encoder, id);
+            gsr_encoder_remove_recording_destination(&encoder, id);
         }
         replay_recording_items.clear();
 
@@ -3807,6 +3814,7 @@ int main(int argc, char **argv) {
     gsr_damage_deinit(&damage);
     gsr_color_conversion_deinit(&color_conversion);
     gsr_video_encoder_destroy(video_encoder, video_codec_context);
+    gsr_encoder_deinit(&encoder);
     gsr_capture_destroy(capture);
 #ifdef GSR_APP_AUDIO
     gsr_pipewire_audio_deinit(&pipewire_audio);

@@ -1,0 +1,44 @@
+#ifndef GSR_ENCODER_H
+#define GSR_ENCODER_H
+
+#include "../replay_buffer.h"
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <pthread.h>
+
+#define GSR_MAX_RECORDING_DESTINATIONS 128
+
+typedef struct AVCodecContext AVCodecContext;
+typedef struct AVFormatContext AVFormatContext;
+typedef struct AVStream AVStream;
+
+typedef struct {
+    size_t id;
+    AVCodecContext *codec_context;
+    AVFormatContext *format_context;
+    AVStream *stream;
+    int64_t start_pts;
+    bool has_received_keyframe;
+} gsr_encoder_recording_destination;
+
+typedef struct {
+    gsr_replay_buffer replay_buffer;
+    bool has_replay_buffer;
+    pthread_mutex_t file_write_mutex;
+    bool mutex_created;
+
+    gsr_encoder_recording_destination recording_destinations[GSR_MAX_RECORDING_DESTINATIONS];
+    size_t num_recording_destinations;
+    size_t recording_destination_id_counter;
+} gsr_encoder;
+
+bool gsr_encoder_init(gsr_encoder *self, size_t replay_buffer_num_packets);
+void gsr_encoder_deinit(gsr_encoder *self);
+
+void gsr_encoder_receive_packets(gsr_encoder *self, AVCodecContext *codec_context, int64_t pts, int stream_index);
+/* Returns the id to the recording destination, or -1 on error */
+size_t gsr_encoder_add_recording_destination(gsr_encoder *self, AVCodecContext *codec_context, AVFormatContext *format_context, AVStream *stream, int64_t start_pts);
+bool gsr_encoder_remove_recording_destination(gsr_encoder *self, size_t id);
+
+#endif /* GSR_ENCODER_H */
