@@ -3665,7 +3665,7 @@ int main(int argc, char **argv) {
             if(new_replay_recording_state) {
                 std::lock_guard<std::mutex> lock(audio_filter_mutex);
                 replay_recording_items.clear();
-                replay_recording_filepath = create_new_recording_filepath_from_timestamp(arg_parser.replay_recording_directory, "Recording", file_extension, arg_parser.date_folders);
+                replay_recording_filepath = create_new_recording_filepath_from_timestamp(arg_parser.replay_recording_directory, "Video", file_extension, arg_parser.date_folders);
                 replay_recording_start_result = start_recording_create_streams(replay_recording_filepath.c_str(), arg_parser.container_format, video_codec_context, audio_tracks, hdr, capture);
                 if(replay_recording_start_result.av_format_context) {
                     const size_t video_recording_destination_id = gsr_encoder_add_recording_destination(&encoder, video_codec_context, replay_recording_start_result.av_format_context, replay_recording_start_result.video_stream, video_frame->pts);
