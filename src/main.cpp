@@ -2892,6 +2892,7 @@ static size_t calculate_estimated_replay_buffer_packets(int64_t replay_buffer_si
     int audio_fps = 0;
     if(!audio_inputs.empty())
         audio_fps = AUDIO_SAMPLE_RATE / audio_codec_get_frame_size(audio_codec);
+
     return replay_buffer_size_secs * (fps + audio_fps * audio_inputs.size());
 }
 
@@ -3654,7 +3655,8 @@ int main(int argc, char **argv) {
 
         if(toggle_replay_recording && !arg_parser.replay_recording_directory) {
             toggle_replay_recording = 0;
-            fprintf(stderr, "Error: unable to start recording since the -ro option was not specified\n");
+            printf("Error: Unable to start recording since the -ro option was not specified\n");
+            fflush(stdout);
         }
 
         if(toggle_replay_recording && arg_parser.replay_recording_directory) {
@@ -3680,8 +3682,8 @@ int main(int argc, char **argv) {
                     force_iframe_frame = true;
                     fprintf(stderr, "Started recording\n");
                 } else {
-                    // TODO: Output "Error: failed to start recording" to stdout, catch in gsr-ui. Catch all That starts with Error:
-                    fprintf(stderr, "Failed to start recording\n");
+                    printf("Error: Failed to start recording\n");
+                    fflush(stdout);
                 }
             } else if(replay_recording_start_result.av_format_context) {
                 for(size_t id : replay_recording_items) {
@@ -3696,8 +3698,8 @@ int main(int argc, char **argv) {
                     if(arg_parser.recording_saved_script)
                         run_recording_saved_script_async(arg_parser.recording_saved_script, replay_recording_filepath.c_str(), "regular");
                 } else {
-                    // TODO: Output "Error: failed to start recording" to stdout, catch in gsr-ui. Catch all That starts with Error:
-                    fprintf(stderr, "Failed to save recording\n");
+                    printf("Error: Failed to save recording\n");
+                    fflush(stdout);
                 }
 
                 replay_recording_start_result = RecordingStartResult{};
@@ -3709,7 +3711,8 @@ int main(int argc, char **argv) {
         if(save_replay_thread.valid() && save_replay_thread.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             save_replay_thread.get();
             if(save_replay_output_filepath.empty()) {
-                // TODO: Output failed to save
+                printf("Error: Failed to save replay\n");
+                fflush(stdout);
             } else {
                 puts(save_replay_output_filepath.c_str());
                 fflush(stdout);
@@ -3786,8 +3789,8 @@ int main(int argc, char **argv) {
             if(arg_parser.recording_saved_script)
                 run_recording_saved_script_async(arg_parser.recording_saved_script, replay_recording_filepath.c_str(), "regular");
         } else {
-            // TODO: Output "Error: failed to start recording" to stdout, catch in gsr-ui. Catch all That starts with Error:
-            fprintf(stderr, "Failed to save recording\n");
+            printf("Error: Failed to save recording\n");
+            fflush(stdout);
         }
     }
 
