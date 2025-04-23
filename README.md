@@ -85,9 +85,7 @@ These are the dependencies needed to build GPU Screen Recorder:
 * libva (and libva-drm)
 * libdrm
 * libcap
-* wayland-client
-* wayland-egl
-* wayland-scanner
+* wayland (wayland-client, wayland-egl, wayland-scanner)
 
 ## Runtime dependencies
 There are also additional dependencies needed at runtime depending on your GPU vendor:
@@ -137,7 +135,8 @@ This can be used for example to show a notification when a replay has been saved
 The replay buffer is stored in ram (as encoded video), so don't use a too large replay time and/or video quality unless you have enough ram to store it.
 ## Recording while using replay/streaming
 You can record a regular video while using replay/streaming by launching GPU Screen Recorder with the `-ro` option to specify a directory where to save the recording.\
-To start/stop (and save) recording use the SIGRTMIN signal, for example `pkill -SIGRTMIN -f gpu-screen-recorder`. The name of the video will be displayed in stdout when saving the video.
+To start/stop (and save) recording use the SIGRTMIN signal, for example `pkill -SIGRTMIN -f gpu-screen-recorder`. The name of the video will be displayed in stdout when saving the video.\
+This way of recording while using replay/streaming is more efficient than running GPU Screen Recorder multiple times since this way it only records the screen and encodes the video once.
 ## Controlling GPU Screen Recorder remotely
 To save a video in replay mode, you need to send signal SIGUSR1 to gpu screen recorder. You can do this by running `pkill -SIGUSR1 -f gpu-screen-recorder`.\
 To stop recording send SIGINT to gpu screen recorder. You can do this by running `pkill -SIGINT -f gpu-screen-recorder` or pressing `Ctrl-C` in the terminal that runs gpu screen recorder. When recording a regular non-replay video this will also save the video.\
