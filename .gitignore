@@ -12,6 +12,7 @@ tests/compile_commands.json
 .vscode/
 
 build/
+debug-build/
 
 *.o
 gpu-screen-recorder

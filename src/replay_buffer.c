@@ -54,7 +54,7 @@ bool gsr_replay_buffer_init(gsr_replay_buffer *self, size_t replay_buffer_num_pa
     assert(replay_buffer_num_packets > 0);
     memset(self, 0, sizeof(*self));
     self->mutex_initialized = false;
-    self->owns_mutex = true;
+    self->original_replay_buffer = NULL;
     if(pthread_mutex_init(&self->mutex, NULL) != 0)
         return false;
 
@@ -70,10 +70,28 @@ bool gsr_replay_buffer_init(gsr_replay_buffer *self, size_t replay_buffer_num_pa
     return true;
 }
 
-void gsr_replay_buffer_deinit(gsr_replay_buffer *self) {
+static void gsr_replay_buffer_lock(gsr_replay_buffer *self) {
+    if(self->original_replay_buffer) {
+        gsr_replay_buffer_lock(self->original_replay_buffer);
+        return;
+    }
+
     if(self->mutex_initialized)
         pthread_mutex_lock(&self->mutex);
+}
 
+static void gsr_replay_buffer_unlock(gsr_replay_buffer *self) {
+    if(self->original_replay_buffer) {
+        gsr_replay_buffer_unlock(self->original_replay_buffer);
+        return;
+    }
+
+    if(self->mutex_initialized)
+        pthread_mutex_unlock(&self->mutex);
+}
+
+void gsr_replay_buffer_deinit(gsr_replay_buffer *self) {
+    gsr_replay_buffer_lock(self);
     for(size_t i = 0; i < self->num_packets; ++i) {
         if(self->packets[i]) {
             gsr_av_packet_unref(self->packets[i]);
@@ -81,9 +99,7 @@ void gsr_replay_buffer_deinit(gsr_replay_buffer *self) {
         }
     }
     self->num_packets = 0;
-
-    if(self->mutex_initialized)
-        pthread_mutex_unlock(&self->mutex);
+    gsr_replay_buffer_unlock(self);
 
     if(self->packets) {
         free(self->packets);
@@ -93,17 +109,19 @@ void gsr_replay_buffer_deinit(gsr_replay_buffer *self) {
     self->capacity_num_packets = 0;
     self->index = 0;
 
-    if(self->mutex_initialized && self->owns_mutex) {
+    if(self->mutex_initialized && !self->original_replay_buffer) {
         pthread_mutex_destroy(&self->mutex);
         self->mutex_initialized = false;
     }
+
+    self->original_replay_buffer = NULL;
 }
 
 bool gsr_replay_buffer_append(gsr_replay_buffer *self, const AVPacket *av_packet, double timestamp) {
-    pthread_mutex_lock(&self->mutex);
+    gsr_replay_buffer_lock(self);
     gsr_av_packet *packet = gsr_av_packet_create(av_packet, timestamp);
     if(!packet) {
-        pthread_mutex_unlock(&self->mutex);
+        gsr_replay_buffer_unlock(self);
         return false;
     }
 
@@ -118,12 +136,12 @@ bool gsr_replay_buffer_append(gsr_replay_buffer *self, const AVPacket *av_packet
     if(self->num_packets > self->capacity_num_packets)
         self->num_packets = self->capacity_num_packets;
 
-    pthread_mutex_unlock(&self->mutex);
+    gsr_replay_buffer_unlock(self);
     return true;
 }
 
 void gsr_replay_buffer_clear(gsr_replay_buffer *self) {
-    pthread_mutex_lock(&self->mutex);
+    gsr_replay_buffer_lock(self);
     for(size_t i = 0; i < self->num_packets; ++i) {
         if(self->packets[i]) {
             gsr_av_packet_unref(self->packets[i]);
@@ -132,7 +150,7 @@ void gsr_replay_buffer_clear(gsr_replay_buffer *self) {
     }
     self->num_packets = 0;
     self->index = 0;
-    pthread_mutex_unlock(&self->mutex);
+    gsr_replay_buffer_unlock(self);
 }
 
 gsr_av_packet* gsr_replay_buffer_get_packet_at_index(gsr_replay_buffer *self, size_t index) {
@@ -147,17 +165,17 @@ gsr_av_packet* gsr_replay_buffer_get_packet_at_index(gsr_replay_buffer *self, si
     return self->packets[offset];
 }
 
-bool gsr_replay_buffer_clone(const gsr_replay_buffer *self, gsr_replay_buffer *destination) {
-    pthread_mutex_lock(&destination->mutex);
+bool gsr_replay_buffer_clone(gsr_replay_buffer *self, gsr_replay_buffer *destination) {
+    gsr_replay_buffer_lock(self);
     memset(destination, 0, sizeof(*destination));
-    destination->owns_mutex = false;
+    destination->original_replay_buffer = self;
     destination->mutex = self->mutex;
     destination->capacity_num_packets = self->capacity_num_packets;
     destination->mutex_initialized = self->mutex_initialized;
     destination->index = self->index;
     destination->packets = calloc(destination->capacity_num_packets, sizeof(gsr_av_packet*));
     if(!destination->packets) {
-        pthread_mutex_unlock(&destination->mutex);
+        gsr_replay_buffer_unlock(self);
         return false;
     }
 
@@ -166,17 +184,17 @@ bool gsr_replay_buffer_clone(const gsr_replay_buffer *self, gsr_replay_buffer *d
         destination->packets[i] = gsr_av_packet_ref(self->packets[i]);
     }
 
-    pthread_mutex_unlock(&destination->mutex);
+    gsr_replay_buffer_unlock(self);
     return true;
 }
 
 /* Binary search */
 size_t gsr_replay_buffer_find_packet_index_by_time_passed(gsr_replay_buffer *self, int seconds) {
-    pthread_mutex_lock(&self->mutex);
+    gsr_replay_buffer_lock(self);
 
     const double now = clock_get_monotonic_seconds();
     if(self->num_packets == 0) {
-        pthread_mutex_unlock(&self->mutex);
+        gsr_replay_buffer_unlock(self);
         return 0;
     }
 
@@ -199,14 +217,14 @@ size_t gsr_replay_buffer_find_packet_index_by_time_passed(gsr_replay_buffer *sel
         }
     }
 
-    pthread_mutex_unlock(&self->mutex);
+    gsr_replay_buffer_unlock(self);
     return index;
 }
 
 size_t gsr_replay_buffer_find_keyframe(gsr_replay_buffer *self, size_t start_index, int stream_index, bool invert_stream_index) {
     assert(start_index < self->num_packets);
     size_t keyframe_index = (size_t)-1;
-    pthread_mutex_lock(&self->mutex);
+    gsr_replay_buffer_lock(self);
     for(size_t i = start_index; i < self->num_packets; ++i) {
         const gsr_av_packet *packet = gsr_replay_buffer_get_packet_at_index(self, i);
         if((packet->packet.flags & AV_PKT_FLAG_KEY) && (invert_stream_index ? packet->packet.stream_index != stream_index : packet->packet.stream_index == stream_index)) {
@@ -214,6 +232,6 @@ size_t gsr_replay_buffer_find_keyframe(gsr_replay_buffer *self, size_t start_ind
             break;
         }
     }
-    pthread_mutex_unlock(&self->mutex);
+    gsr_replay_buffer_unlock(self);
     return keyframe_index;
 }

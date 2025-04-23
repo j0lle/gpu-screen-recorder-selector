@@ -116,7 +116,7 @@ static bool get_supported_video_codecs(VADisplay va_dpy, gsr_supported_video_cod
     int va_minor = 0;
     if(vaInitialize(va_dpy, &va_major, &va_minor) != VA_STATUS_SUCCESS) {
         fprintf(stderr, "gsr error: gsr_get_supported_video_codecs_vaapi: vaInitialize failed\n");
-        goto fail;
+        return false;
     }
 
     int num_profiles = vaMaxNumProfiles(va_dpy);

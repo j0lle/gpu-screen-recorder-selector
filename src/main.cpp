@@ -1270,13 +1270,13 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
     }
 
     const size_t audio_start_index = gsr_replay_buffer_find_keyframe(replay_buffer, video_start_index, video_stream_index, true);
-    if(audio_start_index == (size_t)-1) {
-        fprintf(stderr, "gsr error: failed to save replay: failed to find an audio keyframe. perhaps replay was saved too fast, before anything has been recorded\n");
-        return;
-    }
+    // if(audio_start_index == (size_t)-1) {
+    //     fprintf(stderr, "gsr error: failed to save replay: failed to find an audio keyframe. perhaps replay was saved too fast, before anything has been recorded\n");
+    //     return;
+    // }
 
     const int64_t video_pts_offset = gsr_replay_buffer_get_packet_at_index(replay_buffer, video_start_index)->packet.pts;
-    const int64_t audio_pts_offset = gsr_replay_buffer_get_packet_at_index(replay_buffer, audio_start_index)->packet.pts;
+    const int64_t audio_pts_offset = audio_start_index == (size_t)-1 ? 0 : gsr_replay_buffer_get_packet_at_index(replay_buffer, audio_start_index)->packet.pts;
 
     gsr_replay_buffer cloned_replay_buffer;
     if(!gsr_replay_buffer_clone(replay_buffer, &cloned_replay_buffer)) {
