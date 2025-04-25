@@ -23,7 +23,7 @@ static bool gsr_video_encoder_vulkan_setup_context(gsr_video_encoder_vulkan *sel
     AVDictionary *options = NULL;
     //av_dict_set(&options, "linear_images", "1", 0);
     //av_dict_set(&options, "disable_multiplane", "1", 0);
-
+#if 0
     // TODO: Use correct device
     if(av_hwdevice_ctx_create(&self->device_ctx, AV_HWDEVICE_TYPE_VULKAN, NULL, options, 0) < 0) {
         fprintf(stderr, "gsr error: gsr_video_encoder_vulkan_setup_context: failed to create hardware device context\n");
@@ -57,6 +57,7 @@ static bool gsr_video_encoder_vulkan_setup_context(gsr_video_encoder_vulkan *sel
 
     video_codec_context->hw_frames_ctx = av_buffer_ref(frame_context);
     av_buffer_unref(&frame_context);
+#endif
     return true;
 }
 
@@ -99,7 +100,7 @@ static bool gsr_video_encoder_vulkan_setup_textures(gsr_video_encoder_vulkan *se
     }
 
     while(self->params.egl->glGetError()) {}
-
+#if 0
     AVVkFrame *target_surface_id = (AVVkFrame*)frame->data[0];
     AVVulkanDeviceContext* vv = video_codec_context_get_vulkan_data(video_codec_context);
     const size_t luma_size = frame->width * frame->height;
@@ -224,7 +225,7 @@ static bool gsr_video_encoder_vulkan_setup_textures(gsr_video_encoder_vulkan *se
         fprintf(stderr, "3 gl error: %d\n", self->params.egl->glGetError());
         self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
      }
-
+#endif
     return true;
 }
 

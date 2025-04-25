@@ -3618,7 +3618,6 @@ int main(int argc, char **argv) {
 
                 if(force_iframe_frame) {
                     video_frame->pict_type = AV_PICTURE_TYPE_I;
-                    video_frame->flags |= AV_FRAME_FLAG_KEY;
                 }
 
                 int ret = avcodec_send_frame(video_codec_context, video_frame);
@@ -3632,7 +3631,6 @@ int main(int argc, char **argv) {
                 if(force_iframe_frame) {
                     force_iframe_frame = false;
                     video_frame->pict_type = AV_PICTURE_TYPE_NONE;
-                    video_frame->flags &= ~AV_FRAME_FLAG_KEY;
                 }
             }
 
