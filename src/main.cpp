@@ -1779,10 +1779,11 @@ static bool monitor_capture_use_drm(const gsr_window *window, gsr_gpu_vendor ven
 
 typedef struct {
     const gsr_window *window;
+    int num_monitors;
 } capture_options_callback;
 
 static void output_monitor_info(const gsr_monitor *monitor, void *userdata) {
-    const capture_options_callback *options = (capture_options_callback*)userdata;
+    capture_options_callback *options = (capture_options_callback*)userdata;
     if(gsr_window_get_display_server(options->window) == GSR_DISPLAY_SERVER_WAYLAND) {
         vec2i monitor_size = monitor->size;
         gsr_monitor_rotation monitor_rotation = GSR_MONITOR_ROT_0;
@@ -1794,6 +1795,7 @@ static void output_monitor_info(const gsr_monitor *monitor, void *userdata) {
     } else {
         printf("%.*s|%dx%d\n", monitor->name_len, monitor->name, monitor->size.x, monitor->size.y);
     }
+    ++options->num_monitors;
 }
 
 static void list_supported_capture_options(const gsr_window *window, const char *card_path, bool list_monitors) {
@@ -1802,15 +1804,18 @@ static void list_supported_capture_options(const gsr_window *window, const char 
         puts("window");
         puts("focused");
     }
-    puts("region");
 
+    capture_options_callback options;
+    options.window = window;
+    options.num_monitors = 0;
     if(list_monitors) {
-        capture_options_callback options;
-        options.window = window;
         const bool is_x11 = gsr_window_get_display_server(window) == GSR_DISPLAY_SERVER_X11;
         const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
         for_each_active_monitor_output(window, card_path, connection_type, output_monitor_info, &options);
     }
+
+    if(options.num_monitors > 0)
+        puts("region");
 
 #ifdef GSR_PORTAL
     // Desktop portal capture on x11 doesn't seem to be hardware accelerated
