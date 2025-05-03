@@ -1375,13 +1375,8 @@ static const AudioDevice* get_audio_device_by_name(const std::vector<AudioDevice
     return nullptr;
 }
 
-static MergedAudioInputs parse_audio_input_arg(const char *str, const AudioDevices &audio_devices) {
+static MergedAudioInputs parse_audio_input_arg(const char *str) {
     MergedAudioInputs result;
-    const bool name_is_existing_audio_device = get_audio_device_by_name(audio_devices.audio_inputs, str) != nullptr;
-    if(name_is_existing_audio_device) {
-        result.audio_inputs.push_back({str, AudioInputType::DEVICE, false});
-        return result;
-    }
 
     split_string(str, '|', [&](const char *sub, size_t size) {
         AudioInput audio_input;
@@ -2373,7 +2368,7 @@ static std::vector<MergedAudioInputs> parse_audio_inputs(const AudioDevices &aud
         if(!audio_input || audio_input[0] == '\0')
             continue;
 
-        requested_audio_inputs.push_back(parse_audio_input_arg(audio_input, audio_devices));
+        requested_audio_inputs.push_back(parse_audio_input_arg(audio_input));
         for(AudioInput &request_audio_input : requested_audio_inputs.back().audio_inputs) {
             if(request_audio_input.type != AudioInputType::DEVICE)
                 continue;
