@@ -278,3 +278,5 @@ Fix constant framerate not working properly on amd/intel because capture framera
     It also appears to skip audio frames on nvidia wayland? why? that should be fine, but it causes video stuttering because of audio/video sync.
 
 Add option to pass a fd (from socketpair) to use for rpc. In the rpc have a common header, with protocol version, data type and data in an enum.
+
+Add the option to set audio track name, for example with -a "track-name:blabla|device:default_output|app:firefox"

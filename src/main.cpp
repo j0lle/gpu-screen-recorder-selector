@@ -1383,12 +1383,6 @@ static MergedAudioInputs parse_audio_input_arg(const char *str, const AudioDevic
         return result;
     }
 
-    const char *track_name_sep_ptr = strchr(str, '/');
-    if(track_name_sep_ptr) {
-        result.track_name.assign(str, track_name_sep_ptr - str);
-        str = track_name_sep_ptr + 1;
-    }
-
     split_string(str, '|', [&](const char *sub, size_t size) {
         AudioInput audio_input;
         audio_input.name.assign(sub, size);

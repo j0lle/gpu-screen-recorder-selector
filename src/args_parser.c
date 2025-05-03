@@ -229,7 +229,6 @@ static void usage_full() {
     printf("  -a    Audio device or application to record from (pulse audio device). Can be specified multiple times. Each time this is specified a new audio track is added for the specified audio device or application.\n");
     printf("        The audio device can also be \"default_output\" in which case the default output device is used, or \"default_input\" in which case the default input device is used.\n");
     printf("        Multiple audio sources can be merged into one audio track by using \"|\" as a separator into one -a argument, for example: -a \"default_output|default_input\".\n");
-    printf("        A name can be given to the audio track by prefixing the audio with <name>/, for example \"track name/default_output\" or \"track name/default_output|default_input\".\n");
     printf("        The audio name can also be prefixed with \"device:\", for example: -a \"device:default_output\".\n");
     printf("        To record audio from an application then prefix the audio name with \"app:\", for example: -a \"app:Brave\". The application name is case-insensitive.\n");
     printf("        To record audio from all applications except the provided ones prefix the audio name with \"app-inverse:\", for example: -a \"app-inverse:Brave\".\n");
