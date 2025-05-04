@@ -10,7 +10,7 @@ typedef enum {
     GSR_GPU_VENDOR_AMD,
     GSR_GPU_VENDOR_INTEL,
     GSR_GPU_VENDOR_NVIDIA,
-    GSR_GPU_VENDOR_BROADCOM
+    GSR_GPU_VENDOR_BROADCOM,
 } gsr_gpu_vendor;
 
 typedef struct {
@@ -23,13 +23,13 @@ typedef enum {
     GSR_MONITOR_ROT_0,
     GSR_MONITOR_ROT_90,
     GSR_MONITOR_ROT_180,
-    GSR_MONITOR_ROT_270
+    GSR_MONITOR_ROT_270,
 } gsr_monitor_rotation;
 
 typedef enum {
     GSR_CONNECTION_X11,
     GSR_CONNECTION_WAYLAND,
-    GSR_CONNECTION_DRM
+    GSR_CONNECTION_DRM,
 } gsr_connection_type;
 
 typedef enum {
@@ -88,13 +88,18 @@ typedef enum {
 
 typedef enum {
     GSR_COLOR_RANGE_LIMITED,
-    GSR_COLOR_RANGE_FULL
+    GSR_COLOR_RANGE_FULL,
 } gsr_color_range;
 
 typedef enum {
     GSR_COLOR_DEPTH_8_BITS,
-    GSR_COLOR_DEPTH_10_BITS
+    GSR_COLOR_DEPTH_10_BITS,
 } gsr_color_depth;
+
+typedef enum {
+    GSR_REPLAY_STORAGE_RAM,
+    GSR_REPLAY_STORAGE_DISK,
+} gsr_replay_storage;
 
 bool video_codec_is_hdr(gsr_video_codec video_codec);
 gsr_video_codec hdr_video_codec_to_sdr_video_codec(gsr_video_codec video_codec);

@@ -26,6 +26,9 @@ src = [
     'src/window/window.c',
     'src/window/x11.c',
     'src/window/wayland.c',
+    'src/replay_buffer/replay_buffer.c',
+    'src/replay_buffer/replay_buffer_ram.c',
+    'src/replay_buffer/replay_buffer_disk.c',
     'src/egl.c',
     'src/cuda.c',
     'src/xnvctrl.c',
@@ -40,7 +43,6 @@ src = [
     'src/image_writer.c',
     'src/args_parser.c',
     'src/defs.c',
-    'src/replay_buffer.c',
     'src/sound.cpp',
     'src/main.cpp',
 ]

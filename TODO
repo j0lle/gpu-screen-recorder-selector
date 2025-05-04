@@ -280,3 +280,6 @@ Fix constant framerate not working properly on amd/intel because capture framera
 Add option to pass a fd (from socketpair) to use for rpc. In the rpc have a common header, with protocol version, data type and data in an enum.
 
 Add the option to set audio track name, for example with -a "track-name:blabla|device:default_output|app:firefox"
+
+Maybe disable qp/vbr for replay. In that case we can preallocate all replay data (for both ram and disk) and write to that directly when receiving packet (dont do that when also recording at the same time).
+    That could improve performance/disk write optimization and maybe even reduce ram usage because of less blocks/fragmentation.

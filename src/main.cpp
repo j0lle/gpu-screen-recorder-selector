@@ -32,7 +32,6 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
-#include <vector>
 #include <thread>
 #include <mutex>
 #include <signal.h>
@@ -41,6 +40,7 @@ extern "C" {
 #include <sys/wait.h>
 #include <inttypes.h>
 #include <libgen.h>
+#include <malloc.h>
 
 #include "../include/sound.hpp"
 
@@ -1262,24 +1262,24 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
     if(save_replay_thread.valid())
         return;
 
-    const size_t search_start_index = current_save_replay_seconds == save_replay_seconds_full ? 0 : gsr_replay_buffer_find_packet_index_by_time_passed(replay_buffer, current_save_replay_seconds);
-    const size_t video_start_index = gsr_replay_buffer_find_keyframe(replay_buffer, search_start_index, video_stream_index, false);
-    if(video_start_index == (size_t)-1) {
+    const gsr_replay_buffer_iterator search_start_iterator = current_save_replay_seconds == save_replay_seconds_full ? gsr_replay_buffer_iterator{0, 0} : gsr_replay_buffer_find_packet_index_by_time_passed(replay_buffer, current_save_replay_seconds);
+    const gsr_replay_buffer_iterator video_start_iterator = gsr_replay_buffer_find_keyframe(replay_buffer, search_start_iterator, video_stream_index, false);
+    if(video_start_iterator.packet_index == (size_t)-1) {
         fprintf(stderr, "gsr error: failed to save replay: failed to find a video keyframe. perhaps replay was saved too fast, before anything has been recorded\n");
         return;
     }
 
-    const size_t audio_start_index = gsr_replay_buffer_find_keyframe(replay_buffer, video_start_index, video_stream_index, true);
+    const gsr_replay_buffer_iterator audio_start_iterator = gsr_replay_buffer_find_keyframe(replay_buffer, video_start_iterator, video_stream_index, true);
     // if(audio_start_index == (size_t)-1) {
     //     fprintf(stderr, "gsr error: failed to save replay: failed to find an audio keyframe. perhaps replay was saved too fast, before anything has been recorded\n");
     //     return;
     // }
 
-    const int64_t video_pts_offset = gsr_replay_buffer_get_packet_at_index(replay_buffer, video_start_index)->packet.pts;
-    const int64_t audio_pts_offset = audio_start_index == (size_t)-1 ? 0 : gsr_replay_buffer_get_packet_at_index(replay_buffer, audio_start_index)->packet.pts;
+    const int64_t video_pts_offset = gsr_replay_buffer_iterator_get_packet(replay_buffer, video_start_iterator)->pts;
+    const int64_t audio_pts_offset = audio_start_iterator.packet_index == (size_t)-1 ? 0 : gsr_replay_buffer_iterator_get_packet(replay_buffer, audio_start_iterator)->pts;
 
-    gsr_replay_buffer cloned_replay_buffer;
-    if(!gsr_replay_buffer_clone(replay_buffer, &cloned_replay_buffer)) {
+    gsr_replay_buffer *cloned_replay_buffer = gsr_replay_buffer_clone(replay_buffer);
+    if(!cloned_replay_buffer) {
         // TODO: Return this error to mark the replay as failed
         fprintf(stderr, "gsr error: failed to save replay: failed to clone replay buffer\n");
         return;
@@ -1292,20 +1292,35 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
 
     save_replay_output_filepath = std::move(output_filepath);
 
-    save_replay_thread = std::async(std::launch::async, [video_stream_index, recording_start_result, video_start_index, video_pts_offset, audio_pts_offset, video_codec_context, cloned_replay_buffer]() mutable {
-        for(size_t i = video_start_index; i < cloned_replay_buffer.num_packets; ++i) {
-            const gsr_av_packet *packet = gsr_replay_buffer_get_packet_at_index(&cloned_replay_buffer, i);
+    save_replay_thread = std::async(std::launch::async, [video_stream_index, recording_start_result, video_start_iterator, video_pts_offset, audio_pts_offset, video_codec_context, cloned_replay_buffer]() mutable {
+        gsr_replay_buffer_iterator replay_iterator = video_start_iterator;
+        for(;;) {
+            AVPacket *replay_packet = gsr_replay_buffer_iterator_get_packet(cloned_replay_buffer, replay_iterator);
+            uint8_t *replay_packet_data = NULL;
+            if(replay_packet)
+                replay_packet_data = gsr_replay_buffer_iterator_get_packet_data(cloned_replay_buffer, replay_iterator);
+
+            if(!replay_packet) {
+                fprintf(stderr, "no replay packet\n");
+                break;
+            }
+
+            if(!replay_packet->data && !replay_packet_data) {
+                fprintf(stderr, "no replay packet data\n");
+                break;
+            }
+
             // TODO: Check if successful
             AVPacket av_packet;
             memset(&av_packet, 0, sizeof(av_packet));
-            //av_packet_from_data(av_packet, packet->packet.data, packet->packet.size);
-            av_packet.data = packet->packet.data;
-            av_packet.size = packet->packet.size;
-            av_packet.stream_index = packet->packet.stream_index;
-            av_packet.pts = packet->packet.pts;
-            av_packet.dts = packet->packet.pts;
-            av_packet.flags = packet->packet.flags;
-            //av_packet.duration = packet->packet.duration;
+            //av_packet_from_data(av_packet, replay_packet->data, replay_packet->size);
+            av_packet.data = replay_packet->data ? replay_packet->data : replay_packet_data;
+            av_packet.size = replay_packet->size;
+            av_packet.stream_index = replay_packet->stream_index;
+            av_packet.pts = replay_packet->pts;
+            av_packet.dts = replay_packet->pts;
+            av_packet.flags = replay_packet->flags;
+            //av_packet.duration = replay_packet->duration;
 
             AVStream *stream = recording_start_result.video_stream;
             AVCodecContext *codec_context = video_codec_context;
@@ -1317,8 +1332,10 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
                 RecordingStartAudio *recording_start_audio = get_recording_start_item_by_stream_index(recording_start_result, av_packet.stream_index);
                 if(!recording_start_audio) {
                     fprintf(stderr, "gsr error: save_replay_async: failed to find audio stream by index: %d\n", av_packet.stream_index);
+                    free(replay_packet_data);
                     continue;
                 }
+
                 const AudioTrack *audio_track = recording_start_audio->audio_track;
                 stream = recording_start_audio->stream;
                 codec_context = audio_track->codec_context;
@@ -1332,13 +1349,17 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
 
             const int ret = av_write_frame(recording_start_result.av_format_context, &av_packet);
             if(ret < 0)
-                fprintf(stderr, "Error: Failed to write frame index %d to muxer, reason: %s (%d)\n", packet->packet.stream_index, av_error_to_string(ret), ret);
+                fprintf(stderr, "Error: Failed to write frame index %d to muxer, reason: %s (%d)\n", av_packet.stream_index, av_error_to_string(ret), ret);
+
+            free(replay_packet_data);
 
             //av_packet_free(&av_packet);
+            if(!gsr_replay_buffer_iterator_next(cloned_replay_buffer, &replay_iterator))
+                break;
         }
 
         stop_recording_close_streams(recording_start_result.av_format_context);
-        gsr_replay_buffer_deinit(&cloned_replay_buffer);
+        gsr_replay_buffer_destroy(cloned_replay_buffer);
     });
 }
 
@@ -2890,8 +2911,24 @@ static size_t calculate_estimated_replay_buffer_packets(int64_t replay_buffer_si
     return replay_buffer_size_secs * (fps + audio_fps * audio_inputs.size());
 }
 
+static void set_display_server_environment_variables() {
+    // Some users dont have properly setup environments (no display manager that does systemctl --user import-environment DISPLAY WAYLAND_DISPLAY)
+    const char *display = getenv("DISPLAY");
+    if(!display) {
+        display = ":0";
+        setenv("DISPLAY", display, true);
+    }
+
+    const char *wayland_display = getenv("WAYLAND_DISPLAY");
+    if(!wayland_display) {
+        wayland_display = "wayland-1";
+        setenv("WAYLAND_DISPLAY", wayland_display, true);
+    }
+}
+
 int main(int argc, char **argv) {
     setlocale(LC_ALL, "C"); // Sigh... stupid C
+    mallopt(M_MMAP_THRESHOLD, 65536);
 
     signal(SIGINT, stop_handler);
     signal(SIGTERM, stop_handler);
@@ -2904,6 +2941,8 @@ int main(int argc, char **argv) {
     signal(SIGRTMIN+4, save_replay_5_minutes_handler);
     signal(SIGRTMIN+5, save_replay_10_minutes_handler);
     signal(SIGRTMIN+6, save_replay_30_minutes_handler);
+
+    set_display_server_environment_variables();
 
     // Stop nvidia driver from buffering frames
     setenv("__GL_MaxFramesAllowed", "1", true);
@@ -3141,7 +3180,7 @@ int main(int argc, char **argv) {
 
     const size_t estimated_replay_buffer_packets = calculate_estimated_replay_buffer_packets(arg_parser.replay_buffer_size_secs, arg_parser.fps, arg_parser.audio_codec, requested_audio_inputs);
     gsr_encoder encoder;
-    if(!gsr_encoder_init(&encoder, estimated_replay_buffer_packets)) {
+    if(!gsr_encoder_init(&encoder, arg_parser.replay_storage, estimated_replay_buffer_packets, arg_parser.replay_buffer_size_secs, arg_parser.filename)) {
         fprintf(stderr, "Error: failed to create encoder\n");
         _exit(1);
     }
@@ -3720,10 +3759,10 @@ int main(int argc, char **argv) {
 
             save_replay_seconds = 0;
             save_replay_output_filepath.clear();
-            save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, &encoder.replay_buffer, arg_parser.filename, arg_parser.container_format, file_extension, arg_parser.date_folders, hdr, capture, current_save_replay_seconds);
+            save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, encoder.replay_buffer, arg_parser.filename, arg_parser.container_format, file_extension, arg_parser.date_folders, hdr, capture, current_save_replay_seconds);
 
             if(arg_parser.restart_replay_on_save && current_save_replay_seconds == save_replay_seconds_full) {
-                gsr_replay_buffer_clear(&encoder.replay_buffer);
+                gsr_replay_buffer_clear(encoder.replay_buffer);
                 replay_start_time = clock_get_monotonic_seconds() - paused_time_offset;
             }
         }

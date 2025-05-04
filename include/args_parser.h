@@ -8,8 +8,7 @@
 
 typedef struct gsr_egl gsr_egl;
 
-#define NUM_ARGS 29
-#define WINDOW_STR_MAX_SIZE 128
+#define NUM_ARGS 30
 
 typedef enum {
     ARG_TYPE_STRING,
@@ -68,7 +67,8 @@ typedef struct {
     gsr_audio_codec audio_codec;
     gsr_bitrate_mode bitrate_mode;
     gsr_video_quality video_quality;
-    char window[WINDOW_STR_MAX_SIZE];
+    gsr_replay_storage replay_storage;
+    char window[64];
     const char *container_format;
     const char *filename;
     const char *replay_recording_directory;

@@ -1,7 +1,7 @@
 #ifndef GSR_ENCODER_H
 #define GSR_ENCODER_H
 
-#include "../replay_buffer.h"
+#include "../replay_buffer/replay_buffer.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -23,8 +23,7 @@ typedef struct {
 } gsr_encoder_recording_destination;
 
 typedef struct {
-    gsr_replay_buffer replay_buffer;
-    bool has_replay_buffer;
+    gsr_replay_buffer *replay_buffer;
     pthread_mutex_t file_write_mutex;
     bool mutex_created;
 
@@ -33,7 +32,7 @@ typedef struct {
     size_t recording_destination_id_counter;
 } gsr_encoder;
 
-bool gsr_encoder_init(gsr_encoder *self, size_t replay_buffer_num_packets);
+bool gsr_encoder_init(gsr_encoder *self, gsr_replay_storage replay_storage, size_t replay_buffer_num_packets, double replay_buffer_time, const char *replay_directory);
 void gsr_encoder_deinit(gsr_encoder *self);
 
 void gsr_encoder_receive_packets(gsr_encoder *self, AVCodecContext *codec_context, int64_t pts, int stream_index);

@@ -69,6 +69,11 @@ static const ArgEnum tune_enums[] = {
     { .name = "quality",     .value = GSR_TUNE_QUALITY     },
 };
 
+static const ArgEnum replay_storage_enums[] = {
+    { .name = "ram",  .value = GSR_REPLAY_STORAGE_RAM  },
+    { .name = "disk", .value = GSR_REPLAY_STORAGE_DISK },
+};
+
 static void arg_deinit(Arg *arg) {
     if(arg->values) {
         free(arg->values);
@@ -185,7 +190,7 @@ static double args_get_double_by_key(Arg *args, int num_args, const char *key, d
 static void usage_header() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-replay-storage ram|disk] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -249,8 +254,13 @@ static void usage_full() {
     printf("\n");
     printf("  -r    Replay buffer time in seconds. If this is set, then only the last seconds as set by this option will be stored\n");
     printf("        and the video will only be saved when the gpu-screen-recorder is closed. This feature is similar to Nvidia's instant replay feature This option has be between 5 and 1200.\n");
-    printf("        Note that the video data is stored in RAM, so don't use too long replay buffer time and use constant bitrate option (-bm cbr) to prevent RAM usage from going too high in busy scenes.\n");
+    printf("        Note that the video data is stored in RAM (unless -replay-storage disk is used), so don't use too long replay buffer time and use constant bitrate option (-bm cbr) to prevent RAM usage from going too high in busy scenes.\n");
     printf("        Optional, disabled by default.\n");
+    printf("\n");
+    printf("  -replay-storage\n");
+    printf("        Specify where temporary replay is stored. Should be either 'ram' or 'disk'. If set to 'disk' then replay data is stored in temporary files in the same directory as -o.\n");
+    printf("        Preferably avoid setting this to 'disk' unless -o is set to a HDD, as constant writes to a SSD can reduce the life-time of the SSD.\n");
+    printf("        Optional, set to 'ram' by default.\n");
     printf("\n");
     printf("  -restart-replay-on-save\n");
     printf("        Restart replay on save. For example if this is set to 'no' and replay time (-r) is set to 60 seconds and a replay is saved once then the first replay video is 60 seconds long\n");
@@ -389,6 +399,7 @@ static void usage_full() {
     printf("  %s -w screen -f 60 -a default_output -a default_input -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a \"default_output|default_input\" -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -c mkv -r 60 -o \"$HOME/Videos\"\n", program_name);
+    printf("  %s -w screen -f 60 -a default_output -c mkv -r 1800 -replay-storage disk -bm cbr -q 40000 -o \"$HOME/Videos\"\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -c mkv -sc script.sh -r 60 -o \"$HOME/Videos\"\n", program_name);
     printf("  %s -w portal -f 60 -a default_output -restore-portal-session yes -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -bm cbr -q 15000 -o video.mp4\n", program_name);
@@ -436,6 +447,7 @@ static bool args_parser_set_values(args_parser *self) {
     self->video_codec = (gsr_video_codec)args_get_enum_by_key(self->args, NUM_ARGS, "-k", GSR_VIDEO_CODEC_AUTO);
     self->audio_codec = (gsr_audio_codec)args_get_enum_by_key(self->args, NUM_ARGS, "-ac", GSR_AUDIO_CODEC_OPUS);
     self->bitrate_mode = (gsr_bitrate_mode)args_get_enum_by_key(self->args, NUM_ARGS, "-bm", GSR_BITRATE_MODE_AUTO);
+    self->replay_storage = (gsr_replay_storage)args_get_enum_by_key(self->args, NUM_ARGS, "-replay-storage", GSR_REPLAY_STORAGE_RAM);
 
     const char *window = args_get_value_by_key(self->args, NUM_ARGS, "-w");
     snprintf(self->window, sizeof(self->window), "%s", window);
@@ -712,7 +724,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     self->args[arg_index++] = (Arg){ .key = "-q",                             .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
     self->args[arg_index++] = (Arg){ .key = "-o",                             .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
     self->args[arg_index++] = (Arg){ .key = "-ro",                            .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
-    self->args[arg_index++] = (Arg){ .key = "-r",                             .optional = true,  .list = false, .type = ARG_TYPE_I64, .integer_value_min = 2, .integer_value_max = 10800 };
+    self->args[arg_index++] = (Arg){ .key = "-r",                             .optional = true,  .list = false, .type = ARG_TYPE_I64, .integer_value_min = 2, .integer_value_max = 86400 };
     self->args[arg_index++] = (Arg){ .key = "-restart-replay-on-save",        .optional = true,  .list = false, .type = ARG_TYPE_BOOLEAN };
     self->args[arg_index++] = (Arg){ .key = "-k",                             .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = video_codec_enums, .num_enum_values = sizeof(video_codec_enums)/sizeof(ArgEnum) };
     self->args[arg_index++] = (Arg){ .key = "-ac",                            .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = audio_codec_enums, .num_enum_values = sizeof(audio_codec_enums)/sizeof(ArgEnum) };
@@ -732,6 +744,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     self->args[arg_index++] = (Arg){ .key = "-restore-portal-session",        .optional = true,  .list = false, .type = ARG_TYPE_BOOLEAN };
     self->args[arg_index++] = (Arg){ .key = "-portal-session-token-filepath", .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
     self->args[arg_index++] = (Arg){ .key = "-encoder",                       .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = video_encoder_enums, .num_enum_values = sizeof(video_encoder_enums)/sizeof(ArgEnum) };
+    self->args[arg_index++] = (Arg){ .key = "-replay-storage",                .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = replay_storage_enums, .num_enum_values = sizeof(replay_storage_enums)/sizeof(ArgEnum) };
     assert(arg_index == NUM_ARGS);
 
     for(int i = 1; i < argc; i += 2) {

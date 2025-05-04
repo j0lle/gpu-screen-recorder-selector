@@ -7,7 +7,7 @@
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 
-bool gsr_encoder_init(gsr_encoder *self, size_t replay_buffer_num_packets) {
+bool gsr_encoder_init(gsr_encoder *self, gsr_replay_storage replay_storage, size_t replay_buffer_num_packets, double replay_buffer_time, const char *replay_directory) {
     memset(self, 0, sizeof(*self));
     self->num_recording_destinations = 0;
     self->recording_destination_id_counter = 0;
@@ -19,12 +19,12 @@ bool gsr_encoder_init(gsr_encoder *self, size_t replay_buffer_num_packets) {
     self->mutex_created = true;
 
     if(replay_buffer_num_packets > 0) {
-        if(!gsr_replay_buffer_init(&self->replay_buffer, replay_buffer_num_packets)) {
+        self->replay_buffer = gsr_replay_buffer_create(replay_storage, replay_directory, replay_buffer_time, replay_buffer_num_packets);
+        if(!self->replay_buffer) {
             fprintf(stderr, "gsr error: gsr_encoder_init: failed to create replay buffer\n");
             gsr_encoder_deinit(self);
             return false;
         }
-        self->has_replay_buffer = true;
     }
 
     return true;
@@ -36,8 +36,11 @@ void gsr_encoder_deinit(gsr_encoder *self)  {
         pthread_mutex_destroy(&self->file_write_mutex);
     }
 
-    gsr_replay_buffer_deinit(&self->replay_buffer);
-    self->has_replay_buffer = false;
+    if(self->replay_buffer) {
+        gsr_replay_buffer_destroy(self->replay_buffer);
+        self->replay_buffer = NULL;
+    }
+
     self->num_recording_destinations = 0;
     self->recording_destination_id_counter = 0;
 }
@@ -56,9 +59,9 @@ void gsr_encoder_receive_packets(gsr_encoder *self, AVCodecContext *codec_contex
             av_packet->pts = pts;
             av_packet->dts = pts;
 
-            if(self->has_replay_buffer) {
+            if(self->replay_buffer) {
                 const double time_now = clock_get_monotonic_seconds();
-                if(!gsr_replay_buffer_append(&self->replay_buffer, av_packet, time_now))
+                if(!gsr_replay_buffer_append(self->replay_buffer, av_packet, time_now))
                     fprintf(stderr, "gsr error: gsr_encoder_receive_packets: failed to add replay buffer data\n");
             }
 
