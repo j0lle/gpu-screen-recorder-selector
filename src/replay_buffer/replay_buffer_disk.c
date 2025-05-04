@@ -360,17 +360,20 @@ static gsr_replay_buffer_iterator gsr_replay_buffer_disk_find_keyframe(gsr_repla
     gsr_replay_buffer_disk *self = (gsr_replay_buffer_disk*)replay_buffer;
     gsr_replay_buffer_iterator keyframe_iterator = {(size_t)-1, 0};
     gsr_replay_buffer_lock(&self->replay_buffer);
+    size_t packet_index = start_iterator.packet_index;
     for(size_t file_index = start_iterator.file_index; file_index < self->num_files; ++file_index) {
         const gsr_replay_buffer_file *file = self->files[file_index];
-        for(size_t packet_index = start_iterator.packet_index; packet_index < file->num_packets; ++packet_index) {
+        for(; packet_index < file->num_packets; ++packet_index) {
             const gsr_av_packet_disk *packet = &file->packets[packet_index];
             if((packet->packet.flags & AV_PKT_FLAG_KEY) && (invert_stream_index ? packet->packet.stream_index != stream_index : packet->packet.stream_index == stream_index)) {
                 keyframe_iterator.packet_index = packet_index;
                 keyframe_iterator.file_index = file_index;
-                break;
+                goto done;
             }
         }
+        packet_index = 0;
     }
+    done:
     gsr_replay_buffer_unlock(&self->replay_buffer);
     return keyframe_iterator;
 }
