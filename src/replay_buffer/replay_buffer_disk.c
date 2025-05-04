@@ -95,19 +95,19 @@ static void gsr_replay_buffer_file_unref(gsr_replay_buffer_file *self, const cha
 static void gsr_replay_buffer_disk_clear(gsr_replay_buffer *replay_buffer) {
     gsr_replay_buffer_disk *self = (gsr_replay_buffer_disk*)replay_buffer;
     gsr_replay_buffer_lock(&self->replay_buffer);
+
     for(size_t i = 0; i < self->num_files; ++i) {
         gsr_replay_buffer_file_unref(self->files[i], self->replay_directory);
     }
     self->num_files = 0;
-    gsr_replay_buffer_unlock(&self->replay_buffer);
 
     if(self->storage_fd > 0) {
         close(self->storage_fd);
         self->storage_fd = 0;
     }
 
-    self->storage_counter = 0;
     self->storage_num_bytes_written = 0;
+    gsr_replay_buffer_unlock(&self->replay_buffer);
 }
 
 static void gsr_replay_buffer_disk_destroy(gsr_replay_buffer *replay_buffer) {
@@ -236,16 +236,21 @@ static uint8_t* gsr_replay_buffer_disk_iterator_get_packet_data(gsr_replay_buffe
         char filename[PATH_MAX];
         snprintf(filename, sizeof(filename), "%s/%s_%d.mp4", self->replay_directory, FILE_PREFIX, (int)file->id);
         file->fd = open(filename, O_RDONLY);
-        if(file->fd <= 0)
+        if(file->fd <= 0) {
+            fprintf(stderr, "gsr error: gsr_replay_buffer_disk_iterator_get_packet_data: failed to open file\n");
             return NULL;
+        }
     }
 
     const gsr_av_packet_disk *packet = &self->files[iterator.file_index]->packets[iterator.packet_index];
-    if(lseek(file->fd, packet->data_index, SEEK_SET) == -1)
+    if(lseek(file->fd, packet->data_index, SEEK_SET) == -1) {
+        fprintf(stderr, "gsr error: gsr_replay_buffer_disk_iterator_get_packet_data: failed to seek\n");
         return NULL;
+    }
 
     uint8_t *packet_data = malloc(packet->packet.size);
     if(read(file->fd, packet_data, packet->packet.size) != packet->packet.size) {
+        fprintf(stderr, "gsr error: gsr_replay_buffer_disk_iterator_get_packet_data: failed to read data from file\n");
         free(packet_data);
         return NULL;
     }

@@ -1301,12 +1301,12 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
                 replay_packet_data = gsr_replay_buffer_iterator_get_packet_data(cloned_replay_buffer, replay_iterator);
 
             if(!replay_packet) {
-                fprintf(stderr, "no replay packet\n");
+                fprintf(stderr, "gsr error: save_replay_async: no replay packet\n");
                 break;
             }
 
             if(!replay_packet->data && !replay_packet_data) {
-                fprintf(stderr, "no replay packet data\n");
+                fprintf(stderr, "gsr error: save_replay_async: no replay packet data\n");
                 break;
             }
 
