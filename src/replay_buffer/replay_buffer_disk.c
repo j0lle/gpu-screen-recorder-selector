@@ -36,7 +36,7 @@ static gsr_replay_buffer_file* gsr_replay_buffer_file_create(char *replay_direct
     }
 
     char filename[PATH_MAX];
-    snprintf(filename, sizeof(filename), "%s/%s_%d.mp4", replay_directory, FILE_PREFIX, (int)replay_storage_counter);
+    snprintf(filename, sizeof(filename), "%s/%s_%d.gsr", replay_directory, FILE_PREFIX, (int)replay_storage_counter);
     *replay_storage_fd = creat(filename, 0700);
     if(*replay_storage_fd <= 0) {
         fprintf(stderr, "gsr error: gsr_av_packet_file_init: failed to create replay file: %s\n", filename);
@@ -71,7 +71,7 @@ static void gsr_replay_buffer_file_free(gsr_replay_buffer_file *self, const char
     }
 
     char filename[PATH_MAX];
-    snprintf(filename, sizeof(filename), "%s/%s_%d.mp4", replay_directory, FILE_PREFIX, (int)self->id);
+    snprintf(filename, sizeof(filename), "%s/%s_%d.gsr", replay_directory, FILE_PREFIX, (int)self->id);
     remove(filename);
 
     if(self->packets) {
@@ -234,7 +234,7 @@ static uint8_t* gsr_replay_buffer_disk_iterator_get_packet_data(gsr_replay_buffe
 
     if(file->fd <= 0) {
         char filename[PATH_MAX];
-        snprintf(filename, sizeof(filename), "%s/%s_%d.mp4", self->replay_directory, FILE_PREFIX, (int)file->id);
+        snprintf(filename, sizeof(filename), "%s/%s_%d.gsr", self->replay_directory, FILE_PREFIX, (int)file->id);
         file->fd = open(filename, O_RDONLY);
         if(file->fd <= 0) {
             fprintf(stderr, "gsr error: gsr_replay_buffer_disk_iterator_get_packet_data: failed to open file\n");
