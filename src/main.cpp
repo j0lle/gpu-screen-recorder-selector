@@ -3320,7 +3320,6 @@ int main(int argc, char **argv) {
     std::mutex audio_filter_mutex;
 
     const double record_start_time = clock_get_monotonic_seconds();
-    std::atomic<double> replay_start_time(record_start_time);
 
     const size_t audio_buffer_size = audio_max_frame_size * 4 * 2; // max 4 bytes/sample, 2 channels
     uint8_t *empty_audio = (uint8_t*)malloc(audio_buffer_size);
@@ -3761,10 +3760,8 @@ int main(int argc, char **argv) {
             save_replay_output_filepath.clear();
             save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, encoder.replay_buffer, arg_parser.filename, arg_parser.container_format, file_extension, arg_parser.date_folders, hdr, capture, current_save_replay_seconds);
 
-            if(arg_parser.restart_replay_on_save && current_save_replay_seconds == save_replay_seconds_full) {
+            if(arg_parser.restart_replay_on_save && current_save_replay_seconds == save_replay_seconds_full)
                 gsr_replay_buffer_clear(encoder.replay_buffer);
-                replay_start_time = clock_get_monotonic_seconds() - paused_time_offset;
-            }
         }
 
         const double frame_end = clock_get_monotonic_seconds();
