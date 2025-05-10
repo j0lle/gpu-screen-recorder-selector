@@ -100,7 +100,6 @@ static const struct wl_output_listener output_listener = {
 static void registry_add_object(void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
     (void)version;
     gsr_window_wayland *window_wayland = data;
-    printf("info: wayland interface: %s\n", interface);
     if(strcmp(interface, "wl_compositor") == 0) {
         if(window_wayland->compositor)
             return;
