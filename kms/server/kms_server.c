@@ -8,6 +8,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <locale.h>
 
 #include <unistd.h>
 #include <limits.h>
@@ -434,6 +435,8 @@ static double clock_get_monotonic_seconds(void) {
 }
 
 int main(int argc, char **argv) {
+    setlocale(LC_ALL, "C"); // Sigh... stupid C
+
     int res = 0;
     int socket_fd = 0;
     gsr_drm drm;

@@ -1,5 +1,6 @@
-#include "../include/dbus.h"
-#include "../include/utils.h"
+#include "dbus_impl.h"
+
+#include <sys/random.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -27,6 +28,25 @@ typedef struct {
         dbus_bool_t boolean;
     };
 } dict_entry;
+
+static bool generate_random_characters(char *buffer, int buffer_size, const char *alphabet, size_t alphabet_size) {
+    /* TODO: Use other functions on other platforms than linux */
+    if(getrandom(buffer, buffer_size, 0) < buffer_size) {
+        fprintf(stderr, "Failed to get random bytes, error: %s\n", strerror(errno));
+        return false;
+    }
+
+    for(int i = 0; i < buffer_size; ++i) {
+        unsigned char c = *(unsigned char*)&buffer[i];
+        buffer[i] = alphabet[c % alphabet_size];
+    }
+
+    return true;
+}
+
+static bool generate_random_characters_standard_alphabet(char *buffer, int buffer_size) {
+    return generate_random_characters(buffer, buffer_size, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", 62);
+}
 
 static const char* dict_value_type_to_string(dict_value_type type) {
     switch(type) {

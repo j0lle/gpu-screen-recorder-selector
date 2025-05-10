@@ -2,7 +2,7 @@
 #include "../../include/color_conversion.h"
 #include "../../include/egl.h"
 #include "../../include/utils.h"
-#include "../../include/dbus.h"
+#include "../../dbus/client/dbus_client.h"
 #include "../../include/pipewire_video.h"
 
 #include <stdlib.h>
@@ -16,8 +16,8 @@ typedef struct {
 
     gsr_texture_map texture_map;
 
-    gsr_dbus dbus;
-    char *session_handle;
+    gsr_dbus_client dbus_client;
+    char session_handle[128];
 
     gsr_pipewire_video pipewire;
     vec2i capture_size;
@@ -52,15 +52,8 @@ static void gsr_capture_portal_stop(gsr_capture_portal *self) {
     }
 
     gsr_capture_portal_cleanup_plane_fds(self);
-
     gsr_pipewire_video_deinit(&self->pipewire);
-
-    if(self->session_handle) {
-        free(self->session_handle);
-        self->session_handle = NULL;
-    }
-
-    gsr_dbus_deinit(&self->dbus);
+    gsr_dbus_client_deinit(&self->dbus_client);
 }
 
 static void gsr_capture_portal_create_input_textures(gsr_capture_portal *self) {
@@ -195,36 +188,36 @@ static int gsr_capture_portal_setup_dbus(gsr_capture_portal *self, int *pipewire
     if(self->params.restore_portal_session)
         gsr_capture_portal_get_restore_token_from_cache(restore_token, sizeof(restore_token), self->params.portal_session_token_filepath);
 
-    if(!gsr_dbus_init(&self->dbus, restore_token))
+    if(!gsr_dbus_client_init(&self->dbus_client, restore_token))
         return -1;
 
     fprintf(stderr, "gsr info: gsr_capture_portal_setup_dbus: CreateSession\n");
-    response_status = gsr_dbus_screencast_create_session(&self->dbus, &self->session_handle);
+    response_status = gsr_dbus_client_screencast_create_session(&self->dbus_client, self->session_handle, sizeof(self->session_handle));
     if(response_status != 0) {
         fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: CreateSession failed\n");
         return response_status;
     }
 
     fprintf(stderr, "gsr info: gsr_capture_portal_setup_dbus: SelectSources\n");
-    response_status = gsr_dbus_screencast_select_sources(&self->dbus, self->session_handle, GSR_PORTAL_CAPTURE_TYPE_ALL, self->params.record_cursor ? GSR_PORTAL_CURSOR_MODE_EMBEDDED : GSR_PORTAL_CURSOR_MODE_HIDDEN);
+    response_status = gsr_dbus_client_screencast_select_sources(&self->dbus_client, self->session_handle, GSR_PORTAL_CAPTURE_TYPE_ALL, self->params.record_cursor ? GSR_PORTAL_CURSOR_MODE_EMBEDDED : GSR_PORTAL_CURSOR_MODE_HIDDEN);
     if(response_status != 0) {
         fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: SelectSources failed\n");
         return response_status;
     }
 
     fprintf(stderr, "gsr info: gsr_capture_portal_setup_dbus: Start\n");
-    response_status = gsr_dbus_screencast_start(&self->dbus, self->session_handle, pipewire_node);
+    response_status = gsr_dbus_client_screencast_start(&self->dbus_client, self->session_handle, pipewire_node);
     if(response_status != 0) {
         fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: Start failed\n");
         return response_status;
     }
 
-    const char *screencast_restore_token = gsr_dbus_screencast_get_restore_token(&self->dbus);
+    const char *screencast_restore_token = gsr_dbus_client_screencast_get_restore_token(&self->dbus_client);
     if(screencast_restore_token)
         gsr_capture_portal_save_restore_token(screencast_restore_token, self->params.portal_session_token_filepath);
 
     fprintf(stderr, "gsr info: gsr_capture_portal_setup_dbus: OpenPipeWireRemote\n");
-    if(!gsr_dbus_screencast_open_pipewire_remote(&self->dbus, self->session_handle, pipewire_fd)) {
+    if(!gsr_dbus_client_screencast_open_pipewire_remote(&self->dbus_client, self->session_handle, pipewire_fd)) {
         fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: OpenPipeWireRemote failed\n");
         return -1;
     }

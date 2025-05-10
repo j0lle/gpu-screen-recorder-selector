@@ -5,7 +5,7 @@ extern "C" {
 #include "../include/capture/kms.h"
 #ifdef GSR_PORTAL
 #include "../include/capture/portal.h"
-#include "../include/dbus.h"
+#include "../dbus/client/dbus_client.h"
 #endif
 #ifdef GSR_APP_AUDIO
 #include "../include/pipewire_audio.h"
@@ -1843,16 +1843,15 @@ static void list_supported_capture_options(const gsr_window *window, const char 
     if(!wayland)
         return;
 
-    gsr_dbus dbus;
-    if(!gsr_dbus_init(&dbus, NULL))
+    gsr_dbus_client dbus_client;
+    if(!gsr_dbus_client_init(&dbus_client, NULL))
         return;
 
-    char *session_handle = NULL;
-    if(gsr_dbus_screencast_create_session(&dbus, &session_handle) == 0) {
-        free(session_handle);
+    char session_handle[128];
+    if(gsr_dbus_client_screencast_create_session(&dbus_client, session_handle, sizeof(session_handle)) == 0)
         puts("portal");
-    }
-    gsr_dbus_deinit(&dbus);
+
+    gsr_dbus_client_deinit(&dbus_client);
 #endif
 }
 
