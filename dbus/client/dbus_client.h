@@ -2,7 +2,7 @@
 #define GSR_DBUS_CLIENT_H
 
 /*
-    Using a client-server architecture is needed for dbus because cap_sys_nice doesn't work with desktop portal.
+    Using a client-server architecture is needed for dbus because cap_sys_nice breaks desktop portal.
     The main binary has cap_sys_nice and we launch a new child-process without it which uses uses desktop portal.
 */
 

@@ -39,6 +39,12 @@ static void reset_cap_nice(void) {
     if(!caps)
         return;
 
+    cap_flag_value_t cap_sys_nice_value = CAP_CLEAR;
+    cap_get_flag(caps, CAP_SYS_NICE, CAP_EFFECTIVE, &cap_sys_nice_value);
+    if(cap_sys_nice_value == CAP_CLEAR) {
+        fprintf(stderr, "gsr warning: cap_sys_nice capability is missing on the gpu-screen-recorder binary, performance might be affected. If you are using the flatpak version of gpu-screen-recorder then the only fix is to use a non-flatpak version of gpu-screen-recorder\n");
+    }
+
     const cap_value_t cap_to_remove = CAP_SYS_NICE;
     cap_set_flag(caps, CAP_EFFECTIVE, 1, &cap_to_remove, CAP_CLEAR);
     cap_set_flag(caps, CAP_PERMITTED, 1, &cap_to_remove, CAP_CLEAR);
