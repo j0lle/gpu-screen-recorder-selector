@@ -5,7 +5,7 @@ Description=GPU Screen Recorder Service
 EnvironmentFile=-%h/.config/gpu-screen-recorder.env
 Environment=WINDOW=screen
 Environment=CONTAINER=mp4
-Environment=QUALITY=50000
+Environment=QUALITY=40000
 Environment=BITRATE_MODE=cbr
 Environment=CODEC=auto
 Environment=AUDIO_CODEC=opus
