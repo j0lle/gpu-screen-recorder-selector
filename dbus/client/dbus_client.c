@@ -3,6 +3,7 @@
 
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/prctl.h>
 #include <unistd.h>
 #include <poll.h>
 
@@ -65,6 +66,9 @@ bool gsr_dbus_client_init(gsr_dbus_client *self, const char *screencast_restore_
     } else if(self->pid == 0) { /* child */
         char socket_pair_server_str[32];
         snprintf(socket_pair_server_str, sizeof(socket_pair_server_str), "%d", self->socket_pair[1]);
+
+        /* Needed for NixOS for example, to make sure gsr-dbus-server doesn't inherit cap_sys_nice */
+        prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0);
 
         const char *args[] = { "gsr-dbus-server", socket_pair_server_str, self->screencast_restore_token ? self->screencast_restore_token : "", NULL };
         execvp(args[0], (char *const*)args);
