@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <drm_mode.h>
 
-#define GSR_KMS_PROTOCOL_VERSION 4
+#define GSR_KMS_PROTOCOL_VERSION 5
 
 #define GSR_KMS_MAX_ITEMS 8
 #define GSR_KMS_MAX_DMA_BUFS 4
@@ -39,6 +39,12 @@ struct gsr_kms_response_dma_buf {
     uint32_t offset;
 };
 
+typedef enum {
+    KMS_PLANE_TYPE_PRIMARY,
+    KMS_PLANE_TYPE_CURSOR,
+    KMS_PLANE_TYPE_OVERLAY
+} gsr_kms_plane_type;
+
 struct gsr_kms_response_item {
     gsr_kms_response_dma_buf dma_buf[GSR_KMS_MAX_DMA_BUFS];
     int num_dma_bufs;
@@ -47,7 +53,7 @@ struct gsr_kms_response_item {
     uint32_t pixel_format;
     uint64_t modifier;
     uint32_t connector_id; /* 0 if unknown */
-    bool is_cursor;
+    gsr_kms_plane_type plane_type;
     bool has_hdr_metadata;
     int x;
     int y;

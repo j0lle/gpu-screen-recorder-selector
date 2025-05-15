@@ -264,12 +264,19 @@ static void gsr_capture_kms_on_event(gsr_capture *cap, gsr_egl *egl) {
 //     }
 // }
 
-static gsr_kms_response_item* find_drm_by_connector_id(gsr_kms_response *kms_response, uint32_t connector_id) {
+static gsr_kms_response_item* find_drm_by_connector_id_and_plane_type(gsr_kms_response *kms_response, uint32_t connector_id, gsr_kms_plane_type plane_type) {
     for(int i = 0; i < kms_response->num_items; ++i) {
-        if(kms_response->items[i].connector_id == connector_id && !kms_response->items[i].is_cursor)
+        if(kms_response->items[i].connector_id == connector_id && kms_response->items[i].plane_type == plane_type)
             return &kms_response->items[i];
     }
     return NULL;
+}
+
+static gsr_kms_response_item* find_drm_by_connector_id(gsr_kms_response *kms_response, uint32_t connector_id) {
+    gsr_kms_response_item *response_item = find_drm_by_connector_id_and_plane_type(kms_response, connector_id, KMS_PLANE_TYPE_PRIMARY);
+    if(!response_item)
+        response_item = find_drm_by_connector_id_and_plane_type(kms_response, connector_id, KMS_PLANE_TYPE_OVERLAY);
+    return response_item;
 }
 
 static gsr_kms_response_item* find_largest_drm(gsr_kms_response *kms_response) {
@@ -280,7 +287,7 @@ static gsr_kms_response_item* find_largest_drm(gsr_kms_response *kms_response) {
     gsr_kms_response_item *largest_drm = &kms_response->items[0];
     for(int i = 0; i < kms_response->num_items; ++i) {
         const int64_t size = (int64_t)kms_response->items[i].width * (int64_t)kms_response->items[i].height;
-        if(size > largest_size && !kms_response->items[i].is_cursor) {
+        if(size > largest_size && kms_response->items[i].plane_type == KMS_PLANE_TYPE_PRIMARY) {
             largest_size = size;
             largest_drm = &kms_response->items[i];
         }
@@ -291,7 +298,7 @@ static gsr_kms_response_item* find_largest_drm(gsr_kms_response *kms_response) {
 static gsr_kms_response_item* find_cursor_drm(gsr_kms_response *kms_response, uint32_t connector_id) {
     gsr_kms_response_item *cursor_drm = NULL;
     for(int i = 0; i < kms_response->num_items; ++i) {
-        if(kms_response->items[i].is_cursor) {
+        if(kms_response->items[i].plane_type == KMS_PLANE_TYPE_CURSOR) {
             cursor_drm = &kms_response->items[i];
             if(kms_response->items[i].connector_id == connector_id)
                 break;
@@ -649,6 +656,28 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
         capture_pos, self->capture_size, original_frame_size,
         gsr_monitor_rotation_to_rotation(self->monitor_rotation), GSR_SOURCE_COLOR_RGB, self->external_texture_fallback, false);
 
+    if(drm_fd->plane_type != KMS_PLANE_TYPE_OVERLAY) {
+        const vec2i framebuffer_size = original_frame_size;
+        for(int i = 0; i < self->monitor_id.num_connector_ids; ++i) {
+            const gsr_kms_response_item *overlay_drm_fd = find_drm_by_connector_id_and_plane_type(&self->kms_response, self->monitor_id.connector_ids[i], KMS_PLANE_TYPE_OVERLAY);
+            if(!overlay_drm_fd)
+                continue;
+
+            self->external_texture_fallback = false;
+            image = gsr_capture_kms_create_egl_image_with_fallback(self, overlay_drm_fd);
+            if(image) {
+                gsr_capture_kms_bind_image_to_input_texture_with_fallback(self, image);
+                self->params.egl->eglDestroyImage(self->params.egl->egl_display, image);
+            }
+
+            // TODO: Lole
+            gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
+                target_pos, output_size,
+                (vec2i){overlay_drm_fd->x, overlay_drm_fd->y}, framebuffer_size, original_frame_size,
+                gsr_monitor_rotation_to_rotation(self->monitor_rotation), GSR_SOURCE_COLOR_RGB, self->external_texture_fallback, true);
+        }
+    }
+
     if(self->params.record_cursor) {
         gsr_kms_response_item *cursor_drm_fd = find_cursor_drm_if_on_monitor(self, drm_fd->connector_id, capture_is_combined_plane);
         // The cursor is handled by x11 on x11 instead of using the cursor drm plane because on prime systems with a dedicated nvidia gpu
@@ -661,7 +690,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
             cursor_monitor_offset.y += self->params.region_position.y;
             render_x11_cursor(self, color_conversion, cursor_monitor_offset, target_pos, output_size);
         } else if(cursor_drm_fd) {
-            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
+            const vec2i framebuffer_size = original_frame_size;
             render_drm_cursor(self, color_conversion, cursor_drm_fd, target_pos, output_size, framebuffer_size);
         }
     }
