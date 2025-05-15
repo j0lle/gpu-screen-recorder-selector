@@ -145,13 +145,12 @@ typedef enum {
     PLANE_PROPERTY_SRC_H      = 1 << 5,
     PLANE_PROPERTY_IS_CURSOR  = 1 << 6,
     PLANE_PROPERTY_IS_PRIMARY = 1 << 7,
-    PLANE_PROPERTY_IS_OVERLAY = 1 << 8,
 } plane_property_mask;
 
 /* Returns plane_property_mask */
-static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *crtc_x, int *crtc_y, int *src_x, int *src_y, int *src_w, int *src_h) {
-    *crtc_x = 0;
-    *crtc_y = 0;
+static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *x, int *y, int *src_x, int *src_y, int *src_w, int *src_h) {
+    *x = 0;
+    *y = 0;
     *src_x = 0;
     *src_y = 0;
     *src_w = 0;
@@ -172,10 +171,10 @@ static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *crtc_x, 
         // SRC_* values are fixed 16.16 points
         const uint32_t type = prop->flags & (DRM_MODE_PROP_LEGACY_TYPE | DRM_MODE_PROP_EXTENDED_TYPE);
         if((type & DRM_MODE_PROP_SIGNED_RANGE) && strcmp(prop->name, "CRTC_X") == 0) {
-            *crtc_x = (int)props->prop_values[i];
+            *x = (int)props->prop_values[i];
             property_mask |= PLANE_PROPERTY_X;
         } else if((type & DRM_MODE_PROP_SIGNED_RANGE) && strcmp(prop->name, "CRTC_Y") == 0) {
-            *crtc_y = (int)props->prop_values[i];
+            *y = (int)props->prop_values[i];
             property_mask |= PLANE_PROPERTY_Y;
         } else if((type & DRM_MODE_PROP_RANGE) && strcmp(prop->name, "SRC_X") == 0) {
             *src_x = (int)(props->prop_values[i] >> 16);
@@ -197,9 +196,6 @@ static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *crtc_x, 
                     break;
                 } else if(prop->enums[j].value == current_enum_value && strcmp(prop->enums[j].name, "Cursor") == 0) {
                     property_mask |= PLANE_PROPERTY_IS_CURSOR;
-                    break;
-                } else if(prop->enums[j].value == current_enum_value && strcmp(prop->enums[j].name, "Overlay") == 0) {
-                    property_mask |= PLANE_PROPERTY_IS_OVERLAY;
                     break;
                 }
             }
@@ -293,16 +289,6 @@ static int drm_prime_handles_to_fds(gsr_drm *drm, drmModeFB2Ptr drmfb, int *fb_f
     return GSR_KMS_MAX_DMA_BUFS;
 }
 
-static int plane_property_get_plane_type(plane_property_mask property_mask) {
-    if(property_mask & PLANE_PROPERTY_IS_PRIMARY)
-        return KMS_PLANE_TYPE_PRIMARY;
-    else if(property_mask & PLANE_PROPERTY_IS_CURSOR)
-        return KMS_PLANE_TYPE_CURSOR;
-    else if(property_mask & PLANE_PROPERTY_IS_OVERLAY)
-        return KMS_PLANE_TYPE_OVERLAY;
-    return -1;
-}
-
 static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response) {
     int result = -1;
 
@@ -354,10 +340,9 @@ static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response) {
         // TODO: Check if dimensions have changed by comparing width and height to previous time this was called.
         // TODO: Support other plane formats than rgb (with multiple planes, such as direct YUV420 on wayland).
 
-        int crtc_x = 0, crtc_y = 0, src_x = 0, src_y = 0, src_w = 0, src_h = 0;
-        const plane_property_mask property_mask = plane_get_properties(drm->drmfd, plane->plane_id, &crtc_x, &crtc_y, &src_x, &src_y, &src_w, &src_h);
-        const int plane_type = plane_property_get_plane_type(property_mask);
-        if(plane_type == -1)
+        int x = 0, y = 0, src_x = 0, src_y = 0, src_w = 0, src_h = 0;
+        plane_property_mask property_mask = plane_get_properties(drm->drmfd, plane->plane_id, &x, &y, &src_x, &src_y, &src_w, &src_h);
+        if(!(property_mask & PLANE_PROPERTY_IS_PRIMARY) && !(property_mask & PLANE_PROPERTY_IS_CURSOR))
             continue;
 
         int fb_fds[GSR_KMS_MAX_DMA_BUFS];
@@ -369,50 +354,38 @@ static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response) {
             goto cleanup_handles;
         }
 
-        gsr_kms_response_item *response_item = &response->items[response->num_items];
+        const int item_index = response->num_items;
 
         const connector_crtc_pair *crtc_pair = get_connector_pair_by_crtc_id(&c2crtc_map, plane->crtc_id);
         if(crtc_pair && crtc_pair->hdr_metadata_blob_id) {
-            response_item->has_hdr_metadata = get_hdr_metadata(drm->drmfd, crtc_pair->hdr_metadata_blob_id, &response_item->hdr_metadata);
+            response->items[item_index].has_hdr_metadata = get_hdr_metadata(drm->drmfd, crtc_pair->hdr_metadata_blob_id, &response->items[item_index].hdr_metadata);
         } else {
-            response_item->has_hdr_metadata = false;
+            response->items[item_index].has_hdr_metadata = false;
         }
 
         for(int j = 0; j < num_fb_fds; ++j) {
-            response_item->dma_buf[j].fd = fb_fds[j];
-            response_item->dma_buf[j].pitch = drmfb->pitches[j];
-            response_item->dma_buf[j].offset = drmfb->offsets[j];
+            response->items[item_index].dma_buf[j].fd = fb_fds[j];
+            response->items[item_index].dma_buf[j].pitch = drmfb->pitches[j];
+            response->items[item_index].dma_buf[j].offset = drmfb->offsets[j];
         }
-        response_item->num_dma_bufs = num_fb_fds;
+        response->items[item_index].num_dma_bufs = num_fb_fds;
 
-        response_item->width = drmfb->width;
-        response_item->height = drmfb->height;
-        response_item->pixel_format = drmfb->pixel_format;
-        response_item->modifier = drmfb->flags & DRM_MODE_FB_MODIFIERS ? drmfb->modifier : DRM_FORMAT_MOD_INVALID;
-        response_item->connector_id = crtc_pair ? crtc_pair->connector_id : 0;
-        response_item->plane_type = plane_type;
-        switch(response_item->plane_type) {
-            case KMS_PLANE_TYPE_PRIMARY: {
-                response_item->x = src_x;
-                response_item->y = src_y;
-                response_item->src_w = src_w;
-                response_item->src_h = src_h;
-                break;
-            }
-            case KMS_PLANE_TYPE_CURSOR: {
-                response_item->x = crtc_x;
-                response_item->y = crtc_y;
-                response_item->src_w = 0;
-                response_item->src_h = 0;
-                break;
-            }
-            case KMS_PLANE_TYPE_OVERLAY: {
-                response_item->x = crtc_x;
-                response_item->y = crtc_y;
-                response_item->src_w = src_w;
-                response_item->src_h = src_y;
-                break;
-            }
+        response->items[item_index].width = drmfb->width;
+        response->items[item_index].height = drmfb->height;
+        response->items[item_index].pixel_format = drmfb->pixel_format;
+        response->items[item_index].modifier = drmfb->flags & DRM_MODE_FB_MODIFIERS ? drmfb->modifier : DRM_FORMAT_MOD_INVALID;
+        response->items[item_index].connector_id = crtc_pair ? crtc_pair->connector_id : 0;
+        response->items[item_index].is_cursor = property_mask & PLANE_PROPERTY_IS_CURSOR;
+        if(property_mask & PLANE_PROPERTY_IS_CURSOR) {
+            response->items[item_index].x = x;
+            response->items[item_index].y = y;
+            response->items[item_index].src_w = 0;
+            response->items[item_index].src_h = 0;
+        } else {
+            response->items[item_index].x = src_x;
+            response->items[item_index].y = src_y;
+            response->items[item_index].src_w = src_w;
+            response->items[item_index].src_h = src_h;
         }
         ++response->num_items;
 
