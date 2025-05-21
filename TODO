@@ -283,3 +283,5 @@ Add the option to set audio track name, for example with -a "track-name:blabla|d
 
 Maybe disable qp/vbr for replay. In that case we can preallocate all replay data (for both ram and disk) and write to that directly when receiving packet (dont do that when also recording at the same time).
     That could improve performance/disk write optimization and maybe even reduce ram usage because of less blocks/fragmentation.
+
+When rpc is added add the option to add/remove audio devices/app audio and also overlays (from new capture sources).
