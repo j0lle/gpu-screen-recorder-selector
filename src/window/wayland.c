@@ -339,24 +339,13 @@ static gsr_monitor_rotation wayland_transform_to_gsr_rotation(int32_t rot) {
 
 static void gsr_window_wayland_for_each_active_monitor_output_cached(const gsr_window *window, active_monitor_callback callback, void *userdata) {
     const gsr_window_wayland *self = window->priv;
-    drm_connector_type_count type_counts[CONNECTOR_TYPE_COUNTS];
-    int num_type_counts = 0;
-
     for(int i = 0; i < self->num_outputs; ++i) {
         const gsr_wayland_output *output = &self->outputs[i];
         if(!output->name)
             continue;
 
         const int connector_type_index = get_connector_type_by_name(output->name);
-        drm_connector_type_count *connector_type = NULL;
-        if(connector_type_index != -1)
-            connector_type = drm_connector_types_get_index(type_counts, &num_type_counts, connector_type_index);
-        
-        if(connector_type) {
-            ++connector_type->count;
-            ++connector_type->count_active;
-        }
-
+        const int connector_type_id = get_connector_type_id_by_name(output->name);
         const gsr_monitor monitor = {
             .name = output->name,
             .name_len = strlen(output->name),
@@ -364,7 +353,7 @@ static void gsr_window_wayland_for_each_active_monitor_output_cached(const gsr_w
             .size = { .x = output->size.x, .y = output->size.y },
             .connector_id = 0,
             .rotation = wayland_transform_to_gsr_rotation(output->transform),
-            .monitor_identifier = connector_type ? monitor_identifier_from_type_and_count(connector_type_index, connector_type->count_active) : 0
+            .monitor_identifier = (connector_type_index != -1 && connector_type_id != -1) ? monitor_identifier_from_type_and_count(connector_type_index, connector_type_id) : 0
         };
         callback(&monitor, userdata);
     }

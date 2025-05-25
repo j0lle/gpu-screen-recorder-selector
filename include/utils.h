@@ -7,8 +7,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CONNECTOR_TYPE_COUNTS 32
-
 typedef struct AVCodecContext AVCodecContext;
 typedef struct AVFrame AVFrame;
 
@@ -29,12 +27,6 @@ typedef struct {
     bool found_monitor;
 } get_monitor_by_name_userdata;
 
-typedef struct {
-    int type;
-    int count;
-    int count_active;
-} drm_connector_type_count;
-
 double clock_get_monotonic_seconds(void);
 bool generate_random_characters(char *buffer, int buffer_size, const char *alphabet, size_t alphabet_size);
 bool generate_random_characters_standard_alphabet(char *buffer, int buffer_size);
@@ -46,7 +38,7 @@ bool get_monitor_by_name(const gsr_egl *egl, gsr_connection_type connection_type
 bool drm_monitor_get_display_server_data(const gsr_window *window, const gsr_monitor *monitor, gsr_monitor_rotation *monitor_rotation, vec2i *monitor_position);
 
 int get_connector_type_by_name(const char *name);
-drm_connector_type_count* drm_connector_types_get_index(drm_connector_type_count *type_counts, int *num_type_counts, int connector_type);
+int get_connector_type_id_by_name(const char *name);
 uint32_t monitor_identifier_from_type_and_count(int monitor_type_index, int monitor_type_count);
 
 bool gl_get_gpu_info(gsr_egl *egl, gsr_gpu_info *info);
@@ -61,7 +53,6 @@ int create_directory_recursive(char *path);
 
 /* |img_attr| needs to be at least 44 in size */
 void setup_dma_buf_attrs(intptr_t *img_attr, uint32_t format, uint32_t width, uint32_t height, const int *fds, const uint32_t *offsets, const uint32_t *pitches, const uint64_t *modifiers, int num_planes, bool use_modifier);
-bool video_codec_context_is_vaapi(AVCodecContext *video_codec_context);
 
 vec2i scale_keep_aspect_ratio(vec2i from, vec2i to);
 

@@ -285,3 +285,7 @@ Maybe disable qp/vbr for replay. In that case we can preallocate all replay data
     That could improve performance/disk write optimization and maybe even reduce ram usage because of less blocks/fragmentation.
 
 When rpc is added add the option to add/remove audio devices/app audio and also overlays (from new capture sources).
+
+Support hdr screenshot.
+
+Recreate opengl context on loss. This can happen if there is a gpu driver bug, causing context to need to be recreated. This is a nice improvement to not break recording even with buggy driver.

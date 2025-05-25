@@ -108,7 +108,7 @@ void for_each_active_monitor_output_x11_not_cached(Display *display, active_moni
                 // but gpu screen recorder captures the drm framebuffer instead of x11 api. This drm framebuffer which doesn't increase in size when using xrandr scaling.
                 // Maybe a better option would be to get the drm crtc size instead.
                 const XRRModeInfo *mode_info = get_mode_info(screen_res, crt_info->mode);
-                if(mode_info && out_info->nameLen < (int)sizeof(display_name)) {
+                if(mode_info) {
                     snprintf(display_name, sizeof(display_name), "%.*s", (int)out_info->nameLen, out_info->name);
                     const gsr_monitor_rotation rotation = x11_rotation_to_gsr_rotation(crt_info->rotation);
                     const vec2i monitor_size = get_monitor_size_rotated(mode_info->width, mode_info->height, rotation);
@@ -150,21 +150,22 @@ int get_connector_type_by_name(const char *name) {
         return -1;
 }
 
-drm_connector_type_count* drm_connector_types_get_index(drm_connector_type_count *type_counts, int *num_type_counts, int connector_type) {
-    for(int i = 0; i < *num_type_counts; ++i) {
-        if(type_counts[i].type == connector_type)
-            return &type_counts[i];
+int get_connector_type_id_by_name(const char *name) {
+    int len = strlen(name);
+    int num_start = 0;
+    for(int i = len - 1; i >= 0; --i) {
+        const bool is_num = name[i] >= '0' && name[i] <= '9';
+        if(!is_num) {
+            num_start = i + 1;
+            break;
+        }
     }
 
-    if(*num_type_counts == CONNECTOR_TYPE_COUNTS)
-        return NULL;
+    const int num_len = len - num_start;
+    if(num_len <= 0)
+        return -1;
 
-    const int index = *num_type_counts;
-    type_counts[index].type = connector_type;
-    type_counts[index].count = 0;
-    type_counts[index].count_active = 0;
-    ++*num_type_counts;
-    return &type_counts[index];
+    return atoi(name + num_start);
 }
 
 uint32_t monitor_identifier_from_type_and_count(int monitor_type_index, int monitor_type_count) {
@@ -195,9 +196,6 @@ static void for_each_active_monitor_output_drm(const char *card_path, active_mon
 
     drmSetClientCap(fd, DRM_CLIENT_CAP_ATOMIC, 1);
 
-    drm_connector_type_count type_counts[CONNECTOR_TYPE_COUNTS];
-    int num_type_counts = 0;
-
     char display_name[256];
     drmModeResPtr resources = drmModeGetResources(fd);
     if(resources) {
@@ -206,35 +204,29 @@ static void for_each_active_monitor_output_drm(const char *card_path, active_mon
             if(!connector)
                 continue;
 
-            drm_connector_type_count *connector_type = drm_connector_types_get_index(type_counts, &num_type_counts, connector->connector_type);
-            const char *connection_name = drmModeGetConnectorTypeName(connector->connector_type);
-            const int connection_name_len = strlen(connection_name);
-            if(connector_type)
-                ++connector_type->count;
-
             if(connector->connection != DRM_MODE_CONNECTED) {
                 drmModeFreeConnector(connector);
                 continue;
             }
 
-            if(connector_type)
-                ++connector_type->count_active;
-
             uint64_t crtc_id = 0;
             connector_get_property_by_name(fd, connector, "CRTC_ID", &crtc_id);
 
             drmModeCrtcPtr crtc = drmModeGetCrtc(fd, crtc_id);
-            if(connector_type && crtc_id > 0 && crtc && connection_name_len + 5 < (int)sizeof(display_name)) {
-                const int display_name_len = snprintf(display_name, sizeof(display_name), "%s-%d", connection_name, connector_type->count);
+            const char *connection_name = drmModeGetConnectorTypeName(connector->connector_type);
+
+            if(connection_name && crtc_id > 0 && crtc) {
                 const int connector_type_index_name = get_connector_type_by_name(display_name);
-                gsr_monitor monitor = {
+                const int display_name_len = snprintf(display_name, sizeof(display_name), "%s-%u", connection_name, connector->connector_type_id);
+
+                const gsr_monitor monitor = {
                     .name = display_name,
                     .name_len = display_name_len,
                     .pos = { .x = crtc->x, .y = crtc->y },
                     .size = { .x = (int)crtc->width, .y = (int)crtc->height },
                     .connector_id = connector->connector_id,
                     .rotation = GSR_MONITOR_ROT_0,
-                    .monitor_identifier = connector_type_index_name != -1 ? monitor_identifier_from_type_and_count(connector_type_index_name, connector_type->count_active) : 0
+                    .monitor_identifier = connector_type_index_name != -1 ? monitor_identifier_from_type_and_count(connector_type_index_name, connector->connector_type_id) : 0
                 };
                 callback(&monitor, userdata);
             }
@@ -605,33 +597,6 @@ void setup_dma_buf_attrs(intptr_t *img_attr, uint32_t format, uint32_t width, ui
 
     img_attr[img_attr_index++] = EGL_NONE;
     assert(img_attr_index <= 44);
-}
-
-static VADisplay video_codec_context_get_vaapi_display(AVCodecContext *video_codec_context) {
-    AVBufferRef *hw_frames_ctx = video_codec_context->hw_frames_ctx;
-    if(!hw_frames_ctx)
-        return NULL;
-
-    AVHWFramesContext *hw_frame_context = (AVHWFramesContext*)hw_frames_ctx->data;
-    AVHWDeviceContext *device_context = (AVHWDeviceContext*)hw_frame_context->device_ctx;
-    if(device_context->type != AV_HWDEVICE_TYPE_VAAPI)
-        return NULL;
-
-    AVVAAPIDeviceContext *vactx = device_context->hwctx;
-    return vactx->display;
-}
-
-bool video_codec_context_is_vaapi(AVCodecContext *video_codec_context) {
-    if(!video_codec_context)
-        return false;
-
-    AVBufferRef *hw_frames_ctx = video_codec_context->hw_frames_ctx;
-    if(!hw_frames_ctx)
-        return false;
-
-    AVHWFramesContext *hw_frame_context = (AVHWFramesContext*)hw_frames_ctx->data;
-    AVHWDeviceContext *device_context = (AVHWDeviceContext*)hw_frame_context->device_ctx;
-    return device_context->type == AV_HWDEVICE_TYPE_VAAPI;
 }
 
 vec2i scale_keep_aspect_ratio(vec2i from, vec2i to) {
