@@ -465,7 +465,7 @@ static bool args_parser_set_values(args_parser *self) {
     self->keyint = args_get_double_by_key(self->args, NUM_ARGS, "-keyint", 2.0);
 
     if(self->audio_codec == GSR_AUDIO_CODEC_FLAC) {
-        fprintf(stderr, "Warning: flac audio codec is temporary disabled, using opus audio codec instead\n");
+        fprintf(stderr, "gsr warning: flac audio codec is temporary disabled, using opus audio codec instead\n");
         self->audio_codec = GSR_AUDIO_CODEC_OPUS;
     }
 
@@ -473,7 +473,7 @@ static bool args_parser_set_values(args_parser *self) {
     if(self->portal_session_token_filepath) {
         int len = strlen(self->portal_session_token_filepath);
         if(len > 0 && self->portal_session_token_filepath[len - 1] == '/') {
-            fprintf(stderr, "Error: -portal-session-token-filepath should be a path to a file but it ends with a /: %s\n", self->portal_session_token_filepath);
+            fprintf(stderr, "gsr error: -portal-session-token-filepath should be a path to a file but it ends with a /: %s\n", self->portal_session_token_filepath);
             return false;
         }
     }
@@ -482,13 +482,13 @@ static bool args_parser_set_values(args_parser *self) {
     if(self->recording_saved_script) {
         struct stat buf;
         if(stat(self->recording_saved_script, &buf) == -1 || !S_ISREG(buf.st_mode)) {
-            fprintf(stderr, "Error: Script \"%s\" either doesn't exist or it's not a file\n", self->recording_saved_script);
+            fprintf(stderr, "gsr error: Script \"%s\" either doesn't exist or it's not a file\n", self->recording_saved_script);
             usage();
             return false;
         }
 
         if(!(buf.st_mode & S_IXUSR)) {
-            fprintf(stderr, "Error: Script \"%s\" is not executable\n", self->recording_saved_script);
+            fprintf(stderr, "gsr error: Script \"%s\" is not executable\n", self->recording_saved_script);
             usage();
             return false;
         }
@@ -500,19 +500,19 @@ static bool args_parser_set_values(args_parser *self) {
 
     if(self->bitrate_mode == GSR_BITRATE_MODE_CBR) {
         if(!quality_str) {
-            fprintf(stderr, "Error: option '-q' is required when using '-bm cbr' option\n");
+            fprintf(stderr, "gsr error: option '-q' is required when using '-bm cbr' option\n");
             usage();
             return false;
         }
 
         if(sscanf(quality_str, "%" PRIi64, &self->video_bitrate) != 1) {
-            fprintf(stderr, "Error: -q argument \"%s\" is not an integer value. When using '-bm cbr' option '-q' is expected to be an integer value\n", quality_str);
+            fprintf(stderr, "gsr error: -q argument \"%s\" is not an integer value. When using '-bm cbr' option '-q' is expected to be an integer value\n", quality_str);
             usage();
             return false;
         }
 
         if(self->video_bitrate < 0) {
-            fprintf(stderr, "Error: -q is expected to be 0 or larger, got %" PRIi64 "\n", self->video_bitrate);
+            fprintf(stderr, "gsr error: -q is expected to be 0 or larger, got %" PRIi64 "\n", self->video_bitrate);
             usage();
             return false;
         }
@@ -531,7 +531,7 @@ static bool args_parser_set_values(args_parser *self) {
         } else if(strcmp(quality_str, "ultra") == 0) {
             self->video_quality = GSR_VIDEO_QUALITY_ULTRA;
         } else {
-            fprintf(stderr, "Error: -q should either be 'medium', 'high', 'very_high' or 'ultra', got: '%s'\n", quality_str);
+            fprintf(stderr, "gsr error: -q should either be 'medium', 'high', 'very_high' or 'ultra', got: '%s'\n", quality_str);
             usage();
             return false;
         }
@@ -539,7 +539,7 @@ static bool args_parser_set_values(args_parser *self) {
 
     const char *output_resolution_str = args_get_value_by_key(self->args, NUM_ARGS, "-s");
     if(!output_resolution_str && strcmp(self->window, "focused") == 0) {
-        fprintf(stderr, "Error: option -s is required when using '-w focused' option\n");
+        fprintf(stderr, "gsr error: option -s is required when using '-w focused' option\n");
         usage();
         return false;
     }
@@ -547,13 +547,13 @@ static bool args_parser_set_values(args_parser *self) {
     self->output_resolution = (vec2i){0, 0};
     if(output_resolution_str) {
         if(sscanf(output_resolution_str, "%dx%d", &self->output_resolution.x, &self->output_resolution.y) != 2) {
-            fprintf(stderr, "Error: invalid value for option -s '%s', expected a value in format WxH\n", output_resolution_str);
+            fprintf(stderr, "gsr error: invalid value for option -s '%s', expected a value in format WxH\n", output_resolution_str);
             usage();
             return false;
         }
 
         if(self->output_resolution.x < 0 || self->output_resolution.y < 0) {
-            fprintf(stderr, "Error: invalid value for option -s '%s', expected width and height to be greater or equal to 0\n", output_resolution_str);
+            fprintf(stderr, "gsr error: invalid value for option -s '%s', expected width and height to be greater or equal to 0\n", output_resolution_str);
             usage();
             return false;
         }
@@ -564,25 +564,25 @@ static bool args_parser_set_values(args_parser *self) {
     const char *region_str = args_get_value_by_key(self->args, NUM_ARGS, "-region");
     if(region_str) {
         if(strcmp(self->window, "region") != 0) {
-            fprintf(stderr, "Error: option -region can only be used when option '-w region' is used\n");
+            fprintf(stderr, "gsr error: option -region can only be used when option '-w region' is used\n");
             usage();
             return false;
         }
 
         if(sscanf(region_str, "%dx%d+%d+%d", &self->region_size.x, &self->region_size.y, &self->region_position.x, &self->region_position.y) != 4) {
-            fprintf(stderr, "Error: invalid value for option -region '%s', expected a value in format WxH+X+Y\n", region_str);
+            fprintf(stderr, "gsr error: invalid value for option -region '%s', expected a value in format WxH+X+Y\n", region_str);
             usage();
             return false;
         }
 
         if(self->region_size.x < 0 || self->region_size.y < 0 || self->region_position.x < 0 || self->region_position.y < 0) {
-            fprintf(stderr, "Error: invalid value for option -region '%s', expected width, height, x and y to be greater or equal to 0\n", region_str);
+            fprintf(stderr, "gsr error: invalid value for option -region '%s', expected width, height, x and y to be greater or equal to 0\n", region_str);
             usage();
             return false;
         }
     } else {
         if(strcmp(self->window, "region") == 0) {
-            fprintf(stderr, "Error: option -region is required when '-w region' is used\n");
+            fprintf(stderr, "gsr error: option -region is required when '-w region' is used\n");
             usage();
             return false;
         }
@@ -604,7 +604,7 @@ static bool args_parser_set_values(args_parser *self) {
         self->is_livestream = is_livestream_path(self->filename);
         if(self->is_livestream) {
             if(is_replaying) {
-                fprintf(stderr, "Error: replay mode is not applicable to live streaming\n");
+                fprintf(stderr, "gsr error: replay mode is not applicable to live streaming\n");
                 return false;
             }
         } else {
@@ -614,20 +614,20 @@ static bool args_parser_set_values(args_parser *self) {
                 char *directory = dirname(directory_buf);
                 if(strcmp(directory, ".") != 0 && strcmp(directory, "/") != 0) {
                     if(create_directory_recursive(directory) != 0) {
-                        fprintf(stderr, "Error: failed to create directory for output file: %s\n", self->filename);
+                        fprintf(stderr, "gsr error: failed to create directory for output file: %s\n", self->filename);
                         return false;
                     }
                 }
             } else {
                 if(!self->container_format) {
-                    fprintf(stderr, "Error: option -c is required when using option -r\n");
+                    fprintf(stderr, "gsr error: option -c is required when using option -r\n");
                     usage();
                     return false;
                 }
 
                 struct stat buf;
                 if(stat(self->filename, &buf) != -1 && !S_ISDIR(buf.st_mode)) {
-                    fprintf(stderr, "Error: File \"%s\" exists but it's not a directory\n", self->filename);
+                    fprintf(stderr, "gsr error: File \"%s\" exists but it's not a directory\n", self->filename);
                     usage();
                     return false;
                 }
@@ -637,13 +637,13 @@ static bool args_parser_set_values(args_parser *self) {
         if(!is_replaying) {
             self->filename = "/dev/stdout";
         } else {
-            fprintf(stderr, "Error: Option -o is required when using option -r\n");
+            fprintf(stderr, "gsr error: Option -o is required when using option -r\n");
             usage();
             return false;
         }
 
         if(!self->container_format) {
-            fprintf(stderr, "Error: option -c is required when not using option -o\n");
+            fprintf(stderr, "gsr error: option -c is required when not using option -o\n");
             usage();
             return false;
         }
@@ -656,10 +656,10 @@ static bool args_parser_set_values(args_parser *self) {
 
     const bool is_portal_capture = strcmp(self->window, "portal") == 0;
     if(!self->restore_portal_session && is_portal_capture)
-        fprintf(stderr, "Info: option '-w portal' was used without '-restore-portal-session yes'. The previous screencast session will be ignored\n");
+        fprintf(stderr, "gsr info: option '-w portal' was used without '-restore-portal-session yes'. The previous screencast session will be ignored\n");
 
     if(self->is_livestream && self->recording_saved_script) {
-        fprintf(stderr, "Warning: live stream detected, -sc script is ignored\n");
+        fprintf(stderr, "gsr warning: live stream detected, -sc script is ignored\n");
         self->recording_saved_script = NULL;
     }
 
@@ -704,7 +704,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
             arg_handlers->list_capture_options(card_path, userdata);
             return true;
         } else {
-            fprintf(stderr, "Error: expected --list-capture-options to be called with either no extra arguments or 1 extra argument (card path)\n");
+            fprintf(stderr, "gsr error: expected --list-capture-options to be called with either no extra arguments or 1 extra argument (card path)\n");
             return false;
         }
     }
@@ -751,19 +751,19 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
         const char *arg_name = argv[i];
         Arg *arg = args_get_by_key(self->args, NUM_ARGS, arg_name);
         if(!arg) {
-            fprintf(stderr, "Error: invalid argument '%s'\n", arg_name);
+            fprintf(stderr, "gsr error: invalid argument '%s'\n", arg_name);
             usage();
             return false;
         }
 
         if(arg->num_values > 0 && !arg->list) {
-            fprintf(stderr, "Error: expected argument '%s' to only be specified once\n", arg_name);
+            fprintf(stderr, "gsr error: expected argument '%s' to only be specified once\n", arg_name);
             usage();
             return false;
         }
 
         if(i + 1 >= argc) {
-            fprintf(stderr, "Error: missing value for argument '%s'\n", arg_name);
+            fprintf(stderr, "gsr error: missing value for argument '%s'\n", arg_name);
             usage();
             return false;
         }
@@ -779,7 +779,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
                 } else if(strcmp(arg_value, "no") == 0) {
                     arg->typed_value.boolean = false;
                 } else {
-                    fprintf(stderr, "Error: %s should either be 'yes' or 'no', got: '%s'\n", arg_name, arg_value);
+                    fprintf(stderr, "gsr error: %s should either be 'yes' or 'no', got: '%s'\n", arg_name, arg_value);
                     usage();
                     return false;
                 }
@@ -787,7 +787,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
             }
             case ARG_TYPE_ENUM: {
                 if(!arg_get_enum_value_by_name(arg, arg_value, &arg->typed_value.enum_value)) {
-                    fprintf(stderr, "Error: %s should either be ", arg_name);
+                    fprintf(stderr, "gsr error: %s should either be ", arg_name);
                     arg_print_expected_enum_names(arg);
                     fprintf(stderr, ", got: '%s'\n", arg_value);
                     usage();
@@ -797,19 +797,19 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
             }
             case ARG_TYPE_I64: {
                 if(sscanf(arg_value, "%" PRIi64, &arg->typed_value.i64_value) != 1) {
-                    fprintf(stderr, "Error: %s argument \"%s\" is not an integer\n", arg_name, arg_value);
+                    fprintf(stderr, "gsr error: %s argument \"%s\" is not an integer\n", arg_name, arg_value);
                     usage();
                     return false;
                 }
 
                 if(arg->typed_value.i64_value < arg->integer_value_min) {
-                    fprintf(stderr, "Error: %s argument is expected to be larger than %" PRIi64 ", got %" PRIi64 "\n", arg_name, arg->integer_value_min, arg->typed_value.i64_value);
+                    fprintf(stderr, "gsr error: %s argument is expected to be larger than %" PRIi64 ", got %" PRIi64 "\n", arg_name, arg->integer_value_min, arg->typed_value.i64_value);
                     usage();
                     return false;
                 }
 
                 if(arg->typed_value.i64_value > arg->integer_value_max) {
-                    fprintf(stderr, "Error: %s argument is expected to be less than %" PRIi64 ", got %" PRIi64 "\n", arg_name, arg->integer_value_max, arg->typed_value.i64_value);
+                    fprintf(stderr, "gsr error: %s argument is expected to be less than %" PRIi64 ", got %" PRIi64 "\n", arg_name, arg->integer_value_max, arg->typed_value.i64_value);
                     usage();
                     return false;
                 }
@@ -817,19 +817,19 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
             }
             case ARG_TYPE_DOUBLE: {
                 if(sscanf(arg_value, "%lf", &arg->typed_value.d_value) != 1) {
-                    fprintf(stderr, "Error: %s argument \"%s\" is not an floating-point number\n", arg_name, arg_value);
+                    fprintf(stderr, "gsr error: %s argument \"%s\" is not an floating-point number\n", arg_name, arg_value);
                     usage();
                     return false;
                 }
 
                 if(arg->typed_value.d_value < arg->integer_value_min) {
-                    fprintf(stderr, "Error: %s argument is expected to be larger than %" PRIi64 ", got %lf\n", arg_name, arg->integer_value_min, arg->typed_value.d_value);
+                    fprintf(stderr, "gsr error: %s argument is expected to be larger than %" PRIi64 ", got %lf\n", arg_name, arg->integer_value_min, arg->typed_value.d_value);
                     usage();
                     return false;
                 }
 
                 if(arg->typed_value.d_value > arg->integer_value_max) {
-                    fprintf(stderr, "Error: %s argument is expected to be less than %" PRIi64 ", got %lf\n", arg_name, arg->integer_value_max, arg->typed_value.d_value);
+                    fprintf(stderr, "gsr error: %s argument is expected to be less than %" PRIi64 ", got %lf\n", arg_name, arg->integer_value_max, arg->typed_value.d_value);
                     usage();
                     return false;
                 }
@@ -838,7 +838,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
         }
 
         if(!arg_append_value(arg, arg_value)) {
-            fprintf(stderr, "Error: failed to append argument, out of memory\n");
+            fprintf(stderr, "gsr error: failed to append argument, out of memory\n");
             return false;
         }
     }
@@ -846,7 +846,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     for(int i = 0; i < NUM_ARGS; ++i) {
         const Arg *arg = &self->args[i];
         if(!arg->optional && arg->num_values == 0) {
-            fprintf(stderr, "Error: missing argument '%s'\n", arg->key);
+            fprintf(stderr, "gsr error: missing argument '%s'\n", arg->key);
             usage();
             return false;
         }
@@ -870,45 +870,45 @@ bool args_parser_validate_with_gl_info(args_parser *self, gsr_egl *egl) {
     }
 
     if(egl->gpu_info.is_steam_deck && self->bitrate_mode == GSR_BITRATE_MODE_QP) {
-        fprintf(stderr, "Warning: qp bitrate mode is not supported on Steam Deck because of Steam Deck driver bugs. Using vbr instead\n");
+        fprintf(stderr, "gsr warning: qp bitrate mode is not supported on Steam Deck because of Steam Deck driver bugs. Using vbr instead\n");
         self->bitrate_mode = GSR_BITRATE_MODE_VBR;
     }
 
     if(self->video_encoder == GSR_VIDEO_ENCODER_HW_CPU && self->bitrate_mode == GSR_BITRATE_MODE_VBR) {
-        fprintf(stderr, "Warning: bitrate mode has been forcefully set to qp because software encoding option doesn't support vbr option\n");
+        fprintf(stderr, "gsr warning: bitrate mode has been forcefully set to qp because software encoding option doesn't support vbr option\n");
         self->bitrate_mode = GSR_BITRATE_MODE_QP;
     }
 
     if(egl->gpu_info.vendor != GSR_GPU_VENDOR_NVIDIA && self->overclock) {
-        fprintf(stderr, "Info: overclock option has no effect on amd/intel, ignoring option\n");
+        fprintf(stderr, "gsr info: overclock option has no effect on amd/intel, ignoring option\n");
         self->overclock = false;
     }
 
     if(egl->gpu_info.vendor == GSR_GPU_VENDOR_NVIDIA && self->overclock && wayland) {
-        fprintf(stderr, "Info: overclocking is not possible on nvidia on wayland, ignoring option\n");
+        fprintf(stderr, "gsr info: overclocking is not possible on nvidia on wayland, ignoring option\n");
         self->overclock = false;
     }
 
     if(egl->gpu_info.is_steam_deck) {
-        fprintf(stderr, "Warning: steam deck has multiple driver issues. One of them has been reported here: https://github.com/ValveSoftware/SteamOS/issues/1609\n"
+        fprintf(stderr, "gsr warning: steam deck has multiple driver issues. One of them has been reported here: https://github.com/ValveSoftware/SteamOS/issues/1609\n"
             "If you have issues with GPU Screen Recorder on steam deck that you don't have on a desktop computer then report the issue to Valve and/or AMD.\n");
     }
 
     self->very_old_gpu = false;
     if(egl->gpu_info.vendor == GSR_GPU_VENDOR_NVIDIA && egl->gpu_info.gpu_version != 0 && egl->gpu_info.gpu_version < 900) {
-        fprintf(stderr, "Info: your gpu appears to be very old (older than maxwell architecture). Switching to lower preset\n");
+        fprintf(stderr, "gsr info: your gpu appears to be very old (older than maxwell architecture). Switching to lower preset\n");
         self->very_old_gpu = true;
     }
 
     if(video_codec_is_hdr(self->video_codec) && !wayland) {
-        fprintf(stderr, "Error: hdr video codec option %s is not available on X11\n", video_codec_to_string(self->video_codec));
+        fprintf(stderr, "gsr error: hdr video codec option %s is not available on X11\n", video_codec_to_string(self->video_codec));
         usage();
         return false;
     }
 
     const bool is_portal_capture = strcmp(self->window, "portal") == 0;
     if(video_codec_is_hdr(self->video_codec) && is_portal_capture) {
-        fprintf(stderr, "Warning: portal capture option doesn't support hdr yet (PipeWire doesn't support hdr), the video will be tonemapped from hdr to sdr\n");
+        fprintf(stderr, "gsr warning: portal capture option doesn't support hdr yet (PipeWire doesn't support hdr), the video will be tonemapped from hdr to sdr\n");
         self->video_codec = hdr_video_codec_to_sdr_video_codec(self->video_codec);
     }
 

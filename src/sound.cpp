@@ -154,7 +154,7 @@ static bool startup_get_default_devices(pa_handle *p, const char *device_name) {
     }
 
     if(p->default_output_device_name[0] == '\0') {
-        fprintf(stderr, "Error: failed to find default audio output device\n");
+        fprintf(stderr, "gsr error: failed to find default audio output device\n");
         return false;
     }
 
@@ -197,7 +197,7 @@ static pa_handle* pa_sound_device_new(const char *server,
     const int buffer_size = attr->fragsize;
     void *buffer = malloc(buffer_size);
     if(!buffer) {
-        fprintf(stderr, "Error: failed to allocate buffer for audio\n");
+        fprintf(stderr, "gsr error: failed to allocate buffer for audio\n");
         *rerror = -1;
         return NULL;
     }
@@ -426,7 +426,7 @@ int sound_device_get_by_name(SoundDevice *device, const char *device_name, const
     int error = 0;
     pa_handle *handle = pa_sound_device_new(nullptr, description, device_name, description, &ss, &buffer_attr, &error);
     if(!handle) {
-        fprintf(stderr, "Error: pa_sound_device_new() failed: %s. Audio input device %s might not be valid\n", pa_strerror(error), device_name);
+        fprintf(stderr, "gsr error: pa_sound_device_new() failed: %s. Audio input device %s might not be valid\n", pa_strerror(error), device_name);
         return -1;
     }
 
