@@ -287,3 +287,5 @@ When rpc is added add the option to add/remove audio devices/app audio and also 
 Support hdr screenshot.
 
 Recreate opengl context on loss. This can happen if there is a gpu driver bug, causing context to need to be recreated. This is a nice improvement to not break recording even with buggy driver.
+
+Support saving video with surround sound. Surround sound audio capture does work, but it gets downmixed to stereo.
