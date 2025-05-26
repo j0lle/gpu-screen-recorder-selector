@@ -649,7 +649,6 @@ static void video_software_set_qp(AVCodecContext *codec_context, gsr_video_quali
 }
 
 static void open_video_software(AVCodecContext *codec_context, const args_parser &arg_parser) {
-    const gsr_color_depth color_depth = video_codec_to_bit_depth(arg_parser.video_codec);
     const bool hdr = video_codec_is_hdr(arg_parser.video_codec);
     AVDictionary *options = nullptr;
 

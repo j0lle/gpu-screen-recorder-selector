@@ -4,6 +4,11 @@
 #include <pipewire/extensions/metadata.h>
 #include <pipewire/impl-module.h>
 
+typedef struct {
+    const gsr_pipewire_audio_port *output_port;
+    const gsr_pipewire_audio_port *input_port;
+} gsr_pipewire_audio_desired_link;
+
 static void on_core_info_cb(void *user_data, const struct pw_core_info *info) {
     gsr_pipewire_audio *self = user_data;
     //fprintf(stderr, "server name: %s\n", info->name);
@@ -29,7 +34,7 @@ static const struct pw_core_events core_events = {
 };
 
 static gsr_pipewire_audio_node* gsr_pipewire_audio_get_node_by_name_case_insensitive(gsr_pipewire_audio *self, const char *node_name, gsr_pipewire_audio_node_type node_type) {
-    for(int i = 0; i < self->num_stream_nodes; ++i) {
+    for(size_t i = 0; i < self->num_stream_nodes; ++i) {
         const gsr_pipewire_audio_node *node = &self->stream_nodes[i];
         if(node->type == node_type && strcasecmp(node->name, node_name) == 0)
             return &self->stream_nodes[i];
@@ -38,7 +43,7 @@ static gsr_pipewire_audio_node* gsr_pipewire_audio_get_node_by_name_case_insensi
 }
 
 static gsr_pipewire_audio_port* gsr_pipewire_audio_get_node_port_by_name(gsr_pipewire_audio *self, uint32_t node_id, const char *port_name) {
-    for(int i = 0; i < self->num_ports; ++i) {
+    for(size_t i = 0; i < self->num_ports; ++i) {
         if(self->ports[i].node_id == node_id && strcmp(self->ports[i].name, port_name) == 0)
             return &self->ports[i];
     }
@@ -81,69 +86,68 @@ static void gsr_pipewire_get_node_input_port_by_type(gsr_pipewire_audio *self, c
     }
 }
 
-static void gsr_pipewire_get_node_output_port_by_type(gsr_pipewire_audio *self, const gsr_pipewire_audio_node *output_node, gsr_pipewire_audio_node_type output_type,
-    const gsr_pipewire_audio_port **output_fl_port, const gsr_pipewire_audio_port **output_fr_port)
-{
-    *output_fl_port = NULL;
-    *output_fr_port = NULL;
-
-    switch(output_type) {
-        case GSR_PIPEWIRE_AUDIO_NODE_TYPE_STREAM_OUTPUT:
-            *output_fl_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "output_FL");
-            *output_fr_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "output_FR");
-            break;
-        case GSR_PIPEWIRE_AUDIO_NODE_TYPE_STREAM_INPUT:
-            *output_fl_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "monitor_FL");
-            *output_fr_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "monitor_FR");
-            break;
-        case GSR_PIPEWIRE_AUDIO_NODE_TYPE_SINK_OR_SOURCE: {
-            *output_fl_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "monitor_FL");
-            *output_fr_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "monitor_FR");
-            if(!*output_fl_port || !*output_fr_port) {
-                *output_fl_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "capture_FL");
-                *output_fr_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "capture_FR");
-            }
-            if(!*output_fl_port || !*output_fr_port) {
-                const gsr_pipewire_audio_port *output_mono_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "monitor_MONO");
-                if(!output_mono_port)
-                    output_mono_port = gsr_pipewire_audio_get_node_port_by_name(self, output_node->id, "capture_MONO");
-
-                if(output_mono_port) {
-                    *output_fl_port = output_mono_port;
-                    *output_fr_port = output_mono_port;
-                }
-            }
-            break;
-        }
-    }
+static bool string_starts_with(const char *str, const char *substr) {
+    const int len = strlen(str);
+    const int substr_len = strlen(substr);
+    return len >= substr_len && memcmp(str, substr, substr_len) == 0;
 }
 
-static void gsr_pipewire_audio_establish_link(gsr_pipewire_audio *self, const gsr_pipewire_audio_port *input_fl_port, const gsr_pipewire_audio_port *input_fr_port,
-    const gsr_pipewire_audio_port *output_fl_port, const gsr_pipewire_audio_port *output_fr_port)
+static bool string_ends_with(const char *str, const char *substr) {
+    const int len = strlen(str);
+    const int substr_len = strlen(substr);
+    return len >= substr_len && memcmp(str + len - substr_len, substr, substr_len) == 0;
+}
+
+/* Returns number of desired links */
+static size_t gsr_pipewire_get_node_output_ports(gsr_pipewire_audio *self, const gsr_pipewire_audio_node *output_node,
+    gsr_pipewire_audio_desired_link *desired_links, size_t desired_links_max_size,
+    const gsr_pipewire_audio_port *input_fl_port, const gsr_pipewire_audio_port *input_fr_port)
 {
-    // TODO: Detect if link already exists before so we dont create these proxies when not needed
+    size_t num_desired_links = 0;
+    for(size_t i = 0; i < self->num_ports && num_desired_links < desired_links_max_size; ++i) {
+        if(self->ports[i].node_id != output_node->id)
+            continue;
+
+        if(string_starts_with(self->ports[i].name, "playback_"))
+            continue;
+
+        if(string_ends_with(self->ports[i].name, "_MONO") || string_ends_with(self->ports[i].name, "_FC") || string_ends_with(self->ports[i].name, "_LFE")) {
+            if(num_desired_links + 2 >= desired_links_max_size)
+                break;
+
+            desired_links[num_desired_links + 0] = (gsr_pipewire_audio_desired_link){ .output_port = &self->ports[i], .input_port = input_fl_port };
+            desired_links[num_desired_links + 1] = (gsr_pipewire_audio_desired_link){ .output_port = &self->ports[i], .input_port = input_fr_port };
+            num_desired_links += 2;
+        } else if(string_ends_with(self->ports[i].name, "_FL") || string_ends_with(self->ports[i].name, "_RL") || string_ends_with(self->ports[i].name, "_SL")) {
+            if(num_desired_links + 1 >= desired_links_max_size)
+                break;
+
+            desired_links[num_desired_links] = (gsr_pipewire_audio_desired_link){ .output_port = &self->ports[i], .input_port = input_fl_port };
+            num_desired_links += 1;
+        } else if(string_ends_with(self->ports[i].name, "_FR") || string_ends_with(self->ports[i].name, "_RR") || string_ends_with(self->ports[i].name, "_SR")) {
+            if(num_desired_links + 1 >= desired_links_max_size)
+                break;
+
+            desired_links[num_desired_links] = (gsr_pipewire_audio_desired_link){ .output_port = &self->ports[i], .input_port = input_fr_port };
+            num_desired_links += 1;
+        }
+    }
+    return num_desired_links;
+}
+
+static void gsr_pipewire_audio_establish_link(gsr_pipewire_audio *self, const gsr_pipewire_audio_port *output_port, const gsr_pipewire_audio_port *input_port) {
+    // TODO: Detect if link already exists before so we dont create these proxies when not needed.
+    // We could do that by saving which nodes have been linked with which nodes after linking them.
 
     //fprintf(stderr, "linking!\n");
     // TODO: error check and cleanup
-    {
-        struct pw_properties *props = pw_properties_new(NULL, NULL);
-        pw_properties_setf(props, PW_KEY_LINK_OUTPUT_PORT, "%u", output_fl_port->id);
-        pw_properties_setf(props, PW_KEY_LINK_INPUT_PORT, "%u", input_fl_port->id);
-        // TODO: Clean this up when removing node
-        struct pw_proxy *proxy = pw_core_create_object(self->core, "link-factory", PW_TYPE_INTERFACE_Link, PW_VERSION_LINK, &props->dict, 0);
-        //self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, self->server_version_sync);
-        pw_properties_free(props);
-    }
-
-    {
-        struct pw_properties *props = pw_properties_new(NULL, NULL);
-        pw_properties_setf(props, PW_KEY_LINK_OUTPUT_PORT, "%u", output_fr_port->id);
-        pw_properties_setf(props, PW_KEY_LINK_INPUT_PORT, "%u", input_fr_port->id);
-        // TODO: Clean this up when removing node
-        struct pw_proxy *proxy = pw_core_create_object(self->core, "link-factory", PW_TYPE_INTERFACE_Link, PW_VERSION_LINK, &props->dict, 0);
-        //self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, self->server_version_sync);
-        pw_properties_free(props);
-    }
+    struct pw_properties *props = pw_properties_new(NULL, NULL);
+    pw_properties_setf(props, PW_KEY_LINK_OUTPUT_PORT, "%u", output_port->id);
+    pw_properties_setf(props, PW_KEY_LINK_INPUT_PORT, "%u", input_port->id);
+    // TODO: Clean this up when removing node
+    struct pw_proxy *proxy = pw_core_create_object(self->core, "link-factory", PW_TYPE_INTERFACE_Link, PW_VERSION_LINK, &props->dict, 0);
+    //self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, self->server_version_sync);
+    pw_properties_free(props);
 }
 
 static void gsr_pipewire_audio_create_link(gsr_pipewire_audio *self, const gsr_pipewire_audio_requested_link *requested_link) {
@@ -158,7 +162,8 @@ static void gsr_pipewire_audio_create_link(gsr_pipewire_audio *self, const gsr_p
     if(!input_fl_port || !input_fr_port)
         return;
 
-    for(int i = 0; i < self->num_stream_nodes; ++i) {
+    gsr_pipewire_audio_desired_link desired_links[64];
+    for(size_t i = 0; i < self->num_stream_nodes; ++i) {
         const gsr_pipewire_audio_node *output_node = &self->stream_nodes[i];
         if(output_node->type != requested_link->output_type)
             continue;
@@ -172,18 +177,15 @@ static void gsr_pipewire_audio_create_link(gsr_pipewire_audio *self, const gsr_p
                 continue;
         }
 
-        const gsr_pipewire_audio_port *output_fl_port = NULL;
-        const gsr_pipewire_audio_port *output_fr_port = NULL;
-        gsr_pipewire_get_node_output_port_by_type(self, output_node, requested_link->output_type, &output_fl_port, &output_fr_port);
-        if(!output_fl_port || !output_fr_port)
-            continue;
-
-        gsr_pipewire_audio_establish_link(self, input_fl_port, input_fr_port, output_fl_port, output_fr_port);
+        const size_t num_desired_links = gsr_pipewire_get_node_output_ports(self, output_node, desired_links, 64, input_fl_port, input_fr_port);
+        for(size_t j = 0; j < num_desired_links; ++j) {
+            gsr_pipewire_audio_establish_link(self, desired_links[j].output_port, desired_links[j].input_port);
+        }
     }
 }
 
 static void gsr_pipewire_audio_create_links(gsr_pipewire_audio *self) {
-    for(int i = 0; i < self->num_requested_links; ++i) {
+    for(size_t i = 0; i < self->num_requested_links; ++i) {
         gsr_pipewire_audio_create_link(self, &self->requested_links[i]);
     }
 }
@@ -214,24 +216,21 @@ static void gsr_pipewire_audio_create_link_for_default_devices(gsr_pipewire_audi
     if(!stream_output_node)
         return;
 
-    const gsr_pipewire_audio_port *output_fl_port = NULL;
-    const gsr_pipewire_audio_port *output_fr_port = NULL;
-    gsr_pipewire_get_node_output_port_by_type(self, stream_output_node, requested_link->output_type, &output_fl_port, &output_fr_port);
-    if(!output_fl_port || !output_fr_port)
-        return;
-
-    gsr_pipewire_audio_establish_link(self, input_fl_port, input_fr_port, output_fl_port, output_fr_port);
-    //fprintf(stderr, "establishing a link from %u to %u\n", stream_output_node->id, stream_input_node->id);
+    gsr_pipewire_audio_desired_link desired_links[64];
+    const size_t num_desired_links = gsr_pipewire_get_node_output_ports(self, stream_output_node, desired_links, 64, input_fl_port, input_fr_port);
+    for(size_t i = 0; i < num_desired_links; ++i) {
+        gsr_pipewire_audio_establish_link(self, desired_links[i].output_port, desired_links[i].input_port);
+    }
 }
 
 static void gsr_pipewire_audio_create_links_for_default_devices(gsr_pipewire_audio *self, gsr_pipewire_audio_requested_type default_device_type) {
-    for(int i = 0; i < self->num_requested_links; ++i) {
+    for(size_t i = 0; i < self->num_requested_links; ++i) {
         gsr_pipewire_audio_create_link_for_default_devices(self, &self->requested_links[i], default_device_type);
     }
 }
 
 static void gsr_pipewire_audio_destroy_links_by_output_to_input(gsr_pipewire_audio *self, uint32_t output_node_id, uint32_t input_node_id) {
-    for(int i = 0; i < self->num_links; ++i) {
+    for(size_t i = 0; i < self->num_links; ++i) {
         if(self->links[i].output_node_id == output_node_id && self->links[i].input_node_id == input_node_id)
             pw_registry_destroy(self->registry, self->links[i].id);
     }
@@ -271,7 +270,7 @@ static void gsr_pipewire_destroy_default_device_link(gsr_pipewire_audio *self, c
 }
 
 static void gsr_pipewire_destroy_default_device_links(gsr_pipewire_audio *self, gsr_pipewire_audio_requested_type default_device_type) {
-    for(int i = 0; i < self->num_requested_links; ++i) {
+    for(size_t i = 0; i < self->num_requested_links; ++i) {
         gsr_pipewire_destroy_default_device_link(self, &self->requested_links[i], default_device_type);
     }
 }
@@ -370,6 +369,24 @@ static bool gsr_pipewire_audio_listen_on_metadata(gsr_pipewire_audio *self, uint
     return true;
 }
 
+static bool array_ensure_capacity(void **array, size_t size, size_t *capacity_items, size_t element_size) {
+    if(size + 1 >= *capacity_items) {
+        size_t new_capacity_items = *capacity_items * 2;
+        if(new_capacity_items == 0)
+            new_capacity_items = 32;
+
+        void *new_data = realloc(*array, new_capacity_items * element_size);
+        if(!new_data) {
+            fprintf(stderr, "gsr error: pipewire_audio: failed to reallocate memory\n");
+            return false;
+        }
+
+        *array = new_data;
+        *capacity_items = new_capacity_items;
+    }
+    return true;
+}
+
 static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
                   const char *type, uint32_t version,
                   const struct spa_dict *props)
@@ -389,10 +406,13 @@ static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
         const bool is_stream_input = media_class && strcmp(media_class, "Stream/Input/Audio") == 0;
         const bool is_sink = media_class && strcmp(media_class, "Audio/Sink") == 0;
         const bool is_source = media_class && strcmp(media_class, "Audio/Source") == 0;
-        if(self->num_stream_nodes < GSR_PIPEWIRE_AUDIO_MAX_STREAM_NODES && node_name && (is_stream_output || is_stream_input || is_sink || is_source)) {
+        if(node_name && (is_stream_output || is_stream_input || is_sink || is_source)) {
             //const char *application_binary = spa_dict_lookup(props, PW_KEY_APP_PROCESS_BINARY);
             //const char *application_name = spa_dict_lookup(props, PW_KEY_APP_NAME);
             //fprintf(stderr, "  node name: %s, app binary: %s, app name: %s\n", node_name, application_binary, application_name);
+
+            if(!array_ensure_capacity((void**)&self->stream_nodes, self->num_stream_nodes, &self->stream_nodes_capacity_items, sizeof(gsr_pipewire_audio_node)))
+                return;
 
             char *node_name_copy = strdup(node_name);
             if(node_name_copy) {
@@ -408,8 +428,6 @@ static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
 
                 gsr_pipewire_audio_create_links(self);
             }
-        } else if(self->num_stream_nodes >= GSR_PIPEWIRE_AUDIO_MAX_STREAM_NODES) {
-            fprintf(stderr, "gsr error: reached the maximum amount of audio stream nodes\n");
         }
     } else if(strcmp(type, PW_TYPE_INTERFACE_Port) == 0) {
         const char *port_name = spa_dict_lookup(props, PW_KEY_PORT_NAME);
@@ -424,7 +442,10 @@ static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
         const char *node_id = spa_dict_lookup(props, PW_KEY_NODE_ID);
         const int node_id_num = node_id ? atoi(node_id) : 0;
 
-        if(self->num_ports < GSR_PIPEWIRE_AUDIO_MAX_PORTS && port_name && direction >= 0 && node_id_num > 0) {
+        if(port_name && direction >= 0 && node_id_num > 0) {
+            if(!array_ensure_capacity((void**)&self->ports, self->num_ports, &self->ports_capacity_items, sizeof(gsr_pipewire_audio_port)))
+                return;
+
             //fprintf(stderr, "  port name: %s, node id: %d, direction: %s\n", port_name, node_id_num, port_direction);
             char *port_name_copy = strdup(port_name);
             if(port_name_copy) {
@@ -437,8 +458,6 @@ static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
 
                 gsr_pipewire_audio_create_links(self);
             }
-        } else if(self->num_ports >= GSR_PIPEWIRE_AUDIO_MAX_PORTS) {
-            fprintf(stderr, "gsr error: reached the maximum amount of audio ports\n");
         }
     } else if(strcmp(type, PW_TYPE_INTERFACE_Link) == 0) {
         const char *output_node = spa_dict_lookup(props, PW_KEY_LINK_OUTPUT_NODE);
@@ -446,14 +465,15 @@ static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
 
         const uint32_t output_node_id_num = output_node ? atoi(output_node) : 0;
         const uint32_t input_node_id_num = input_node ? atoi(input_node) : 0;
-        if(self->num_links < GSR_PIPEWIRE_AUDIO_MAX_LINKS && output_node_id_num > 0 && input_node_id_num > 0) {
+        if(output_node_id_num > 0 && input_node_id_num > 0) {
+            if(!array_ensure_capacity((void**)&self->links, self->num_links, &self->links_capacity_items, sizeof(gsr_pipewire_audio_link)))
+                return;
+
             //fprintf(stderr, "  new link (%u): %u -> %u\n", id, output_node_id_num, input_node_id_num);
             self->links[self->num_links].id = id;
             self->links[self->num_links].output_node_id = output_node_id_num;
             self->links[self->num_links].input_node_id = input_node_id_num;
             ++self->num_links;
-        } else if(self->num_ports >= GSR_PIPEWIRE_AUDIO_MAX_LINKS) {
-            fprintf(stderr, "gsr error: reached the maximum amount of audio links\n");
         }
     } else if(strcmp(type, PW_TYPE_INTERFACE_Metadata) == 0) {
         const char *name = spa_dict_lookup(props, PW_KEY_METADATA_NAME);
@@ -463,7 +483,7 @@ static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
 }
 
 static bool gsr_pipewire_audio_remove_node_by_id(gsr_pipewire_audio *self, uint32_t node_id) {
-    for(int i = 0; i < self->num_stream_nodes; ++i) {
+    for(size_t i = 0; i < self->num_stream_nodes; ++i) {
         if(self->stream_nodes[i].id != node_id)
             continue;
 
@@ -476,7 +496,7 @@ static bool gsr_pipewire_audio_remove_node_by_id(gsr_pipewire_audio *self, uint3
 }
 
 static bool gsr_pipewire_audio_remove_port_by_id(gsr_pipewire_audio *self, uint32_t port_id) {
-    for(int i = 0; i < self->num_ports; ++i) {
+    for(size_t i = 0; i < self->num_ports; ++i) {
         if(self->ports[i].id != port_id)
             continue;
 
@@ -489,7 +509,7 @@ static bool gsr_pipewire_audio_remove_port_by_id(gsr_pipewire_audio *self, uint3
 }
 
 static bool gsr_pipewire_audio_remove_link_by_id(gsr_pipewire_audio *self, uint32_t link_id) {
-    for(int i = 0; i < self->num_links; ++i) {
+    for(size_t i = 0; i < self->num_links; ++i) {
         if(self->links[i].id != link_id)
             continue;
 
@@ -580,13 +600,19 @@ void gsr_pipewire_audio_deinit(gsr_pipewire_audio *self) {
         pw_thread_loop_stop(self->thread_loop);
     }
 
-    for(int i = 0; i < self->num_virtual_sink_proxies; ++i) {
+    for(size_t i = 0; i < self->num_virtual_sink_proxies; ++i) {
         if(self->virtual_sink_proxies[i]) {
             pw_proxy_destroy(self->virtual_sink_proxies[i]);
             self->virtual_sink_proxies[i] = NULL;
         }
     }
     self->num_virtual_sink_proxies = 0;
+    self->virtual_sink_proxies_capacity_items = 0;
+
+    if(self->virtual_sink_proxies) {
+        free(self->virtual_sink_proxies);
+        self->virtual_sink_proxies = NULL;
+    }
 
     if(self->metadata_proxy) {
         spa_hook_remove(&self->metadata_listener);
@@ -615,26 +641,50 @@ void gsr_pipewire_audio_deinit(gsr_pipewire_audio *self) {
         self->thread_loop = NULL;
     }
 
-    for(int i = 0; i < self->num_stream_nodes; ++i) {
-        free(self->stream_nodes[i].name);
-    }
-    self->num_stream_nodes = 0;
-
-    for(int i = 0; i < self->num_ports; ++i) {
-        free(self->ports[i].name);
-    }
-    self->num_ports = 0;
-
-    self->num_links = 0;
-
-    for(int i = 0; i < self->num_requested_links; ++i) {
-        for(int j = 0; j < self->requested_links[i].num_outputs; ++j) {
-            free(self->requested_links[i].outputs[j].name);
+    if(self->stream_nodes) {
+        for(size_t i = 0; i < self->num_stream_nodes; ++i) {
+            free(self->stream_nodes[i].name);
         }
-        free(self->requested_links[i].outputs);
-        free(self->requested_links[i].input_name);
+        self->num_stream_nodes = 0;
+        self->stream_nodes_capacity_items = 0;
+
+        free(self->stream_nodes);
+        self->stream_nodes = NULL;
     }
-    self->num_requested_links = 0;
+
+    if(self->ports) {
+        for(size_t i = 0; i < self->num_ports; ++i) {
+            free(self->ports[i].name);
+        }
+        self->num_ports = 0;
+        self->ports_capacity_items = 0;
+
+        free(self->ports);
+        self->ports = NULL;
+    }
+
+    if(self->links) {
+        self->num_links = 0;
+        self->links_capacity_items = 0;
+
+        free(self->links);
+        self->links = NULL;
+    }
+
+    if(self->requested_links) {
+        for(size_t i = 0; i < self->num_requested_links; ++i) {
+            for(int j = 0; j < self->requested_links[i].num_outputs; ++j) {
+                free(self->requested_links[i].outputs[j].name);
+            }
+            free(self->requested_links[i].outputs);
+            free(self->requested_links[i].input_name);
+        }
+        self->num_requested_links = 0;
+        self->requested_links_capacity_items = 0;
+
+        free(self->requested_links);
+        self->requested_links = NULL;
+    }
 
 #if PW_CHECK_VERSION(0, 3, 49)
     pw_deinit();
@@ -653,10 +703,8 @@ static struct pw_properties* gsr_pipewire_create_null_audio_sink(const char *nam
 }
 
 bool gsr_pipewire_audio_create_virtual_sink(gsr_pipewire_audio *self, const char *name) {
-    if(self->num_virtual_sink_proxies == GSR_PIPEWIRE_AUDIO_MAX_VIRTUAL_SINKS) {
-        fprintf(stderr, "gsr error: gsr_pipewire_audio_create_virtual_sink: reached max number of virtual sinks\n");
+    if(!array_ensure_capacity((void**)&self->virtual_sink_proxies, self->num_virtual_sink_proxies, &self->virtual_sink_proxies_capacity_items, sizeof(struct pw_proxy*)))
         return false;
-    }
 
     pw_thread_loop_lock(self->thread_loop);
 
@@ -701,10 +749,8 @@ static bool string_remove_suffix(char *str, const char *suffix) {
 }
 
 static bool gsr_pipewire_audio_add_links_to_output(gsr_pipewire_audio *self, const char **output_names, int num_output_names, const char *input_name, gsr_pipewire_audio_node_type output_type, gsr_pipewire_audio_link_input_type input_type, bool inverted) {
-    if(self->num_requested_links >= GSR_PIPEWIRE_AUDIO_MAX_REQUESTED_LINKS) {
-        fprintf(stderr, "gsr error: reached the maximum amount of audio links\n");
+    if(!array_ensure_capacity((void**)&self->requested_links, self->num_requested_links, &self->requested_links_capacity_items, sizeof(gsr_pipewire_audio_requested_link)))
         return false;
-    }
     
     gsr_pipewire_audio_requested_output *outputs = calloc(num_output_names, sizeof(gsr_pipewire_audio_requested_output));
     if(!outputs)
@@ -781,7 +827,7 @@ bool gsr_pipewire_audio_add_link_from_sources_to_sink(gsr_pipewire_audio *self, 
 
 void gsr_pipewire_audio_for_each_app(gsr_pipewire_audio *self, gsr_pipewire_audio_app_query_callback callback, void *userdata) {
     pw_thread_loop_lock(self->thread_loop);
-    for(int i = 0; i < self->num_stream_nodes; ++i) {
+    for(int i = 0; i < (int)self->num_stream_nodes; ++i) {
         const gsr_pipewire_audio_node *node = &self->stream_nodes[i];
         if(node->type != GSR_PIPEWIRE_AUDIO_NODE_TYPE_STREAM_OUTPUT)
             continue;

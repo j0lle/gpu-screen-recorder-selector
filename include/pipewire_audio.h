@@ -8,12 +8,6 @@
 
 #include <stdbool.h>
 
-#define GSR_PIPEWIRE_AUDIO_MAX_STREAM_NODES 128
-#define GSR_PIPEWIRE_AUDIO_MAX_PORTS 256
-#define GSR_PIPEWIRE_AUDIO_MAX_LINKS 256
-#define GSR_PIPEWIRE_AUDIO_MAX_REQUESTED_LINKS 32
-#define GSR_PIPEWIRE_AUDIO_MAX_VIRTUAL_SINKS 32
-
 typedef enum {
     GSR_PIPEWIRE_AUDIO_NODE_TYPE_STREAM_OUTPUT, /* Application audio */
     GSR_PIPEWIRE_AUDIO_NODE_TYPE_STREAM_INPUT,  /* Audio recording input */
@@ -84,20 +78,25 @@ typedef struct {
     char default_output_device_name[128];
     char default_input_device_name[128];
 
-    gsr_pipewire_audio_node stream_nodes[GSR_PIPEWIRE_AUDIO_MAX_STREAM_NODES];
-    int num_stream_nodes;
+    gsr_pipewire_audio_node *stream_nodes;
+    size_t num_stream_nodes;
+    size_t stream_nodes_capacity_items;
 
-    gsr_pipewire_audio_port ports[GSR_PIPEWIRE_AUDIO_MAX_PORTS];
-    int num_ports;
+    gsr_pipewire_audio_port *ports;
+    size_t num_ports;
+    size_t ports_capacity_items;
 
-    gsr_pipewire_audio_link links[GSR_PIPEWIRE_AUDIO_MAX_LINKS];
-    int num_links;
+    gsr_pipewire_audio_link *links;
+    size_t num_links;
+    size_t links_capacity_items;
 
-    gsr_pipewire_audio_requested_link requested_links[GSR_PIPEWIRE_AUDIO_MAX_REQUESTED_LINKS];
-    int num_requested_links;
+    gsr_pipewire_audio_requested_link *requested_links;
+    size_t num_requested_links;
+    size_t requested_links_capacity_items;
 
-    struct pw_proxy *virtual_sink_proxies[GSR_PIPEWIRE_AUDIO_MAX_VIRTUAL_SINKS];
-    int num_virtual_sink_proxies;
+    struct pw_proxy **virtual_sink_proxies;
+    size_t num_virtual_sink_proxies;
+    size_t virtual_sink_proxies_capacity_items;
 } gsr_pipewire_audio;
 
 bool gsr_pipewire_audio_init(gsr_pipewire_audio *self);
