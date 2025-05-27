@@ -508,6 +508,41 @@ int create_directory_recursive(char *path) {
 }
 
 void setup_dma_buf_attrs(intptr_t *img_attr, uint32_t format, uint32_t width, uint32_t height, const int *fds, const uint32_t *offsets, const uint32_t *pitches, const uint64_t *modifiers, int num_planes, bool use_modifier) {
+    const uint32_t plane_fd_attrs[4] = {
+        EGL_DMA_BUF_PLANE0_FD_EXT,
+        EGL_DMA_BUF_PLANE1_FD_EXT,
+        EGL_DMA_BUF_PLANE2_FD_EXT,
+        EGL_DMA_BUF_PLANE3_FD_EXT
+    };
+
+    const uint32_t plane_offset_attrs[4] = {
+        EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+        EGL_DMA_BUF_PLANE1_OFFSET_EXT,
+        EGL_DMA_BUF_PLANE2_OFFSET_EXT,
+        EGL_DMA_BUF_PLANE3_OFFSET_EXT
+    };
+
+    const uint32_t plane_pitch_attrs[4] = {
+        EGL_DMA_BUF_PLANE0_PITCH_EXT,
+        EGL_DMA_BUF_PLANE1_PITCH_EXT,
+        EGL_DMA_BUF_PLANE2_PITCH_EXT,
+        EGL_DMA_BUF_PLANE3_PITCH_EXT
+    };
+
+    const uint32_t plane_modifier_lo_attrs[4] = {
+        EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT,
+        EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT,
+        EGL_DMA_BUF_PLANE2_MODIFIER_LO_EXT,
+        EGL_DMA_BUF_PLANE3_MODIFIER_LO_EXT
+    };
+
+    const uint32_t plane_modifier_hi_attrs[4] = {
+        EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,
+        EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT,
+        EGL_DMA_BUF_PLANE2_MODIFIER_HI_EXT,
+        EGL_DMA_BUF_PLANE3_MODIFIER_HI_EXT
+    };
+
     size_t img_attr_index = 0;
 
     img_attr[img_attr_index++] = EGL_LINUX_DRM_FOURCC_EXT;
@@ -519,79 +554,23 @@ void setup_dma_buf_attrs(intptr_t *img_attr, uint32_t format, uint32_t width, ui
     img_attr[img_attr_index++] = EGL_HEIGHT;
     img_attr[img_attr_index++] = height;
 
-    if(num_planes >= 1) {
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE0_FD_EXT;
-        img_attr[img_attr_index++] = fds[0];
+    assert(num_planes <= 4);
+    for(int i = 0; i < num_planes; ++i) {
+        img_attr[img_attr_index++] = plane_fd_attrs[i];
+        img_attr[img_attr_index++] = fds[i];
 
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE0_OFFSET_EXT;
-        img_attr[img_attr_index++] = offsets[0];
+        img_attr[img_attr_index++] = plane_offset_attrs[i];
+        img_attr[img_attr_index++] = offsets[i];
 
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE0_PITCH_EXT;
-        img_attr[img_attr_index++] = pitches[0];
-
-        if(use_modifier) {
-            img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT;
-            img_attr[img_attr_index++] = modifiers[0] & 0xFFFFFFFFULL;
-
-            img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT;
-            img_attr[img_attr_index++] = modifiers[0] >> 32ULL;
-        }
-    }
-
-    if(num_planes >= 2) {
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE1_FD_EXT;
-        img_attr[img_attr_index++] = fds[1];
-
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE1_OFFSET_EXT;
-        img_attr[img_attr_index++] = offsets[1];
-
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE1_PITCH_EXT;
-        img_attr[img_attr_index++] = pitches[1];
+        img_attr[img_attr_index++] = plane_pitch_attrs[i];
+        img_attr[img_attr_index++] = pitches[i];
 
         if(use_modifier) {
-            img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT;
-            img_attr[img_attr_index++] = modifiers[1] & 0xFFFFFFFFULL;
+            img_attr[img_attr_index++] = plane_modifier_lo_attrs[i];
+            img_attr[img_attr_index++] = modifiers[i] & 0xFFFFFFFFULL;
 
-            img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT;
-            img_attr[img_attr_index++] = modifiers[1] >> 32ULL;
-        }
-    }
-
-    if(num_planes >= 3) {
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE2_FD_EXT;
-        img_attr[img_attr_index++] = fds[2];
-
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE2_OFFSET_EXT;
-        img_attr[img_attr_index++] = offsets[2];
-
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE2_PITCH_EXT;
-        img_attr[img_attr_index++] = pitches[2];
-
-        if(use_modifier) {
-            img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE2_MODIFIER_LO_EXT;
-            img_attr[img_attr_index++] = modifiers[2] & 0xFFFFFFFFULL;
-
-            img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE2_MODIFIER_HI_EXT;
-            img_attr[img_attr_index++] = modifiers[2] >> 32ULL;
-        }
-    }
-
-    if(num_planes >= 4) {
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE3_FD_EXT;
-        img_attr[img_attr_index++] = fds[3];
-
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE3_OFFSET_EXT;
-        img_attr[img_attr_index++] = offsets[3];
-
-        img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE3_PITCH_EXT;
-        img_attr[img_attr_index++] = pitches[3];
-
-        if(use_modifier) {
-            img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE3_MODIFIER_LO_EXT;
-            img_attr[img_attr_index++] = modifiers[3] & 0xFFFFFFFFULL;
-
-            img_attr[img_attr_index++] = EGL_DMA_BUF_PLANE3_MODIFIER_HI_EXT;
-            img_attr[img_attr_index++] = modifiers[3] >> 32ULL;
+            img_attr[img_attr_index++] = plane_modifier_hi_attrs[i];
+            img_attr[img_attr_index++] = modifiers[i] >> 32ULL;
         }
     }
 
