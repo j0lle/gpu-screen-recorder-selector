@@ -961,6 +961,7 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
 
     gsr_color_conversion_swizzle_reset(self, source_color);
     self->params.egl->glBindTexture(texture_target, 0);
+    self->params.egl->glFlush();
 }
 
 void gsr_color_conversion_clear(gsr_color_conversion *self) {

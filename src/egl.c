@@ -42,7 +42,7 @@ static void reset_cap_nice(void) {
     cap_flag_value_t cap_sys_nice_value = CAP_CLEAR;
     cap_get_flag(caps, CAP_SYS_NICE, CAP_EFFECTIVE, &cap_sys_nice_value);
     if(cap_sys_nice_value == CAP_CLEAR) {
-        fprintf(stderr, "gsr warning: cap_sys_nice capability is missing on the gpu-screen-recorder binary, performance might be affected. If you are using the flatpak version of gpu-screen-recorder then the only fix is to use a non-flatpak version of gpu-screen-recorder\n");
+        fprintf(stderr, "gsr warning: cap_sys_nice capability is missing on the gpu-screen-recorder binary, performance might be affected. If you are using the flatpak version of gpu-screen-recorder then the only fix is to use a non-flatpak version of gpu-screen-recorder. Make sure you install gpu-screen-recorder, don't run it from the build directory\n");
     }
 
     const cap_value_t cap_to_remove = CAP_SYS_NICE;
@@ -546,13 +546,13 @@ void gsr_egl_unload(gsr_egl *self) {
 void gsr_egl_swap_buffers(gsr_egl *self) {
     /* This uses less cpu than swap buffer on nvidia */
     // TODO: Do these and remove swap
-    //self->glFlush();
-    //self->glFinish();
-    if(self->egl_display) {
-        self->eglSwapBuffers(self->egl_display, self->egl_surface);
-    } else if(gsr_window_get_display_server(self->window) == GSR_DISPLAY_SERVER_X11) {
-        Display *display = gsr_window_get_display(self->window);
-        const Window window = (Window)gsr_window_get_window(self->window);
-        self->glXSwapBuffers(display, window);
-    }
+    self->glFlush();
+//    self->glFinish();
+    // if(self->egl_display) {
+    //     self->eglSwapBuffers(self->egl_display, self->egl_surface);
+    // } else if(gsr_window_get_display_server(self->window) == GSR_DISPLAY_SERVER_X11) {
+    //     Display *display = gsr_window_get_display(self->window);
+    //     const Window window = (Window)gsr_window_get_window(self->window);
+    //     self->glXSwapBuffers(display, window);
+    // }
 }

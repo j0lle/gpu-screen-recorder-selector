@@ -194,7 +194,6 @@ static void usage_header() {
     fflush(stdout);
 }
 
-// TODO: Update with portal info
 static void usage_full() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
@@ -397,6 +396,7 @@ static void usage_full() {
     printf("EXAMPLES:\n");
     printf("  %s -w screen -f 60 -a default_output -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -a default_input -o video.mp4\n", program_name);
+    printf("  %s -w $(xdotool selectwindow) -f 60 -a default_output -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a \"default_output|default_input\" -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -c mkv -r 60 -o \"$HOME/Videos\"\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -c mkv -r 1800 -replay-storage disk -bm cbr -q 40000 -o \"$HOME/Videos\"\n", program_name);

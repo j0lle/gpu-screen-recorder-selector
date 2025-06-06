@@ -125,7 +125,9 @@ in this case you could record a window or a monitor with the name `DP-1`.\
 To list available audio devices that you can use you can run `gpu-screen-recorder --list-audio-devices` and the name to use is on the left size of the `|`.\
 To list available audio application names that you can use you can run `gpu-screen-recorder --list-application-audio`.
 ## Streaming
-Streaming works the same as recording, but the `-o` argument should be path to the live streaming service you want to use (including your live streaming key). Take a look at `scripts/twitch-stream.sh` to see an example of how to stream to twitch.
+Streaming works the same way as recording, but the `-o` argument should be path to the live streaming service you want to use (including your live streaming key). Take a look at `scripts/twitch-stream.sh` to see an example of how to stream to twitch.\
+GPU Screen Recorder uses Ffmpeg so GPU Screen Recorder supports all protocols that Ffmpeg supports.\
+If you want to reduce latency one thing you can do is to use the `-keyint` option, for example `-keyint 0.5`. Lower value means lower latency at the cost of increased bitrate/decreased quality.
 ## Replay mode
 Run `gpu-screen-recorder` with the `-c mp4` and `-r` option, for example: `gpu-screen-recorder -w screen -f 60 -r 30 -c mp4 -o ~/Videos`. Note that in this case, `-o` should point to a directory.\
 If `-df yes` is set, replays are save in folders based on the date.
@@ -195,3 +197,7 @@ I don't know how well recording HDR works in wayland compositors other than KDE 
 This is a [steam issue](https://github.com/ValveSoftware/steam-for-linux/issues/11446). Prepend the gpu-screen-recorder command with `LD_PREFIX=""`, for example `LD_PREFIX="" gpu-screen-recorder -w screen -o video.mp4`.
 ## The video isn't smooth when gpu usage is 100%
 If you are using the flatpak version of GPU Screen Recorder then try installing GPU Screen Recorder from a non-flatpak source instead (such as from aur or from source). Flatpak has a limitation that prevents GPU Screen Recorder from running faster when playing very heavy games.
+## How do I apply audio effects, such as noise suppression?
+You have to use external software for that, such as Easy Effects or NoiseTorch.
+## My AMD GPU freezes when using GPU Screen Recorder
+This is an AMD driver bug that happens to some people: [https://gitlab.freedesktop.org/mesa/mesa/-/issues/13224](https://gitlab.freedesktop.org/mesa/mesa/-/issues/13224). If you are able to provide system information and output of `sudo dmesg` in that bug report then please do so. It will continue to be an issue until AMD fixes it. As a temporary workaround you can run `sudo setcap -r /usr/bin/gpu-screen-recorder` (but this gets overwritten when you update GPU Screen Recorder).

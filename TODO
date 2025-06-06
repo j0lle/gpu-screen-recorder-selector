@@ -289,3 +289,14 @@ Support hdr screenshot.
 Recreate opengl context on loss. This can happen if there is a gpu driver bug, causing context to need to be recreated. This is a nice improvement to not break recording even with buggy driver.
 
 Support saving video with surround sound. Surround sound audio capture does work, but it gets downmixed to stereo.
+
+Add (render) plugin support. To simplify it (and possibly best performance) create one rgba texture (with the size of the output video) that is used across all plugins.
+    Create a framebuffer and set this texture and the target and set the framebuffer as active before calling the plugins.
+    Then the plugins can render simply by doing simple opengl draw functions.
+    Maybe send some metadata to the plugin, such as video (and framebuffer) size. Although this data can be retrieved from the active framebuffer.
+
+Either support webcam support with raw yuyv, mapping the buffer directly to opengl. Or use mjpeg, mapping the buffer directly to vaapi jpeg decoder and then get then map the decoded buffer to opengl.
+    Some webcams dont support raw yuyv and many webcams support higher framerates for mjpeg.
+
+Allow medium, high, very_high and ultra quality for -bm cbr. If that is used then it will automatically estimate the best bitrate for that quality based on resolution and fps.
+    Maybe do this in the ui instead (or both?), to show estimated file size.

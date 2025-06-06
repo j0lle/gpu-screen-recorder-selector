@@ -33,7 +33,7 @@ static bool gsr_dbus_client_wait_for_startup(gsr_dbus_client *self) {
                 int exit_code = -1;
                 if(WIFEXITED(status))
                     exit_code = WEXITSTATUS(status);
-                fprintf(stderr, "gsr error: gsr_dbus_client_init: server side or never started, exit code: %d\n", exit_code);
+                fprintf(stderr, "gsr error: gsr_dbus_client_init: server died or never started, exit code: %d\n", exit_code);
                 self->pid = 0;
                 return false;
             }
@@ -73,7 +73,7 @@ bool gsr_dbus_client_init(gsr_dbus_client *self, const char *screencast_restore_
         const char *args[] = { "gsr-dbus-server", socket_pair_server_str, self->screencast_restore_token ? self->screencast_restore_token : "", NULL };
         execvp(args[0], (char *const*)args);
 
-        fprintf(stderr, "gsr error: gsr_dbus_client_init: execvp failed, error: %s\n", strerror(errno));
+        fprintf(stderr, "gsr error: gsr_dbus_client_init: failed to launch \"gsr-dbus-server\", error: %s\n", strerror(errno));
         _exit(127);
     } else { /* parent */
         if(!gsr_dbus_client_wait_for_startup(self)) {

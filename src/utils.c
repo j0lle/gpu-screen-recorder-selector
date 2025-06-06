@@ -19,6 +19,8 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/hwcontext_vaapi.h>
 
+#define DRM_NUM_BUF_ATTRS 4
+
 double clock_get_monotonic_seconds(void) {
     struct timespec ts;
     ts.tv_sec = 0;
@@ -508,35 +510,35 @@ int create_directory_recursive(char *path) {
 }
 
 void setup_dma_buf_attrs(intptr_t *img_attr, uint32_t format, uint32_t width, uint32_t height, const int *fds, const uint32_t *offsets, const uint32_t *pitches, const uint64_t *modifiers, int num_planes, bool use_modifier) {
-    const uint32_t plane_fd_attrs[4] = {
+    const uint32_t plane_fd_attrs[DRM_NUM_BUF_ATTRS] = {
         EGL_DMA_BUF_PLANE0_FD_EXT,
         EGL_DMA_BUF_PLANE1_FD_EXT,
         EGL_DMA_BUF_PLANE2_FD_EXT,
         EGL_DMA_BUF_PLANE3_FD_EXT
     };
 
-    const uint32_t plane_offset_attrs[4] = {
+    const uint32_t plane_offset_attrs[DRM_NUM_BUF_ATTRS] = {
         EGL_DMA_BUF_PLANE0_OFFSET_EXT,
         EGL_DMA_BUF_PLANE1_OFFSET_EXT,
         EGL_DMA_BUF_PLANE2_OFFSET_EXT,
         EGL_DMA_BUF_PLANE3_OFFSET_EXT
     };
 
-    const uint32_t plane_pitch_attrs[4] = {
+    const uint32_t plane_pitch_attrs[DRM_NUM_BUF_ATTRS] = {
         EGL_DMA_BUF_PLANE0_PITCH_EXT,
         EGL_DMA_BUF_PLANE1_PITCH_EXT,
         EGL_DMA_BUF_PLANE2_PITCH_EXT,
         EGL_DMA_BUF_PLANE3_PITCH_EXT
     };
 
-    const uint32_t plane_modifier_lo_attrs[4] = {
+    const uint32_t plane_modifier_lo_attrs[DRM_NUM_BUF_ATTRS] = {
         EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT,
         EGL_DMA_BUF_PLANE1_MODIFIER_LO_EXT,
         EGL_DMA_BUF_PLANE2_MODIFIER_LO_EXT,
         EGL_DMA_BUF_PLANE3_MODIFIER_LO_EXT
     };
 
-    const uint32_t plane_modifier_hi_attrs[4] = {
+    const uint32_t plane_modifier_hi_attrs[DRM_NUM_BUF_ATTRS] = {
         EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,
         EGL_DMA_BUF_PLANE1_MODIFIER_HI_EXT,
         EGL_DMA_BUF_PLANE2_MODIFIER_HI_EXT,
@@ -554,7 +556,7 @@ void setup_dma_buf_attrs(intptr_t *img_attr, uint32_t format, uint32_t width, ui
     img_attr[img_attr_index++] = EGL_HEIGHT;
     img_attr[img_attr_index++] = height;
 
-    assert(num_planes <= 4);
+    assert(num_planes <= DRM_NUM_BUF_ATTRS);
     for(int i = 0; i < num_planes; ++i) {
         img_attr[img_attr_index++] = plane_fd_attrs[i];
         img_attr[img_attr_index++] = fds[i];

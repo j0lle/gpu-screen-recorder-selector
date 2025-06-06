@@ -312,7 +312,7 @@ int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
             const char *args[] = { "pkexec", server_filepath, self->initial_socket_path, card_path, NULL };
             execvp(args[0], (char *const*)args);
         }
-        fprintf(stderr, "gsr error: gsr_kms_client_init: execvp failed, error: %s\n", strerror(errno));
+        fprintf(stderr, "gsr error: gsr_kms_client_init: failed to launch \"gsr-kms-server\", error: %s\n", strerror(errno));
         _exit(127);
     } else { /* parent */
         self->kms_server_pid = pid;
