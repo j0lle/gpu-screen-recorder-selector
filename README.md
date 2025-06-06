@@ -199,5 +199,3 @@ This is a [steam issue](https://github.com/ValveSoftware/steam-for-linux/issues/
 If you are using the flatpak version of GPU Screen Recorder then try installing GPU Screen Recorder from a non-flatpak source instead (such as from aur or from source). Flatpak has a limitation that prevents GPU Screen Recorder from running faster when playing very heavy games.
 ## How do I apply audio effects, such as noise suppression?
 You have to use external software for that, such as Easy Effects or NoiseTorch.
-## My AMD GPU freezes when using GPU Screen Recorder
-This is an AMD driver bug that happens to some people: [https://gitlab.freedesktop.org/mesa/mesa/-/issues/13224](https://gitlab.freedesktop.org/mesa/mesa/-/issues/13224). If you are able to provide system information and output of `sudo dmesg` in that bug report then please do so. It will continue to be an issue until AMD fixes it. As a temporary workaround you can run `sudo setcap -r /usr/bin/gpu-screen-recorder` (but this gets overwritten when you update GPU Screen Recorder).

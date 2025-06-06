@@ -300,3 +300,5 @@ Either support webcam support with raw yuyv, mapping the buffer directly to open
 
 Allow medium, high, very_high and ultra quality for -bm cbr. If that is used then it will automatically estimate the best bitrate for that quality based on resolution and fps.
     Maybe do this in the ui instead (or both?), to show estimated file size.
+
+Maybe remove shader compute code. It doesn't seem necessary anymore now that glSwapBuffer/glFinish isn't used. dbus server isn't needed anymore either, the code can be moved back to the gpu screen recorder process.

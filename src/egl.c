@@ -9,7 +9,6 @@
 #include <dlfcn.h>
 #include <assert.h>
 #include <unistd.h>
-#include <sys/capability.h>
 
 // TODO: rename gsr_egl to something else since this includes both egl and glx and in the future maybe vulkan too
 
@@ -29,29 +28,6 @@
 #define GLX_DEPTH_SIZE                     12
 #define GLX_RGBA_TYPE                      0x8014
 
-#define GLX_CONTEXT_PRIORITY_LEVEL_EXT    0x3100
-#define GLX_CONTEXT_PRIORITY_HIGH_EXT     0x3101
-#define GLX_CONTEXT_PRIORITY_MEDIUM_EXT   0x3102
-#define GLX_CONTEXT_PRIORITY_LOW_EXT      0x3103
-
-static void reset_cap_nice(void) {
-    cap_t caps = cap_get_proc();
-    if(!caps)
-        return;
-
-    cap_flag_value_t cap_sys_nice_value = CAP_CLEAR;
-    cap_get_flag(caps, CAP_SYS_NICE, CAP_EFFECTIVE, &cap_sys_nice_value);
-    if(cap_sys_nice_value == CAP_CLEAR) {
-        fprintf(stderr, "gsr warning: cap_sys_nice capability is missing on the gpu-screen-recorder binary, performance might be affected. If you are using the flatpak version of gpu-screen-recorder then the only fix is to use a non-flatpak version of gpu-screen-recorder. Make sure you install gpu-screen-recorder, don't run it from the build directory\n");
-    }
-
-    const cap_value_t cap_to_remove = CAP_SYS_NICE;
-    cap_set_flag(caps, CAP_EFFECTIVE, 1, &cap_to_remove, CAP_CLEAR);
-    cap_set_flag(caps, CAP_PERMITTED, 1, &cap_to_remove, CAP_CLEAR);
-    cap_set_proc(caps);
-    cap_free(caps);
-}
-
 // TODO: Create egl context without surface (in other words, x11/wayland agnostic, doesn't require x11/wayland dependency)
 static bool gsr_egl_create_window(gsr_egl *self) {
     EGLConfig  ecfg;
@@ -66,7 +42,6 @@ static bool gsr_egl_create_window(gsr_egl *self) {
 
     const int32_t ctxattr[] = {
         EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL_CONTEXT_PRIORITY_LEVEL_IMG, EGL_CONTEXT_PRIORITY_HIGH_IMG, /* requires cap_sys_nice, ignored otherwise */
         EGL_NONE, EGL_NONE
     };
 
@@ -106,11 +81,9 @@ static bool gsr_egl_create_window(gsr_egl *self) {
         goto fail;
     }
 
-    reset_cap_nice();
     return true;
 
     fail:
-    reset_cap_nice();
     gsr_egl_unload(self);
     return false;
 }
