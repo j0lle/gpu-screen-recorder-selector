@@ -517,15 +517,7 @@ void gsr_egl_unload(gsr_egl *self) {
 }
 
 void gsr_egl_swap_buffers(gsr_egl *self) {
-    /* This uses less cpu than swap buffer on nvidia */
-    // TODO: Do these and remove swap
     self->glFlush();
-//    self->glFinish();
-    // if(self->egl_display) {
-    //     self->eglSwapBuffers(self->egl_display, self->egl_surface);
-    // } else if(gsr_window_get_display_server(self->window) == GSR_DISPLAY_SERVER_X11) {
-    //     Display *display = gsr_window_get_display(self->window);
-    //     const Window window = (Window)gsr_window_get_window(self->window);
-    //     self->glXSwapBuffers(display, window);
-    // }
+    // TODO: Use the minimal barrier required
+    self->glMemoryBarrier(GL_ALL_BARRIER_BITS); // GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
 }

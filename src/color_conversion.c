@@ -920,7 +920,6 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
         source_position.x += source_pos.x;
         source_position.y += source_pos.y;
         gsr_color_conversion_draw_graphics(self, texture_id, external_texture, rotation_matrix, source_position, source_size, destination_pos, texture_size, scale, source_color);
-        // TODO: Is glFlush and glFinish needed here for graphics garbage?
     } else {
         switch(rotation) {
             case GSR_ROT_0:
@@ -955,13 +954,13 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
         }
     }
 
+    self->params.egl->glFlush();
     // TODO: Use the minimal barrier required
     self->params.egl->glMemoryBarrier(GL_ALL_BARRIER_BITS); // GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
     self->params.egl->glUseProgram(0);
 
     gsr_color_conversion_swizzle_reset(self, source_color);
     self->params.egl->glBindTexture(texture_target, 0);
-    self->params.egl->glFlush();
 }
 
 void gsr_color_conversion_clear(gsr_color_conversion *self) {
