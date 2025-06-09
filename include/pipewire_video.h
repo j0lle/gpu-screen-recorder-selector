@@ -65,7 +65,6 @@ typedef struct {
     struct spa_video_info format;
     int server_version_sync;
     bool negotiated;
-    bool renegotiated;
     bool damaged;
 
     struct {

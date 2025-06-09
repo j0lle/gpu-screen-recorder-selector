@@ -71,15 +71,16 @@ void gsr_video_encoder_software_stop(gsr_video_encoder_software *self, AVCodecCo
 }
 
 static void gsr_video_encoder_software_copy_textures_to_frame(gsr_video_encoder *encoder, AVFrame *frame, gsr_color_conversion *color_conversion) {
-    (void)encoder;
-    //gsr_video_encoder_software *self = encoder->priv;
+    gsr_video_encoder_software *self = encoder->priv;
     // TODO: hdr support
     const unsigned int formats[2] = { GL_RED, GL_RG };
-    const int div[2] = {1, 2}; // divide UV texture size by 2 because chroma is half size
     for(int i = 0; i < 2; ++i) {
-        // TODO: Use glPixelStore?
-        gsr_color_conversion_read_destination_texture(color_conversion, i, 0, 0, frame->width / div[i], frame->height / div[i], formats[i], GL_UNSIGNED_BYTE, frame->data[i]);
+        self->params.egl->glBindTexture(GL_TEXTURE_2D, self->target_textures[i]);
+        // We could use glGetTexSubImage and then we wouldn't have to use a specific linesize (LINESIZE_ALIGNMENT) that adds padding,
+        // but glGetTexSubImage is only available starting from opengl 4.5.
+        self->params.egl->glGetTexImage(GL_TEXTURE_2D, 0, formats[i], GL_UNSIGNED_BYTE, frame->data[i]);
     }
+    self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
     // cap_kms->kms.base.egl->eglSwapBuffers(cap_kms->kms.base.egl->egl_display, cap_kms->kms.base.egl->egl_surface);
 
     //self->params.egl->glFlush();

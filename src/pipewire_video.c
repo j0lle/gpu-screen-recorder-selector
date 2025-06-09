@@ -358,7 +358,7 @@ static int64_t spa_video_format_to_drm_format(const enum spa_video_format format
         case SPA_VIDEO_FORMAT_ARGB_210LE: return DRM_FORMAT_ARGB2101010;
         case SPA_VIDEO_FORMAT_ABGR_210LE: return DRM_FORMAT_ABGR2101010;
 #endif
-        default:                          break;
+        default:                    break;
     }
     return DRM_FORMAT_INVALID;
 }
@@ -471,27 +471,6 @@ static void gsr_pipewire_video_init_modifiers(gsr_pipewire_video *self) {
         spa_video_format_get_modifiers(self, self->supported_video_formats[i].format, self->modifiers + self->num_modifiers, GSR_PIPEWIRE_VIDEO_MAX_MODIFIERS - self->num_modifiers, &num_modifiers);
         self->supported_video_formats[i].modifiers_index = self->num_modifiers;
         self->supported_video_formats[i].modifiers_size = num_modifiers;
-        self->num_modifiers += num_modifiers;
-    }
-}
-
-static void gsr_pipewire_video_format_remove_modifier(gsr_pipewire_video *self, gsr_video_format *video_format, uint64_t modifier) {
-    for(size_t i = 0; i < video_format->modifiers_size; ++i) {
-        if(self->modifiers[video_format->modifiers_index + i] != modifier)
-            continue;
-
-        for(size_t j = i + 1; j < video_format->modifiers_size; ++j) {
-            self->modifiers[j - 1] = self->modifiers[j];
-        }
-        --video_format->modifiers_size;
-        return;
-    }
-}
-
-static void gsr_pipewire_video_remove_modifier(gsr_pipewire_video *self, uint64_t modifier) {
-    for(size_t i = 0; i < GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS; i++) {
-        gsr_video_format *video_format = &self->supported_video_formats[i];
-        gsr_pipewire_video_format_remove_modifier(self, video_format, modifier);
     }
 }
 
@@ -672,7 +651,6 @@ void gsr_pipewire_video_deinit(gsr_pipewire_video *self) {
     self->dmabuf_num_planes = 0;
 
     self->negotiated = false;
-    self->renegotiated = false;
 
     if(self->mutex_initialized) {
         pthread_mutex_destroy(&self->mutex);
@@ -724,19 +702,9 @@ static EGLImage gsr_pipewire_video_create_egl_image_with_fallback(gsr_pipewire_v
     } else {
         image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, true);
         if(!image) {
-            if(self->renegotiated) {
-                fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, trying without modifiers\n");
-                self->no_modifiers_fallback = true;
-                image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
-            } else {
-                fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, renegotiating with a different modifier\n");
-                self->negotiated = false;
-                self->renegotiated = true;
-                gsr_pipewire_video_remove_modifier(self, self->format.info.raw.modifier);
-                pw_thread_loop_lock(self->thread_loop);
-                pw_loop_signal_event(pw_thread_loop_get_loop(self->thread_loop), self->reneg);
-                pw_thread_loop_unlock(self->thread_loop);
-            }
+            fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, trying without modifiers\n");
+            self->no_modifiers_fallback = true;
+            image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
         }
     }
     return image;
@@ -768,9 +736,13 @@ static void gsr_pipewire_video_update_cursor_texture(gsr_pipewire_video *self, g
     if(!self->cursor.data)
         return;
 
+    const float border_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     self->egl->glBindTexture(GL_TEXTURE_2D, texture_map.cursor_texture_id);
     // TODO: glTextureSubImage2D if same size
     self->egl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, self->cursor.width, self->cursor.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, self->cursor.data);
+    self->egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    self->egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    self->egl->glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border_color);
     self->egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     self->egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     self->egl->glBindTexture(GL_TEXTURE_2D, 0);
@@ -795,14 +767,11 @@ bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map te
     }
 
     EGLImage image = gsr_pipewire_video_create_egl_image_with_fallback(self);
-    if(!image) {
-        pthread_mutex_unlock(&self->mutex);
-        return false;
+    if(image) {
+        gsr_pipewire_video_bind_image_to_texture_with_fallback(self, texture_map, image);
+        *using_external_image = self->external_texture_fallback;
+        self->egl->eglDestroyImage(self->egl->egl_display, image);
     }
-
-    gsr_pipewire_video_bind_image_to_texture_with_fallback(self, texture_map, image);
-    *using_external_image = self->external_texture_fallback;
-    self->egl->eglDestroyImage(self->egl->egl_display, image);
 
     gsr_pipewire_video_update_cursor_texture(self, texture_map);
 

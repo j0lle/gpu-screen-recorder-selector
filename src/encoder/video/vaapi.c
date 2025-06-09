@@ -92,6 +92,10 @@ static bool gsr_video_encoder_vaapi_setup_textures(gsr_video_encoder_vaapi *self
     if(self->prime.fourcc == VA_FOURCC_NV12 || self->prime.fourcc == VA_FOURCC_P010) {
         const uint32_t *formats = self->prime.fourcc == VA_FOURCC_NV12 ? formats_nv12 : formats_p010;
         const int div[2] = {1, 2}; // divide UV texture size by 2 because chroma is half size
+        const float border_colors[2][4] = {
+            {0.0f, 0.0f, 0.0f, 1.0f},
+            {0.5f, 0.5f, 0.0f, 1.0f}
+        };
 
         self->params.egl->glGenTextures(2, self->target_textures);
         for(int i = 0; i < 2; ++i) {
@@ -121,6 +125,9 @@ static bool gsr_video_encoder_vaapi_setup_textures(gsr_video_encoder_vaapi *self
             }
 
             self->params.egl->glBindTexture(GL_TEXTURE_2D, self->target_textures[i]);
+            self->params.egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+            self->params.egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+            self->params.egl->glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border_colors[i]);
             self->params.egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             self->params.egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 

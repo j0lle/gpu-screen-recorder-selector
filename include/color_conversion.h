@@ -50,7 +50,6 @@ typedef struct {
 
     gsr_color_range color_range;
     bool load_external_image_shader;
-    bool force_graphics_shader;
 } gsr_color_conversion_params;
 
 typedef struct {
@@ -78,7 +77,6 @@ void gsr_color_conversion_deinit(gsr_color_conversion *self);
 
 void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i source_pos, vec2i source_size, vec2i texture_size, gsr_rotation rotation, gsr_source_color source_color, bool external_texture, bool alpha_blending);
 void gsr_color_conversion_clear(gsr_color_conversion *self);
-void gsr_color_conversion_read_destination_texture(gsr_color_conversion *self, int destination_texture_index, int x, int y, int width, int height, unsigned int color_format, unsigned int data_format, void *pixels);
 
 gsr_rotation gsr_monitor_rotation_to_rotation(gsr_monitor_rotation monitor_rotation);
 

@@ -71,15 +71,11 @@ static bool gsr_image_writer_write_opengl_texture_to_file(gsr_image_writer *self
         return false;
     }
 
-    unsigned int fbo = 0;
-    self->egl->glGenFramebuffers(1, &fbo);
-    self->egl->glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    self->egl->glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self->texture, 0);
-
-    self->egl->glReadPixels(0, 0, self->width, self->height, GL_RGBA, GL_UNSIGNED_BYTE, frame_data);
-
-    self->egl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    self->egl->glDeleteFramebuffers(1, &fbo);
+    // TODO: hdr support
+    self->egl->glBindTexture(GL_TEXTURE_2D, self->texture);
+    // We could use glGetTexSubImage, but it's only available starting from opengl 4.5
+    self->egl->glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, frame_data);
+    self->egl->glBindTexture(GL_TEXTURE_2D, 0);
 
     self->egl->glFlush();
     self->egl->glFinish();
