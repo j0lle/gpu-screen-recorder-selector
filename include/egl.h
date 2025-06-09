@@ -141,8 +141,6 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_MAX_COMPUTE_FIXED_GROUP_INVOCATIONS  0x90EB
 #define GL_TEXTURE0                             0x84C0
 #define GL_TEXTURE1                             0x84C1
-#define GL_CLAMP_TO_BORDER                      0x812D
-#define GL_TEXTURE_BORDER_COLOR                 0x1004
 #define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT      0x00000020
 #define GL_ALL_BARRIER_BITS                     0xFFFFFFFF
 

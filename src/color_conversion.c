@@ -89,15 +89,13 @@ static void get_compute_shader_header(char *header, size_t header_size, bool ext
     if(external_texture) {
         snprintf(header, header_size,
             "#version 310 es\n"
-            "#extension GL_ARB_compute_shader: enable\n"
             "#extension GL_OES_EGL_image_external : enable\n"
             "#extension GL_OES_EGL_image_external_essl3 : require\n"
             "layout(binding = 0) uniform highp samplerExternalOES img_input;\n"
             "layout(binding = 1) uniform highp sampler2D img_background;\n");
     } else {
         snprintf(header, header_size,
-            "#version 420\n"
-            "#extension GL_ARB_compute_shader: enable\n"
+            "#version 310 es\n"
             "layout(binding = 0) uniform highp sampler2D img_input;\n"
             "layout(binding = 1) uniform highp sampler2D img_background;\n");
     }
@@ -109,7 +107,7 @@ static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_com
     char header[512];
     get_compute_shader_header(header, sizeof(header), external_texture);
 
-    char compute_shader[2048];
+    char compute_shader[4096];
     snprintf(compute_shader, sizeof(compute_shader),
         "%s"
         "layout (local_size_x = %d, local_size_y = %d, local_size_z = 1) in;\n"
@@ -127,12 +125,16 @@ static int load_compute_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_com
         "    ivec2 output_size = textureSize(img_background, 0);\n"
         "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size_shift) * rotation_matrix + vec2(size_shift) + 0.5;\n"
         "    vec2 output_texel_coord = vec2(texel_coord - source_position + target_position) + 0.5;\n"
-        "    vec4 source_color = texture(img_input, rotated_texel_coord/vec2(size));\n"
+        "    vec2 source_color_coords = rotated_texel_coord/vec2(size);\n"
+        "    vec4 source_color = texture(img_input, source_color_coords);\n"
+        "    if(source_color_coords.x > 1.0 || source_color_coords.y > 1.0)\n"
+        "        source_color.rgba = vec4(0.0, 0.0, 0.0, %s);\n"
         "    vec4 source_color_yuv = RGBtoYUV * vec4(source_color.rgb, 1.0);\n"
         "    vec4 output_color_yuv = %s;\n"
         "    float y_color = mix(output_color_yuv.r, source_color_yuv.r, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(y_color, 1.0, 1.0, 1.0));\n"
         "}\n", header, max_local_size_dim, max_local_size_dim, color_transform_matrix,
+            alpha_blending ? "0.0" : "1.0",
             alpha_blending ? "texture(img_background, output_texel_coord/vec2(output_size))" : "source_color_yuv");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
@@ -151,7 +153,7 @@ static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_co
     char header[512];
     get_compute_shader_header(header, sizeof(header), external_texture);
 
-    char compute_shader[2048];
+    char compute_shader[4096];
     snprintf(compute_shader, sizeof(compute_shader),
         "%s"
         "layout (local_size_x = %d, local_size_y = %d, local_size_z = 1) in;\n"
@@ -169,12 +171,16 @@ static int load_compute_shader_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_co
         "    ivec2 output_size = textureSize(img_background, 0);\n"
         "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size_shift) * rotation_matrix + vec2(size_shift) + 0.5;\n"
         "    vec2 output_texel_coord = vec2(texel_coord - source_position + target_position) + 0.5;\n"
-        "    vec4 source_color = texture(img_input, rotated_texel_coord/vec2(size>>1));\n" // size/2
+        "    vec2 source_color_coords = rotated_texel_coord/vec2(size>>1);\n"
+        "    vec4 source_color = texture(img_input, source_color_coords);\n" // size/2
+        "    if(source_color_coords.x > 1.0 || source_color_coords.y > 1.0)\n"
+        "        source_color.rgba = vec4(0.0, 0.0, 0.0, %s);\n"
         "    vec4 source_color_yuv = RGBtoYUV * vec4(source_color.rgb, 1.0);\n"
         "    vec4 output_color_yuv = %s;\n"
         "    vec2 uv_color = mix(output_color_yuv.rg, source_color_yuv.gb, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(uv_color, 1.0, 1.0));\n"
         "}\n", header, max_local_size_dim, max_local_size_dim, color_transform_matrix,
+            alpha_blending ? "0.0" : "1.0",
             alpha_blending ? "texture(img_background, output_texel_coord/vec2(output_size))" : "source_color_yuv");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
@@ -191,10 +197,11 @@ static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_c
     char header[512];
     get_compute_shader_header(header, sizeof(header), external_texture);
 
-    char compute_shader[2048];
+    char compute_shader[4096];
     snprintf(compute_shader, sizeof(compute_shader),
         "%s"
         "layout (local_size_x = %d, local_size_y = %d, local_size_z = 1) in;\n"
+        "precision highp float;\n"
         "uniform ivec2 source_position;\n"
         "uniform ivec2 target_position;\n"
         "uniform vec2 scale;\n"
@@ -207,11 +214,15 @@ static int load_compute_shader_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_c
         "    ivec2 output_size = textureSize(img_background, 0);\n"
         "    vec2 rotated_texel_coord = vec2(texel_coord - source_position - size_shift) * rotation_matrix + vec2(size_shift) + 0.5;\n"
         "    vec2 output_texel_coord = vec2(texel_coord - source_position + target_position) + 0.5;\n"
-        "    vec4 source_color = texture(img_input, rotated_texel_coord/vec2(size));\n"
+        "    vec2 source_color_coords = rotated_texel_coord/vec2(size);\n"
+        "    vec4 source_color = texture(img_input, source_color_coords);\n"
+        "    if(source_color_coords.x > 1.0 || source_color_coords.y > 1.0)\n"
+        "        source_color.rgba = vec4(0.0, 0.0, 0.0, %s);\n"
         "    vec4 output_color = %s;\n"
         "    vec3 color = mix(output_color.rgb, source_color.rgb, source_color.a);\n"
         "    imageStore(img_output, texel_coord + target_position, vec4(color, 1.0));\n"
         "}\n", header, max_local_size_dim, max_local_size_dim,
+            alpha_blending ? "0.0" : "1.0",
             alpha_blending ? "texture(img_background, output_texel_coord/vec2(output_size))" : "source_color");
 
     if(gsr_shader_init(shader, egl, NULL, NULL, compute_shader) != 0)
@@ -620,19 +631,32 @@ int gsr_color_conversion_init(gsr_color_conversion *self, const gsr_color_conver
         }
     }
 
-    if(!gsr_color_conversion_load_compute_shaders(self)) {
+    if(self->params.force_graphics_shader) {
         self->compute_shaders_failed_to_load = true;
-        fprintf(stderr, "gsr info: failed to load one or more compute shaders, run gpu-screen-recorder with the '-gl-debug yes' option to see why. Falling back to slower graphics shader instead\n");
+        self->external_compute_shaders_failed_to_load = true;
+        
         if(!gsr_color_conversion_load_graphics_shaders(self))
             goto err;
-    }
 
-    if(self->params.load_external_image_shader) {
-        if(!gsr_color_conversion_load_external_compute_shaders(self)) {
-            self->external_compute_shaders_failed_to_load = true;
-            fprintf(stderr, "gsr info: failed to load one or more external compute shaders, run gpu-screen-recorder with the '-gl-debug yes' option to see why. Falling back to slower graphics shader instead\n");
+        if(self->params.load_external_image_shader) {
             if(!gsr_color_conversion_load_external_graphics_shaders(self))
                 goto err;
+        }
+    } else {
+        if(!gsr_color_conversion_load_compute_shaders(self)) {
+            self->compute_shaders_failed_to_load = true;
+            fprintf(stderr, "gsr info: failed to load one or more compute shaders, run gpu-screen-recorder with the '-gl-debug yes' option to see why. Falling back to slower graphics shader instead\n");
+            if(!gsr_color_conversion_load_graphics_shaders(self))
+                goto err;
+        }
+
+        if(self->params.load_external_image_shader) {
+            if(!gsr_color_conversion_load_external_compute_shaders(self)) {
+                self->external_compute_shaders_failed_to_load = true;
+                fprintf(stderr, "gsr info: failed to load one or more external compute shaders, run gpu-screen-recorder with the '-gl-debug yes' option to see why. Falling back to slower graphics shader instead\n");
+                if(!gsr_color_conversion_load_external_graphics_shaders(self))
+                    goto err;
+            }
         }
     }
 
@@ -995,6 +1019,13 @@ void gsr_color_conversion_clear(gsr_color_conversion *self) {
         self->params.egl->glClear(GL_COLOR_BUFFER_BIT);
     }
 
+    self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void gsr_color_conversion_read_destination_texture(gsr_color_conversion *self, int destination_texture_index, int x, int y, int width, int height, unsigned int color_format, unsigned int data_format, void *pixels) {
+    assert(destination_texture_index >= 0 && destination_texture_index < self->params.num_destination_textures);
+    self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, self->framebuffers[destination_texture_index]);
+    self->params.egl->glReadPixels(x, y, width, height, color_format, data_format, pixels);
     self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
