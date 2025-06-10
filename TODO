@@ -302,3 +302,5 @@ Allow medium, high, very_high and ultra quality for -bm cbr. If that is used the
     Maybe do this in the ui instead (or both?), to show estimated file size.
 
 Maybe remove shader compute code. It doesn't seem necessary anymore now that glSwapBuffer/glFinish isn't used. dbus server isn't needed anymore either, the code can be moved back to the gpu screen recorder process.
+
+Add proper check if opengl functions are supported. dlsym for the symbol will return a no-op function if it's not supported, so it silently fails if used.
