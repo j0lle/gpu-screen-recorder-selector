@@ -459,9 +459,9 @@ bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bo
         /* This fixes nvenc codecs unable to load on openSUSE tumbleweed because of a cuda error. Don't ask me why */
         const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
         if(inside_flatpak)
-            system("flatpak-spawn --host -- nvidia-smi -f /dev/null");
+            system("flatpak-spawn --host -- sh -c 'grep -q openSUSE /etc/os-release && nvidia-smi -f /dev/null'");
         else
-            system("nvidia-smi -f /dev/null");
+            system("sh -c 'grep -q openSUSE /etc/os-release && nvidia-smi -f /dev/null'");
     }
 
     return true;
