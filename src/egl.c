@@ -35,7 +35,7 @@ static bool gsr_egl_create_window(gsr_egl *self) {
 
     const int32_t attr[] = {
         EGL_BUFFER_SIZE, 24,
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
         EGL_NONE, EGL_NONE
     };
 
