@@ -12,7 +12,7 @@
 #include <fcntl.h>
 
 #include <xf86drm.h>
-#include <libdrm/drm_fourcc.h>
+#include <drm_fourcc.h>
 
 #include <libavutil/mastering_display_metadata.h>
 

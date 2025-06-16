@@ -6,7 +6,7 @@
 #include <spa/param/video/format-utils.h>
 #include <spa/debug/types.h>
 
-#include <libdrm/drm_fourcc.h>
+#include <drm_fourcc.h>
 
 #include <fcntl.h>
 #include <unistd.h>
