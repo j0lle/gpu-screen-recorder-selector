@@ -98,7 +98,7 @@ There are also additional dependencies needed at runtime depending on your GPU v
 
 ### Intel
 * mesa
-* vaapi (intel-media-driver/libva-intel-driver/linux-firmware, depending on which intel iGPU you have)
+* vaapi (intel-media-driver/libva-intel-driver/linux-firmware-intel, depending on which intel iGPU you have)
 
 ### NVIDIA
 * cuda runtime (libcuda.so.1) (libnvidia-compute)
