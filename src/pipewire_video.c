@@ -346,17 +346,17 @@ static int64_t spa_video_format_to_drm_format(const enum spa_video_format format
     switch(format) {
         case SPA_VIDEO_FORMAT_RGBx:       return DRM_FORMAT_XBGR8888;
         case SPA_VIDEO_FORMAT_BGRx:       return DRM_FORMAT_XRGB8888;
-        case SPA_VIDEO_FORMAT_RGBA:       return DRM_FORMAT_ABGR8888;
-        case SPA_VIDEO_FORMAT_BGRA:       return DRM_FORMAT_ARGB8888;
+       // case SPA_VIDEO_FORMAT_RGBA:       return DRM_FORMAT_ABGR8888;
+        //case SPA_VIDEO_FORMAT_BGRA:       return DRM_FORMAT_ARGB8888;
         case SPA_VIDEO_FORMAT_RGB:        return DRM_FORMAT_XBGR8888;
         case SPA_VIDEO_FORMAT_BGR:        return DRM_FORMAT_XRGB8888;
-        case SPA_VIDEO_FORMAT_ARGB:       return DRM_FORMAT_XRGB8888;
-        case SPA_VIDEO_FORMAT_ABGR:       return DRM_FORMAT_XRGB8888;
+        //case SPA_VIDEO_FORMAT_ARGB:       return DRM_FORMAT_XRGB8888;
+        //case SPA_VIDEO_FORMAT_ABGR:       return DRM_FORMAT_XRGB8888;
 #if PW_CHECK_VERSION(0, 3, 41)
         case SPA_VIDEO_FORMAT_xRGB_210LE: return DRM_FORMAT_XRGB2101010;
         case SPA_VIDEO_FORMAT_xBGR_210LE: return DRM_FORMAT_XBGR2101010;
-        case SPA_VIDEO_FORMAT_ARGB_210LE: return DRM_FORMAT_ARGB2101010;
-        case SPA_VIDEO_FORMAT_ABGR_210LE: return DRM_FORMAT_ABGR2101010;
+      //  case SPA_VIDEO_FORMAT_ARGB_210LE: return DRM_FORMAT_ARGB2101010;
+      //  case SPA_VIDEO_FORMAT_ABGR_210LE: return DRM_FORMAT_ABGR2101010;
 #endif
         default:                          break;
     }
@@ -366,23 +366,23 @@ static int64_t spa_video_format_to_drm_format(const enum spa_video_format format
 #if PW_CHECK_VERSION(0, 3, 41)
 #define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS
 #else
-#define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS 8
+#define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS 4
 #endif
 
 static const enum spa_video_format video_formats[GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS] = {
-    SPA_VIDEO_FORMAT_BGRA,
+   // SPA_VIDEO_FORMAT_BGRA,
     SPA_VIDEO_FORMAT_BGRx,
     SPA_VIDEO_FORMAT_BGR,
     SPA_VIDEO_FORMAT_RGBx,
-    SPA_VIDEO_FORMAT_RGBA,
+   // SPA_VIDEO_FORMAT_RGBA,
     SPA_VIDEO_FORMAT_RGB,
-    SPA_VIDEO_FORMAT_ARGB,
-    SPA_VIDEO_FORMAT_ABGR,
+  //  SPA_VIDEO_FORMAT_ARGB,
+  //  SPA_VIDEO_FORMAT_ABGR,
 #if PW_CHECK_VERSION(0, 3, 41)
     SPA_VIDEO_FORMAT_xRGB_210LE,
     SPA_VIDEO_FORMAT_xBGR_210LE,
-    SPA_VIDEO_FORMAT_ARGB_210LE,
-    SPA_VIDEO_FORMAT_ABGR_210LE
+  //  SPA_VIDEO_FORMAT_ARGB_210LE,
+  //  SPA_VIDEO_FORMAT_ABGR_210LE
 #endif
 };
 
