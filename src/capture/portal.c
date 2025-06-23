@@ -23,6 +23,12 @@ typedef struct {
     vec2i capture_size;
     gsr_pipewire_video_dmabuf_data dmabuf_data[GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES];
     int num_dmabuf_data;
+
+    gsr_pipewire_video_region region;
+    gsr_pipewire_video_region cursor_region;
+    uint32_t pipewire_fourcc;
+    uint64_t pipewire_modifiers;
+    bool using_external_image;
 } gsr_capture_portal;
 
 static void gsr_capture_portal_cleanup_plane_fds(gsr_capture_portal *self) {
@@ -216,19 +222,13 @@ static int gsr_capture_portal_setup_dbus(gsr_capture_portal *self, int *pipewire
 }
 
 static bool gsr_capture_portal_get_frame_dimensions(gsr_capture_portal *self) {
-    gsr_pipewire_video_region region = {0, 0, 0, 0};
-    gsr_pipewire_video_region cursor_region = {0, 0, 0, 0};
     fprintf(stderr, "gsr info: gsr_capture_portal_start: waiting for pipewire negotiation\n");
 
     const double start_time = clock_get_monotonic_seconds();
     while(clock_get_monotonic_seconds() - start_time < 5.0) {
-        bool uses_external_image = false;
-        uint32_t fourcc = 0;
-        uint64_t modifiers = 0;
-        if(gsr_pipewire_video_map_texture(&self->pipewire, self->texture_map, &region, &cursor_region, self->dmabuf_data, &self->num_dmabuf_data, &fourcc, &modifiers, &uses_external_image)) {
-            gsr_capture_portal_cleanup_plane_fds(self);
-            self->capture_size.x = region.width;
-            self->capture_size.y = region.height;
+        if(gsr_pipewire_video_map_texture(&self->pipewire, self->texture_map, &self->region, &self->cursor_region, self->dmabuf_data, &self->num_dmabuf_data, &self->pipewire_fourcc, &self->pipewire_modifiers, &self->using_external_image)) {
+            self->capture_size.x = self->region.width;
+            self->capture_size.y = self->region.height;
             fprintf(stderr, "gsr info: gsr_capture_portal_start: pipewire negotiation finished\n");
             return true;
         }
@@ -300,20 +300,17 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
     (void)color_conversion;
     gsr_capture_portal *self = cap->priv;
 
-    /* TODO: Handle formats other than RGB(a) */
-    gsr_pipewire_video_region region = {0, 0, 0, 0};
-    gsr_pipewire_video_region cursor_region = {0, 0, 0, 0};
-    uint32_t pipewire_fourcc = 0;
-    uint64_t pipewire_modifiers = 0;
-    bool using_external_image = false;
-    if(gsr_pipewire_video_map_texture(&self->pipewire, self->texture_map, &region, &cursor_region, self->dmabuf_data, &self->num_dmabuf_data, &pipewire_fourcc, &pipewire_modifiers, &using_external_image)) {
-        if(region.width != self->capture_size.x || region.height != self->capture_size.y) {
-            self->capture_size.x = region.width;
-            self->capture_size.y = region.height;
-            gsr_color_conversion_clear(color_conversion);
+    /* TODO: Handle formats other than RGB(A) */
+    if(self->num_dmabuf_data == 0) {
+        if(gsr_pipewire_video_map_texture(&self->pipewire, self->texture_map, &self->region, &self->cursor_region, self->dmabuf_data, &self->num_dmabuf_data, &self->pipewire_fourcc, &self->pipewire_modifiers, &self->using_external_image)) {
+            if(self->region.width != self->capture_size.x || self->region.height != self->capture_size.y) {
+                self->capture_size.x = self->region.width;
+                self->capture_size.y = self->region.height;
+                gsr_color_conversion_clear(color_conversion);
+            }
+        } else {
+            return -1;
         }
-    } else {
-        return -1;
     }
 
     const bool is_scaled = self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0;
@@ -327,27 +324,27 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
 
     // TODO: Handle region crop
 
-    gsr_color_conversion_draw(color_conversion, using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
+    gsr_color_conversion_draw(color_conversion, self->using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
         target_pos, output_size,
-        (vec2i){region.x, region.y}, self->capture_size, self->capture_size,
-        GSR_ROT_0, GSR_SOURCE_COLOR_RGB, using_external_image, false);
+        (vec2i){self->region.x, self->region.y}, self->capture_size, self->capture_size,
+        GSR_ROT_0, GSR_SOURCE_COLOR_RGB, self->using_external_image, false);
 
-    if(self->params.record_cursor && self->texture_map.cursor_texture_id > 0 && cursor_region.width > 0) {
+    if(self->params.record_cursor && self->texture_map.cursor_texture_id > 0 && self->cursor_region.width > 0) {
         const vec2d scale = {
             self->capture_size.x == 0 ? 0 : (double)output_size.x / (double)self->capture_size.x,
             self->capture_size.y == 0 ? 0 : (double)output_size.y / (double)self->capture_size.y
         };
 
         const vec2i cursor_pos = {
-            target_pos.x + (cursor_region.x * scale.x),
-            target_pos.y + (cursor_region.y * scale.y)
+            target_pos.x + (self->cursor_region.x * scale.x),
+            target_pos.y + (self->cursor_region.y * scale.y)
         };
 
         self->params.egl->glEnable(GL_SCISSOR_TEST);
         self->params.egl->glScissor(target_pos.x, target_pos.y, output_size.x, output_size.y);
         gsr_color_conversion_draw(color_conversion, self->texture_map.cursor_texture_id,
-            (vec2i){cursor_pos.x, cursor_pos.y}, (vec2i){cursor_region.width * scale.x, cursor_region.height * scale.y},
-            (vec2i){0, 0}, (vec2i){cursor_region.width, cursor_region.height}, (vec2i){cursor_region.width, cursor_region.height},
+            (vec2i){cursor_pos.x, cursor_pos.y}, (vec2i){self->cursor_region.width * scale.x, self->cursor_region.height * scale.y},
+            (vec2i){0, 0}, (vec2i){self->cursor_region.width, self->cursor_region.height}, (vec2i){self->cursor_region.width, self->cursor_region.height},
             GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false, true);
         self->params.egl->glDisable(GL_SCISSOR_TEST);
     }
