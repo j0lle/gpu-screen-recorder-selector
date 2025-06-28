@@ -76,7 +76,7 @@ uses_pipewire = false
 if get_option('portal') == true
     src += [
         'src/capture/portal.c',
-        'dbus/client/dbus_client.c',
+        'src/dbus.c',
         'src/pipewire_video.c',
     ]
     add_project_arguments('-DGSR_PORTAL', language : ['c', 'cpp'])
@@ -95,6 +95,7 @@ if uses_pipewire == true
     dep += [
         dependency('libpipewire-0.3'),
         dependency('libspa-0.2'),
+        dependency('dbus-1'),
     ]
 endif
 
@@ -102,10 +103,6 @@ add_project_arguments('-DGSR_VERSION="' + meson.project_version() + '"', languag
 
 executable('gsr-kms-server', 'kms/server/kms_server.c', dependencies : dependency('libdrm'), c_args : '-fstack-protector-all', install : true)
 executable('gpu-screen-recorder', src, dependencies : dep, install : true)
-
-if get_option('portal') == true
-    executable('gsr-dbus-server', ['dbus/server/dbus_server.c', 'dbus/dbus_impl.c'], dependencies : dependency('dbus-1'), install : true)
-endif
 
 if get_option('systemd') == true
     install_data(files('extra/gpu-screen-recorder.service'), install_dir : 'lib/systemd/user')

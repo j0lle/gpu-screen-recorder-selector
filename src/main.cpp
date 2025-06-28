@@ -5,7 +5,7 @@ extern "C" {
 #include "../include/capture/kms.h"
 #ifdef GSR_PORTAL
 #include "../include/capture/portal.h"
-#include "../dbus/client/dbus_client.h"
+#include "../include/dbus.h"
 #endif
 #ifdef GSR_APP_AUDIO
 #include "../include/pipewire_audio.h"
@@ -1847,15 +1847,15 @@ static void list_supported_capture_options(const gsr_window *window, const char 
     if(!wayland)
         return;
 
-    gsr_dbus_client dbus_client;
-    if(!gsr_dbus_client_init(&dbus_client, NULL))
+    gsr_dbus dbus;
+    if(!gsr_dbus_init(&dbus, NULL))
         return;
 
-    char session_handle[128];
-    if(gsr_dbus_client_screencast_create_session(&dbus_client, session_handle, sizeof(session_handle)) == 0)
+    char *session_handle = NULL;
+    if(gsr_dbus_screencast_create_session(&dbus, &session_handle) == 0)
         puts("portal");
 
-    gsr_dbus_client_deinit(&dbus_client);
+    gsr_dbus_deinit(&dbus);
 #endif
 }
 
@@ -3312,7 +3312,7 @@ int main(int argc, char **argv) {
     int damage_fps_counter = 0;
 
     bool paused = false;
-    double paused_time_offset = 0.0;
+    std::atomic<double> paused_time_offset(0.0);
     double paused_time_start = 0.0;
     bool replay_recording = false;
     RecordingStartResult replay_recording_start_result;
@@ -3628,7 +3628,23 @@ int main(int argc, char **argv) {
 
             // TODO: Dont do this if no damage?
             egl.glClear(0);
+
+            bool capture_has_synchronous_task = false;
+            if(capture->capture_has_synchronous_task) {
+                capture_has_synchronous_task = capture->capture_has_synchronous_task(capture);
+                if(capture_has_synchronous_task) {
+                    paused_time_start = clock_get_monotonic_seconds();
+                    paused = true;
+                }
+            }
+
             gsr_capture_capture(capture, &capture_metadata, &color_conversion);
+
+            if(capture_has_synchronous_task) {
+                paused_time_offset = paused_time_offset + (clock_get_monotonic_seconds() - paused_time_start);
+                paused = false;
+            }
+
             gsr_egl_swap_buffers(&egl);
             gsr_video_encoder_copy_textures_to_frame(video_encoder, video_frame, &color_conversion);
 
@@ -3678,7 +3694,7 @@ int main(int argc, char **argv) {
                 paused_time_start = clock_get_monotonic_seconds();
                 fprintf(stderr, "Paused\n");
             } else {
-                paused_time_offset += (clock_get_monotonic_seconds() - paused_time_start);
+                paused_time_offset = paused_time_offset + (clock_get_monotonic_seconds() - paused_time_start);
                 fprintf(stderr, "Unpaused\n");
             }
 

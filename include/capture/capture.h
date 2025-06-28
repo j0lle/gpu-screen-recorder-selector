@@ -22,12 +22,13 @@ typedef struct {
 } gsr_capture_metadata;
 
 struct gsr_capture {
-    /* These methods should not be called manually. Call gsr_capture_* instead */
+    /* These methods should not be called manually. Call gsr_capture_* instead. |capture_metdata->width| and |capture_metadata->height| should be set by this function */
     int (*start)(gsr_capture *cap, gsr_capture_metadata *capture_metadata);
     void (*on_event)(gsr_capture *cap, gsr_egl *egl); /* can be NULL */
     void (*tick)(gsr_capture *cap); /* can be NULL. If there is an event then |on_event| is called before this */
     bool (*should_stop)(gsr_capture *cap, bool *err); /* can be NULL. If NULL, return false */
-    int (*capture)(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion);
+    bool (*capture_has_synchronous_task)(gsr_capture *cap); /* can be NULL. If this returns true then the time spent in |capture| is ignored for video/audio (capture is paused while the synchronous task happens) */
+    int (*capture)(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion); /* Return 0 if the frame was captured */
     bool (*uses_external_image)(gsr_capture *cap); /* can be NULL. If NULL, return false */
     bool (*set_hdr_metadata)(gsr_capture *cap, AVMasteringDisplayMetadata *mastering_display_metadata, AVContentLightMetadata *light_metadata); /* can be NULL. If NULL, return false */
     uint64_t (*get_window_id)(gsr_capture *cap); /* can be NULL. Returns 0 if unknown */

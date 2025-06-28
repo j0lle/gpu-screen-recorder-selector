@@ -280,13 +280,21 @@ static void on_param_changed_cb(void *user_data, uint32_t id, const struct spa_p
     self->negotiated = true;
 }
 
-static void on_state_changed_cb(void *user_data, enum pw_stream_state old, enum pw_stream_state state, const char *error) {
-    (void)old;
+static void on_state_changed_cb(void *user_data, enum pw_stream_state prev_state, enum pw_stream_state new_state, const char *error) {
     gsr_pipewire_video *self = user_data;
 
-    fprintf(stderr, "gsr info: pipewire: stream %p state: \"%s\" (error: %s)\n",
-         (void*)self->stream, pw_stream_state_as_string(state),
+    fprintf(stderr, "gsr info: pipewire: stream %p previous state: \"%s\", new state: \"%s\" (error: %s)\n",
+         (void*)self->stream, pw_stream_state_as_string(prev_state), pw_stream_state_as_string(new_state),
          error ? error : "none");
+
+    pthread_mutex_lock(&self->mutex);
+    if(new_state == PW_STREAM_STATE_PAUSED) {
+        self->paused_start_secs = clock_get_monotonic_seconds();
+        self->paused = true;
+    } else {
+        self->paused = false;
+    }
+    pthread_mutex_unlock(&self->mutex);
 }
 
 static const struct pw_stream_events stream_events = {
@@ -841,6 +849,9 @@ bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map te
 }
 
 bool gsr_pipewire_video_is_damaged(gsr_pipewire_video *self) {
+    if(!self->mutex_initialized)
+        return false;
+
     bool damaged = false;
     pthread_mutex_lock(&self->mutex);
     damaged = self->damaged;
@@ -849,7 +860,21 @@ bool gsr_pipewire_video_is_damaged(gsr_pipewire_video *self) {
 }
 
 void gsr_pipewire_video_clear_damage(gsr_pipewire_video *self) {
+    if(!self->mutex_initialized)
+        return;
+
     pthread_mutex_lock(&self->mutex);
     self->damaged = false;
     pthread_mutex_unlock(&self->mutex);
+}
+
+bool gsr_pipewire_video_should_restart(gsr_pipewire_video *self) {
+    if(!self->mutex_initialized)
+        return false;
+
+    bool should_restart = false;
+    pthread_mutex_lock(&self->mutex);
+    should_restart = self->paused && clock_get_monotonic_seconds() - self->paused_start_secs >= 3.0;
+    pthread_mutex_unlock(&self->mutex);
+    return should_restart;
 }

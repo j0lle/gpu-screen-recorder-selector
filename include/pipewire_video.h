@@ -95,6 +95,9 @@ typedef struct {
 
     uint64_t modifiers[GSR_PIPEWIRE_VIDEO_MAX_MODIFIERS];
     size_t num_modifiers;
+
+    bool paused;
+    double paused_start_secs;
 } gsr_pipewire_video;
 
 /*
@@ -109,5 +112,6 @@ void gsr_pipewire_video_deinit(gsr_pipewire_video *self);
 bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map texture_map, gsr_pipewire_video_region *region, gsr_pipewire_video_region *cursor_region, gsr_pipewire_video_dmabuf_data *dmabuf_data, int *num_dmabuf_data, uint32_t *fourcc, uint64_t *modifiers, bool *using_external_image);
 bool gsr_pipewire_video_is_damaged(gsr_pipewire_video *self);
 void gsr_pipewire_video_clear_damage(gsr_pipewire_video *self);
+bool gsr_pipewire_video_should_restart(gsr_pipewire_video *self);
 
 #endif /* GSR_PIPEWIRE_VIDEO_H */

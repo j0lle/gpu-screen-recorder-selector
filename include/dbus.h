@@ -1,12 +1,24 @@
 #ifndef GSR_DBUS_H
 #define GSR_DBUS_H
 
-#include "portal.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <dbus/dbus.h>
 
 #define DBUS_RANDOM_STR_SIZE 16
+
+typedef enum {
+    GSR_PORTAL_CAPTURE_TYPE_MONITOR = 1 << 0,
+    GSR_PORTAL_CAPTURE_TYPE_WINDOW  = 1 << 1,
+    GSR_PORTAL_CAPTURE_TYPE_VIRTUAL = 1 << 2,
+    GSR_PORTAL_CAPTURE_TYPE_ALL = GSR_PORTAL_CAPTURE_TYPE_MONITOR | GSR_PORTAL_CAPTURE_TYPE_WINDOW | GSR_PORTAL_CAPTURE_TYPE_VIRTUAL
+} gsr_portal_capture_type;
+
+typedef enum {
+    GSR_PORTAL_CURSOR_MODE_HIDDEN   = 1 << 0,
+    GSR_PORTAL_CURSOR_MODE_EMBEDDED = 1 << 1,
+    GSR_PORTAL_CURSOR_MODE_METADATA = 1 << 2
+} gsr_portal_cursor_mode;
 
 typedef struct {
     DBusConnection *con;

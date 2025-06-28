@@ -2,7 +2,7 @@
 #include "../../include/color_conversion.h"
 #include "../../include/egl.h"
 #include "../../include/utils.h"
-#include "../../dbus/client/dbus_client.h"
+#include "../../include/dbus.h"
 #include "../../include/pipewire_video.h"
 
 #include <stdlib.h>
@@ -11,13 +11,22 @@
 #include <limits.h>
 #include <assert.h>
 
+#define PORTAL_CAPTURE_CANCELED_BY_USER_EXIT_CODE 60
+
+typedef enum {
+    PORTAL_CAPTURE_SETUP_IDLE,
+    PORTAL_CAPTURE_SETUP_IN_PROGRESS,
+    PORTAL_CAPTURE_SETUP_FINISHED,
+    PORTAL_CAPTURE_SETUP_FAILED
+} gsr_portal_capture_setup_state;
+
 typedef struct {
     gsr_capture_portal_params params;
 
     gsr_texture_map texture_map;
 
-    gsr_dbus_client dbus_client;
-    char session_handle[128];
+    gsr_dbus dbus;
+    char *session_handle;
 
     gsr_pipewire_video pipewire;
     vec2i capture_size;
@@ -29,6 +38,9 @@ typedef struct {
     uint32_t pipewire_fourcc;
     uint64_t pipewire_modifiers;
     bool using_external_image;
+
+    bool should_stop;
+    bool stop_is_error;
 } gsr_capture_portal;
 
 static void gsr_capture_portal_cleanup_plane_fds(gsr_capture_portal *self) {
@@ -59,7 +71,7 @@ static void gsr_capture_portal_stop(gsr_capture_portal *self) {
 
     gsr_capture_portal_cleanup_plane_fds(self);
     gsr_pipewire_video_deinit(&self->pipewire);
-    gsr_dbus_client_deinit(&self->dbus_client);
+    gsr_dbus_deinit(&self->dbus);
 }
 
 static void gsr_capture_portal_create_input_textures(gsr_capture_portal *self) {
@@ -183,36 +195,36 @@ static int gsr_capture_portal_setup_dbus(gsr_capture_portal *self, int *pipewire
     if(self->params.restore_portal_session)
         gsr_capture_portal_get_restore_token_from_cache(restore_token, sizeof(restore_token), self->params.portal_session_token_filepath);
 
-    if(!gsr_dbus_client_init(&self->dbus_client, restore_token))
+    if(!gsr_dbus_init(&self->dbus, restore_token))
         return -1;
 
     fprintf(stderr, "gsr info: gsr_capture_portal_setup_dbus: CreateSession\n");
-    response_status = gsr_dbus_client_screencast_create_session(&self->dbus_client, self->session_handle, sizeof(self->session_handle));
+    response_status = gsr_dbus_screencast_create_session(&self->dbus, &self->session_handle);
     if(response_status != 0) {
         fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: CreateSession failed\n");
         return response_status;
     }
 
     fprintf(stderr, "gsr info: gsr_capture_portal_setup_dbus: SelectSources\n");
-    response_status = gsr_dbus_client_screencast_select_sources(&self->dbus_client, self->session_handle, GSR_PORTAL_CAPTURE_TYPE_ALL, self->params.record_cursor ? GSR_PORTAL_CURSOR_MODE_EMBEDDED : GSR_PORTAL_CURSOR_MODE_HIDDEN);
+    response_status = gsr_dbus_screencast_select_sources(&self->dbus, self->session_handle, GSR_PORTAL_CAPTURE_TYPE_ALL, self->params.record_cursor ? GSR_PORTAL_CURSOR_MODE_EMBEDDED : GSR_PORTAL_CURSOR_MODE_HIDDEN);
     if(response_status != 0) {
         fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: SelectSources failed\n");
         return response_status;
     }
 
     fprintf(stderr, "gsr info: gsr_capture_portal_setup_dbus: Start\n");
-    response_status = gsr_dbus_client_screencast_start(&self->dbus_client, self->session_handle, pipewire_node);
+    response_status = gsr_dbus_screencast_start(&self->dbus, self->session_handle, pipewire_node);
     if(response_status != 0) {
         fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: Start failed\n");
         return response_status;
     }
 
-    const char *screencast_restore_token = gsr_dbus_client_screencast_get_restore_token(&self->dbus_client);
+    const char *screencast_restore_token = gsr_dbus_screencast_get_restore_token(&self->dbus);
     if(screencast_restore_token)
         gsr_capture_portal_save_restore_token(screencast_restore_token, self->params.portal_session_token_filepath);
 
     fprintf(stderr, "gsr info: gsr_capture_portal_setup_dbus: OpenPipeWireRemote\n");
-    if(!gsr_dbus_client_screencast_open_pipewire_remote(&self->dbus_client, self->session_handle, pipewire_fd)) {
+    if(!gsr_dbus_screencast_open_pipewire_remote(&self->dbus, self->session_handle, pipewire_fd)) {
         fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: OpenPipeWireRemote failed\n");
         return -1;
     }
@@ -239,45 +251,51 @@ static bool gsr_capture_portal_get_frame_dimensions(gsr_capture_portal *self) {
     return false;
 }
 
-static int gsr_capture_portal_start(gsr_capture *cap, gsr_capture_metadata *capture_metadata) {
-    gsr_capture_portal *self = cap->priv;
-
+static int gsr_capture_portal_setup(gsr_capture_portal *self, int fps) {
     gsr_capture_portal_create_input_textures(self);
 
     int pipewire_fd = 0;
     uint32_t pipewire_node = 0;
     const int response_status = gsr_capture_portal_setup_dbus(self, &pipewire_fd, &pipewire_node);
     if(response_status != 0) {
-        gsr_capture_portal_stop(self);
         // Response status values:
         // 0: Success, the request is carried out
         // 1: The user cancelled the interaction
         // 2: The user interaction was ended in some other way
         // Response status value 2 happens usually if there was some kind of error in the desktop portal on the system
         if(response_status == 2) {
-            fprintf(stderr, "gsr error: gsr_capture_portal_start: desktop portal capture failed. Either you Wayland compositor doesn't support desktop portal capture or it's incorrectly setup on your system\n");
+            fprintf(stderr, "gsr error: gsr_capture_portal_setup: desktop portal capture failed. Either you Wayland compositor doesn't support desktop portal capture or it's incorrectly setup on your system\n");
             return 50;
         } else if(response_status == 1) {
-            fprintf(stderr, "gsr error: gsr_capture_portal_start: desktop portal capture failed. It seems like desktop portal capture was canceled by the user.\n");
-            return 60;
+            fprintf(stderr, "gsr error: gsr_capture_portal_setup: desktop portal capture failed. It seems like desktop portal capture was canceled by the user.\n");
+            return PORTAL_CAPTURE_CANCELED_BY_USER_EXIT_CODE;
         } else {
             return -1;
         }
     }
 
-    fprintf(stderr, "gsr info: gsr_capture_portal_start: setting up pipewire\n");
+    fprintf(stderr, "gsr info: gsr_capture_portal_setup: setting up pipewire\n");
     /* TODO: support hdr when pipewire supports it */
     /* gsr_pipewire closes the pipewire fd, even on failure */
-    if(!gsr_pipewire_video_init(&self->pipewire, pipewire_fd, pipewire_node, capture_metadata->fps, self->params.record_cursor, self->params.egl)) {
-        fprintf(stderr, "gsr error: gsr_capture_portal_start: failed to setup pipewire with fd: %d, node: %" PRIu32 "\n", pipewire_fd, pipewire_node);
-        gsr_capture_portal_stop(self);
+    if(!gsr_pipewire_video_init(&self->pipewire, pipewire_fd, pipewire_node, fps, self->params.record_cursor, self->params.egl)) {
+        fprintf(stderr, "gsr error: gsr_capture_portal_setup: failed to setup pipewire with fd: %d, node: %" PRIu32 "\n", pipewire_fd, pipewire_node);
         return -1;
     }
-    fprintf(stderr, "gsr info: gsr_capture_portal_start: pipewire setup finished\n");
+    fprintf(stderr, "gsr info: gsr_capture_portal_setup: pipewire setup finished\n");
 
-    if(!gsr_capture_portal_get_frame_dimensions(self)) {
-        gsr_capture_portal_stop(self);
+    if(!gsr_capture_portal_get_frame_dimensions(self))
         return -1;
+
+    return 0;
+}
+
+static int gsr_capture_portal_start(gsr_capture *cap, gsr_capture_metadata *capture_metadata) {
+    gsr_capture_portal *self = cap->priv;
+
+    const int result = gsr_capture_portal_setup(self, capture_metadata->fps);
+    if(result != 0) {
+        gsr_capture_portal_stop(self);
+        return result;
     }
 
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
@@ -296,9 +314,28 @@ static int max_int(int a, int b) {
     return a > b ? a : b;
 }
 
+static bool gsr_capture_portal_capture_has_synchronous_task(gsr_capture *cap) {
+    gsr_capture_portal *self = cap->priv;
+    return gsr_pipewire_video_should_restart(&self->pipewire);
+}
+
 static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     (void)color_conversion;
     gsr_capture_portal *self = cap->priv;
+
+    if(self->should_stop)
+        return -1;
+
+    if(gsr_pipewire_video_should_restart(&self->pipewire)) {
+        fprintf(stderr, "gsr info: gsr_capture_portal_capture: pipewire capture was paused, trying to start capture again\n");
+        gsr_capture_portal_stop(self);
+        const int result = gsr_capture_portal_setup(self, capture_metadata->fps);
+        if(result != 0) {
+            self->stop_is_error = result != PORTAL_CAPTURE_CANCELED_BY_USER_EXIT_CODE;
+            self->should_stop = true;
+        }
+        return -1;
+    }
 
     /* TODO: Handle formats other than RGB(A) */
     if(self->num_dmabuf_data == 0) {
@@ -362,6 +399,13 @@ static bool gsr_capture_portal_uses_external_image(gsr_capture *cap) {
     return true;
 }
 
+static bool gsr_capture_portal_should_stop(gsr_capture *cap, bool *err) {
+    gsr_capture_portal *self = cap->priv;
+    if(err)
+        *err = self->stop_is_error;
+    return self->should_stop;
+}
+
 static bool gsr_capture_portal_is_damaged(gsr_capture *cap) {
     gsr_capture_portal *self = cap->priv;
     return gsr_pipewire_video_is_damaged(&self->pipewire);
@@ -403,7 +447,8 @@ gsr_capture* gsr_capture_portal_create(const gsr_capture_portal_params *params) 
     *cap = (gsr_capture) {
         .start = gsr_capture_portal_start,
         .tick = NULL,
-        .should_stop = NULL,
+        .should_stop = gsr_capture_portal_should_stop,
+        .capture_has_synchronous_task = gsr_capture_portal_capture_has_synchronous_task,
         .capture = gsr_capture_portal_capture,
         .uses_external_image = gsr_capture_portal_uses_external_image,
         .is_damaged = gsr_capture_portal_is_damaged,
