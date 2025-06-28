@@ -3400,7 +3400,7 @@ int main(int argc, char **argv) {
                     }
 
                     // TODO: Is this |received_audio_time| really correct?
-                    const int64_t num_expected_frames = std::round((this_audio_frame_time - record_start_time) / timeout_sec);
+                    const int64_t num_expected_frames = std::floor((this_audio_frame_time - record_start_time) / timeout_sec);
                     int64_t num_missing_frames = std::max((int64_t)0LL, num_expected_frames - num_received_frames);
 
                     if(got_audio_data)
@@ -3547,9 +3547,6 @@ int main(int argc, char **argv) {
     if(is_monitor_capture)
         gsr_damage_set_target_monitor(&damage, arg_parser.window);
 
-    double last_capture_seconds = record_start_time;
-    bool wait_until_frame_time_elapsed = false;
-
     while(running) {
         const double frame_start = clock_get_monotonic_seconds();
 
@@ -3604,24 +3601,10 @@ int main(int argc, char **argv) {
         }
 
         const double this_video_frame_time = clock_get_monotonic_seconds() - paused_time_offset;
-        const double time_since_last_frame_captured_seconds = this_video_frame_time - last_capture_seconds;
-        double frame_time_overflow = time_since_last_frame_captured_seconds - target_fps;
-        const bool frame_timeout = frame_time_overflow >= 0.0;
+        const int64_t expected_frames = std::floor((this_video_frame_time - record_start_time) / target_fps);
+        const int64_t num_missed_frames = expected_frames - video_pts_counter;
 
-        bool force_frame_capture = wait_until_frame_time_elapsed && frame_timeout;
-        bool allow_capture = !wait_until_frame_time_elapsed || force_frame_capture;
-        if(arg_parser.framerate_mode == GSR_FRAMERATE_MODE_CONTENT) {
-            force_frame_capture = false;
-            allow_capture = frame_timeout;
-        }
-
-        bool frame_captured = false;
-        if((damaged || force_frame_capture) && allow_capture && !paused) {
-            frame_captured = true;
-            frame_time_overflow = std::min(std::max(0.0, frame_time_overflow), target_fps);
-            last_capture_seconds = this_video_frame_time - frame_time_overflow;
-            wait_until_frame_time_elapsed = false;
-
+        if(damaged && num_missed_frames >= 1 && !paused) {
             gsr_damage_clear(&damage);
             if(capture->clear_damage)
                 capture->clear_damage(capture);
@@ -3650,9 +3633,6 @@ int main(int argc, char **argv) {
 
             if(hdr && !hdr_metadata_set && !is_replaying && add_hdr_metadata_to_video_stream(capture, video_stream))
                 hdr_metadata_set = true;
-
-            const int64_t expected_frames = std::round((this_video_frame_time - record_start_time) / target_fps);
-            const int num_missed_frames = std::max((int64_t)1LL, expected_frames - video_pts_counter);
 
             // TODO: Check if duplicate frame can be saved just by writing it with a different pts instead of sending it again
             const int num_frames_to_encode = arg_parser.framerate_mode == GSR_FRAMERATE_MODE_CONSTANT ? num_missed_frames : 1;
@@ -3685,7 +3665,7 @@ int main(int argc, char **argv) {
                 }
             }
 
-            video_pts_counter += num_frames_to_encode;
+            video_pts_counter += num_missed_frames;
         }
 
         if(toggle_pause == 1 && !is_replaying) {
@@ -3783,29 +3763,22 @@ int main(int argc, char **argv) {
                 gsr_replay_buffer_clear(encoder.replay_buffer);
         }
 
-        const double frame_end = clock_get_monotonic_seconds();
-        const double time_at_frame_end = frame_end - paused_time_offset;
+        const double time_at_frame_end = clock_get_monotonic_seconds() - paused_time_offset;
         const double time_elapsed_total = time_at_frame_end - record_start_time;
-        const int64_t frames_elapsed = (int64_t)(time_elapsed_total / target_fps);
+        const int64_t frames_elapsed = std::floor(time_elapsed_total / target_fps);
         const double time_at_next_frame = (frames_elapsed + 1) * target_fps;
         double time_to_next_frame = time_at_next_frame - time_elapsed_total;
-        if(time_to_next_frame > target_fps*1.1)
+        if(time_to_next_frame > target_fps)
             time_to_next_frame = target_fps;
+        const int64_t end_num_missed_frames = frames_elapsed - video_pts_counter;
 
-        const double frame_time = frame_end - frame_start;
-        const bool frame_deadline_missed = frame_time > target_fps;
-        if(time_to_next_frame >= 0.0 && !frame_deadline_missed && frame_captured)
+        if(time_to_next_frame > 0.0 && end_num_missed_frames <= 0)
             av_usleep(time_to_next_frame * 1000.0 * 1000.0);
         else {
             if(paused)
                 av_usleep(20.0 * 1000.0); // 20 milliseconds
-            else if(frame_deadline_missed)
-            {}
-            else if(arg_parser.framerate_mode == GSR_FRAMERATE_MODE_CONTENT || !frame_captured)
+            else if(arg_parser.framerate_mode == GSR_FRAMERATE_MODE_CONTENT)
                 av_usleep(2.8 * 1000.0); // 2.8 milliseconds
-            else if(!frame_captured)
-                av_usleep(1.0 * 1000.0); // 1 milliseconds
-            wait_until_frame_time_elapsed = true;
         }
     }
 
