@@ -3548,8 +3548,6 @@ int main(int argc, char **argv) {
         gsr_damage_set_target_monitor(&damage, arg_parser.window);
 
     while(running) {
-        const double frame_start = clock_get_monotonic_seconds();
-
         while(gsr_window_process_event(window)) {
             gsr_damage_on_event(&damage, gsr_window_get_event_data(window));
             gsr_capture_on_event(capture, &egl);
