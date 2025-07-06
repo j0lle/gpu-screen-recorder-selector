@@ -309,3 +309,7 @@ Colors are offset to bottom left by 1 pixel or so on steam deck in landscape mod
 
 When constant framerate is used (and for audio) multiple frames need to be encoded after resuming from suspend.
     The clock jumps forward by around 2-3 seconds (on my machine). Is there a way to make sure the clock doesn't jump forward?
+
+Colors are correct, but they look incorrect for thin elements, such as colored text. This can be improved by sampling neighbor pixels for color average.
+
+Record first video/audio frame immediately.

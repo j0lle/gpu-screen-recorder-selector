@@ -119,8 +119,11 @@ static int recv_msg_from_server(int server_pid, int server_fd, gsr_kms_response 
 
 /* We have to use $HOME because in flatpak there is no simple path that is accessible, read and write, that multiple flatpak instances can access */
 static bool create_socket_path(char *output_path, size_t output_path_size) {
+    const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *home = getenv("HOME");
-    if(!home)
+    // Portable home with AppImage can cause the socket path to be longer than 108 characters (unix domain socket path max length).
+    // Using gsr-kms-socket in $HOME is only needed in flatpak, so use /tmp everywhere else instead.
+    if(!home || !inside_flatpak)
         home = "/tmp";
 
     char random_characters[11];
@@ -318,6 +321,8 @@ int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
         self->kms_server_pid = pid;
     }
 
+    // We need this dumb-shit retardation with unix domain socket and then replace it with socketpair because
+    // pkexec doesn't work with socketpair................
     fprintf(stderr, "gsr info: gsr_kms_client_init: waiting for server to connect\n");
     struct pollfd poll_fd = {
         .fd = self->initial_socket_fd,
