@@ -9,9 +9,6 @@ typedef struct gsr_kms_client gsr_kms_client;
 
 struct gsr_kms_client {
     pid_t kms_server_pid;
-    int initial_socket_fd;
-    int initial_client_fd;
-    char initial_socket_path[PATH_MAX];
     int socket_pair[2];
 };
 
