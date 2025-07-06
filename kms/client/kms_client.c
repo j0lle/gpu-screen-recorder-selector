@@ -1,4 +1,5 @@
 #include "kms_client.h"
+#include "../../include/utils.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -8,13 +9,17 @@
 #include <stdbool.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/wait.h>
+#include <poll.h>
+#include <sys/stat.h>
 #include <sys/capability.h>
 
 #define GSR_SOCKET_PAIR_LOCAL  0
 #define GSR_SOCKET_PAIR_REMOTE 1
 
 static void cleanup_socket(gsr_kms_client *self, bool kill_server);
+static int gsr_kms_client_replace_connection(gsr_kms_client *self);
 
 static void close_fds(gsr_kms_response *response) {
     for(int i = 0; i < response->num_items; ++i) {
@@ -112,6 +117,21 @@ static int recv_msg_from_server(int server_pid, int server_fd, gsr_kms_response 
     return res;
 }
 
+/* We have to use $HOME because in flatpak there is no simple path that is accessible, read and write, that multiple flatpak instances can access */
+static bool create_socket_path(char *output_path, size_t output_path_size) {
+    const char *home = getenv("HOME");
+    if(!home)
+        home = "/tmp";
+
+    char random_characters[11];
+    random_characters[10] = '\0';
+    if(!generate_random_characters_standard_alphabet(random_characters, 10))
+        return false;
+
+    snprintf(output_path, output_path_size, "%s/.gsr-kms-socket-%s", home, random_characters);
+    return true;
+}
+
 static bool readlink_realpath(const char *filepath, char *buffer) {
     char symlinked_path[PATH_MAX];
     ssize_t bytes_written = readlink(filepath, symlinked_path, sizeof(symlinked_path) - 1);
@@ -186,8 +206,18 @@ static bool find_program_in_path(const char *program_name, char *filepath, int f
 int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
     int result = -1;
     self->kms_server_pid = -1;
+    self->initial_socket_fd = -1;
+    self->initial_client_fd = -1;
+    self->initial_socket_path[0] = '\0';
     self->socket_pair[0] = -1;
     self->socket_pair[1] = -1;
+    struct sockaddr_un local_addr = {0};
+    struct sockaddr_un remote_addr = {0};
+
+    if(!create_socket_path(self->initial_socket_path, sizeof(self->initial_socket_path))) {
+        fprintf(stderr, "gsr error: gsr_kms_client_init: failed to create path to kms socket\n");
+        return -1;
+    }
 
     char server_filepath[PATH_MAX];
     if(!readlink_realpath("/proc/self/exe", server_filepath)) {
@@ -209,7 +239,7 @@ int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
         }
     }
 
-    fprintf(stderr, "gsr info: gsr_kms_client_init: launching gsr-kms-server at %s\n", server_filepath);
+    fprintf(stderr, "gsr info: gsr_kms_client_init: setting up connection to %s\n", server_filepath);
 
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *home = getenv("HOME");
@@ -244,33 +274,89 @@ int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
         goto err;
     }
 
+    self->initial_socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if(self->initial_socket_fd == -1) {
+        fprintf(stderr, "gsr error: gsr_kms_client_init: socket failed, error: %s\n", strerror(errno));
+        goto err;
+    }
+
+    local_addr.sun_family = AF_UNIX;
+    snprintf(local_addr.sun_path, sizeof(local_addr.sun_path), "%s", (const char*)self->initial_socket_path);
+
+    const mode_t prev_mask = umask(0000);
+    const int bind_res = bind(self->initial_socket_fd, (struct sockaddr*)&local_addr, sizeof(local_addr.sun_family) + strlen(local_addr.sun_path));
+    umask(prev_mask);
+
+    if(bind_res == -1) {
+        fprintf(stderr, "gsr error: gsr_kms_client_init: failed to bind socket, error: %s\n", strerror(errno));
+        goto err;
+    }
+
+    if(listen(self->initial_socket_fd, 1) == -1) {
+        fprintf(stderr, "gsr error: gsr_kms_client_init: failed to listen on socket, error: %s\n", strerror(errno));
+        goto err;
+    }
+
     pid_t pid = fork();
     if(pid == -1) {
         fprintf(stderr, "gsr error: gsr_kms_client_init: fork failed, error: %s\n", strerror(errno));
         goto err;
     } else if(pid == 0) { /* child */
-        char socket_pair_remote_str[32];
-        snprintf(socket_pair_remote_str, sizeof(socket_pair_remote_str), "%d", self->socket_pair[GSR_SOCKET_PAIR_REMOTE]);
-
         if(inside_flatpak) {
-            char forward_fd_arg[128];
-            snprintf(forward_fd_arg, sizeof(forward_fd_arg), "--forward-fd=%s", socket_pair_remote_str);
-
-            const char *args[] = { "flatpak-spawn", "--host", forward_fd_arg, "/var/lib/flatpak/app/com.dec05eba.gpu_screen_recorder/current/active/files/bin/kms-server-proxy", socket_pair_remote_str, card_path, home, NULL };
+            const char *args[] = { "flatpak-spawn", "--host", "/var/lib/flatpak/app/com.dec05eba.gpu_screen_recorder/current/active/files/bin/kms-server-proxy", self->initial_socket_path, card_path, home, NULL };
             execvp(args[0], (char *const*)args);
         } else if(has_perm) {
-            const char *args[] = { server_filepath, socket_pair_remote_str, card_path, NULL };
+            const char *args[] = { server_filepath, self->initial_socket_path, card_path, NULL };
             execvp(args[0], (char *const*)args);
         } else {
-            const char *args[] = { "pkexec", server_filepath, socket_pair_remote_str, card_path, NULL };
+            const char *args[] = { "pkexec", server_filepath, self->initial_socket_path, card_path, NULL };
             execvp(args[0], (char *const*)args);
         }
-
         fprintf(stderr, "gsr error: gsr_kms_client_init: failed to launch \"gsr-kms-server\", error: %s\n", strerror(errno));
         _exit(127);
     } else { /* parent */
         self->kms_server_pid = pid;
     }
+
+    fprintf(stderr, "gsr info: gsr_kms_client_init: waiting for server to connect\n");
+    struct pollfd poll_fd = {
+        .fd = self->initial_socket_fd,
+        .events = POLLIN,
+        .revents = 0
+    };
+    for(;;) {
+        int poll_res = poll(&poll_fd, 1, 100);
+        if(poll_res > 0 && (poll_fd.revents & POLLIN)) {
+            socklen_t sock_len = 0;
+            self->initial_client_fd = accept(self->initial_socket_fd, (struct sockaddr*)&remote_addr, &sock_len);
+            if(self->initial_client_fd == -1) {
+                fprintf(stderr, "gsr error: gsr_kms_client_init: accept failed on socket, error: %s\n", strerror(errno));
+                goto err;
+            }
+            break;
+        } else {
+            int status = 0;
+            int wait_result = waitpid(self->kms_server_pid, &status, WNOHANG);
+            if(wait_result != 0) {
+                int exit_code = -1;
+                if(WIFEXITED(status))
+                    exit_code = WEXITSTATUS(status);
+                fprintf(stderr, "gsr error: gsr_kms_client_init: kms server died or never started, exit code: %d\n", exit_code);
+                self->kms_server_pid = -1;
+                if(exit_code != 0)
+                    result = exit_code;
+                goto err;
+            }
+        }
+    }
+    fprintf(stderr, "gsr info: gsr_kms_client_init: server connected\n");
+
+    fprintf(stderr, "gsr info: replacing file-backed unix domain socket with socketpair\n");
+    if(gsr_kms_client_replace_connection(self) != 0)
+        goto err;
+
+    cleanup_socket(self, false);
+    fprintf(stderr, "gsr info: using socketpair\n");
 
     return 0;
 
@@ -280,6 +366,16 @@ int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
 }
 
 void cleanup_socket(gsr_kms_client *self, bool kill_server) {
+    if(self->initial_client_fd > 0) {
+        close(self->initial_client_fd);
+        self->initial_client_fd = -1;
+    }
+
+    if(self->initial_socket_fd > 0) {
+        close(self->initial_socket_fd);
+        self->initial_socket_fd = -1;
+    }
+
     if(kill_server) {
         for(int i = 0; i < 2; ++i) {
             if(self->socket_pair[i] > 0) {
@@ -296,10 +392,48 @@ void cleanup_socket(gsr_kms_client *self, bool kill_server) {
         //waitpid(self->kms_server_pid, &status, 0);
         self->kms_server_pid = -1;
     }
+
+    if(self->initial_socket_path[0] != '\0') {
+        remove(self->initial_socket_path);
+        self->initial_socket_path[0] = '\0';
+    }
 }
 
 void gsr_kms_client_deinit(gsr_kms_client *self) {
     cleanup_socket(self, true);
+}
+
+int gsr_kms_client_replace_connection(gsr_kms_client *self) {
+    gsr_kms_response response;
+    response.version = 0;
+    response.result = KMS_RESULT_FAILED_TO_SEND;
+    response.err_msg[0] = '\0';
+
+    gsr_kms_request request;
+    request.version = GSR_KMS_PROTOCOL_VERSION;
+    request.type = KMS_REQUEST_TYPE_REPLACE_CONNECTION;
+    request.new_connection_fd = self->socket_pair[GSR_SOCKET_PAIR_REMOTE];
+    if(send_msg_to_server(self->initial_client_fd, &request) == -1) {
+        fprintf(stderr, "gsr error: gsr_kms_client_replace_connection: failed to send request message to server\n");
+        return -1;
+    }
+
+    const int recv_res = recv_msg_from_server(self->kms_server_pid, self->socket_pair[GSR_SOCKET_PAIR_LOCAL], &response);
+    if(recv_res == 0) {
+        fprintf(stderr, "gsr warning: gsr_kms_client_replace_connection: kms server shut down\n");
+        return -1;
+    } else if(recv_res == -1) {
+        fprintf(stderr, "gsr error: gsr_kms_client_replace_connection: failed to receive response\n");
+        return -1;
+    }
+
+    if(response.version != GSR_KMS_PROTOCOL_VERSION) {
+        fprintf(stderr, "gsr error: gsr_kms_client_replace_connection: expected gsr-kms-server protocol version to be %u, but it's %u. please reinstall gpu screen recorder\n", GSR_KMS_PROTOCOL_VERSION, response.version);
+        /*close_fds(response);*/
+        return -1;
+    }
+
+    return 0;
 }
 
 int gsr_kms_client_get_kms(gsr_kms_client *self, gsr_kms_response *response) {

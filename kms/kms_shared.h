@@ -15,6 +15,7 @@ typedef struct gsr_kms_response_item gsr_kms_response_item;
 typedef struct gsr_kms_response gsr_kms_response;
 
 typedef enum {
+    KMS_REQUEST_TYPE_REPLACE_CONNECTION,
     KMS_REQUEST_TYPE_GET_KMS
 } gsr_kms_request_type;
 

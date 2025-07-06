@@ -6,14 +6,16 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <locale.h>
 
 #include <unistd.h>
 #include <limits.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <sys/un.h>
+#include <time.h>
 
 #include <xf86drm.h>
 #include <xf86drmMode.h>
@@ -424,6 +426,14 @@ static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response) {
     return result;
 }
 
+static double clock_get_monotonic_seconds(void) {
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = 0;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec * 0.000000001;
+}
+
 int main(int argc, char **argv) {
     setlocale(LC_ALL, "C"); // Sigh... stupid C
 
@@ -433,18 +443,18 @@ int main(int argc, char **argv) {
     drm.drmfd = 0;
 
     if(argc != 3) {
-        fprintf(stderr, "usage: gsr-kms-server <socket_fd> <card_path>\n");
+        fprintf(stderr, "usage: gsr-kms-server <domain_socket_path> <card_path>\n");
         return 1;
     }
 
-    const char *socket_fd_str = argv[1];
+    const char *domain_socket_path = argv[1];
+    socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if(socket_fd == -1) {
+        fprintf(stderr, "kms server error: failed to create socket, error: %s\n", strerror(errno));
+        return 2;
+    }
+
     const char *card_path = argv[2];
-
-    socket_fd = atoi(socket_fd_str);
-    if(socket_fd <= 0) {
-        fprintf(stderr, "kms server error: received invalid socket fd for argument 1, expected a number got \"%s\"\n", socket_fd_str);
-        return 1;
-    }
 
     drm.drmfd = open(card_path, O_RDONLY);
     if(drm.drmfd < 0) {
@@ -461,6 +471,40 @@ int main(int argc, char **argv) {
 
     if(drmSetClientCap(drm.drmfd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
         fprintf(stderr, "kms server warning: drmSetClientCap DRM_CLIENT_CAP_ATOMIC failed, error: %s. The wrong monitor may be captured as a result\n", strerror(errno));
+    }
+
+    fprintf(stderr, "kms server info: connecting to the client\n");
+    bool connected = false;
+    const double connect_timeout_sec = 5.0;
+    const double start_time = clock_get_monotonic_seconds();
+    while(clock_get_monotonic_seconds() - start_time < connect_timeout_sec) {
+        struct sockaddr_un remote_addr = {0};
+        remote_addr.sun_family = AF_UNIX;
+        snprintf(remote_addr.sun_path, sizeof(remote_addr.sun_path), "%s", domain_socket_path);
+        // TODO: Check if parent disconnected
+        if(connect(socket_fd, (struct sockaddr*)&remote_addr, sizeof(remote_addr.sun_family) + strlen(remote_addr.sun_path)) == -1) {
+            if(errno == ECONNREFUSED || errno == ENOENT) {
+                goto next;
+            } else if(errno == EISCONN) {
+                connected = true;
+                break;
+            }
+
+            fprintf(stderr, "kms server error: connect failed, error: %s (%d)\n", strerror(errno), errno);
+            res = 2;
+            goto done;
+        }
+
+        next:
+        usleep(30 * 1000); // 30 milliseconds
+    }
+
+    if(connected) {
+        fprintf(stderr, "kms server info: connected to the client\n");
+    } else {
+        fprintf(stderr, "kms server error: failed to connect to the client in %f seconds\n", connect_timeout_sec);
+        res = 2;
+        goto done;
     }
 
     for(;;) {
@@ -495,6 +539,29 @@ int main(int argc, char **argv) {
         }
 
         switch(request.type) {
+            case KMS_REQUEST_TYPE_REPLACE_CONNECTION: {
+                gsr_kms_response response;
+                response.version = GSR_KMS_PROTOCOL_VERSION;
+                response.num_items = 0;
+
+                if(request.new_connection_fd > 0) {
+                    if(socket_fd > 0)
+                        close(socket_fd);
+                    socket_fd = request.new_connection_fd;
+
+                    response.result = KMS_RESULT_OK;
+                    if(send_msg_to_client(socket_fd, &response) == -1)
+                        fprintf(stderr, "kms server error: failed to respond to client KMS_REQUEST_TYPE_REPLACE_CONNECTION request\n");
+                } else {
+                    response.result = KMS_RESULT_INVALID_REQUEST;
+                    snprintf(response.err_msg, sizeof(response.err_msg), "received invalid connection fd");
+                    fprintf(stderr, "kms server error: %s\n", response.err_msg);
+                    if(send_msg_to_client(socket_fd, &response) == -1)
+                        fprintf(stderr, "kms server error: failed to respond to client request\n");
+                }
+
+                break;
+            }
             case KMS_REQUEST_TYPE_GET_KMS: {
                 gsr_kms_response response;
                 response.version = GSR_KMS_PROTOCOL_VERSION;
