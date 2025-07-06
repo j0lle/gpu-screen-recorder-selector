@@ -71,6 +71,7 @@ Here are some known unofficial packages:
 * OpenMandriva: [gpu-screen-recorder](https://github.com/OpenMandrivaAssociation/gpu-screen-recorder)
 * Solus: [gpu-screen-recorder](https://github.com/getsolus/packages/tree/main/packages/g/gpu-screen-recorder)
 * Nobara: [Nobara wiki](https://wiki.nobaraproject.org/en/general-usage/additional-software/GPU-Screen-Recorder)
+* AppImage [AppImage GitHub releases](https://github.com/pkgforge-dev/gpu-screen-recorder-AppImage/releases)
 
 # Dependencies
 GPU Screen Recorder uses meson build system so you need to install `meson` to build GPU Screen Recorder.
@@ -171,7 +172,7 @@ See [https://git.dec05eba.com/?p=about](https://git.dec05eba.com/?p=about).
 # FAQ
 ## It tells me that my AMD/Intel GPU is not supported or that my GPU doesn't support h264/hevc, but that's not true!
 Some linux distros (such as manjaro and fedora) disable hardware accelerated h264/hevc on AMD/Intel because of "patent license issues". If you are using an arch-based distro then you can install mesa-git instead of mesa and if you are using another distro then you may have to switch to a better distro. On fedora based distros you can follow this: [Hardware Accelerated Codec](https://rpmfusion.org/Howto/Multimedia).\
-If you installed GPU Screen Recorder flatpak then you can try installing mesa-extra freedesktop runtime by running this command: `flatpak install --system org.freedesktop.Platform.GL.default//23.08-extra`
+You can alternatively install the flatpak version of GPU Screen Recorder from [flathub](https://flathub.org/apps/details/com.dec05eba.gpu_screen_recorder) which doesn't have this issue on any distro.
 ## I have an old nvidia GPU that supports nvenc but I get a cuda error when trying to record
 Newer ffmpeg versions don't support older nvidia cards. Try installing GPU Screen Recorder flatpak from [flathub](https://flathub.org/apps/details/com.dec05eba.gpu_screen_recorder) instead. It comes with an older ffmpeg version which might work for your GPU.
 ## I get a black screen/glitches while live streaming
@@ -197,7 +198,13 @@ KDE Plasma version 6.2 broke HDR and ICC profiles for screen recorders. This was
 I don't know how well recording HDR works in wayland compositors other than KDE plasma.
 ## GPU Screen Recorder starts lagging after 30-40 minutes when launching GPU Screen Recorder from steam command launcher
 This is a [steam issue](https://github.com/ValveSoftware/steam-for-linux/issues/11446). Prepend the gpu-screen-recorder command with `LD_PREFIX=""`, for example `LD_PREFIX="" gpu-screen-recorder -w screen -o video.mp4`.
-## The video isn't smooth when gpu usage is 100%
-If you are using the flatpak version of GPU Screen Recorder then try installing GPU Screen Recorder from a non-flatpak source instead (such as from aur or from source). Flatpak has a limitation that prevents GPU Screen Recorder from running faster when playing very heavy games.
 ## How do I apply audio effects, such as noise suppression?
 You have to use external software for that, such as Easy Effects or NoiseTorch.
+## How do I choose which GPU to record/encode with?
+It's not really possible except in some cases. You can only record with the GPU that is displaying the graphics on your monitor.\
+Some laptops have display adapters that connect external monitors directly to the external GPU (if you have one)
+and on Wayland the external GPU will display the graphics for that monitor.
+In that case you can record the monitor with the external GPU by launching GPU Screen Recorder with [prime-run or DRI_PRIME](https://wiki.archlinux.org/title/PRIME) environment variable
+depending on your GPU brand.\
+However if you really want to change which GPU you want to record and encode with with then you can instead configure your display server (Xorg or Wayland compositor) to run with that GPU,
+then GPU Screen Recorder will automatically use that same GPU for recording and encoding.
