@@ -65,11 +65,16 @@ dep = [
     dependency('libavfilter'),
     dependency('libva'),
     dependency('libva-drm'),
-    dependency('libcap'),
     dependency('libdrm'),
     dependency('wayland-egl'),
     dependency('wayland-client'),
 ]
+
+if build_machine.system() == 'linux'
+    dep += [
+        dependency('libcap'),
+    ]
+endif
 
 uses_pipewire = false
 

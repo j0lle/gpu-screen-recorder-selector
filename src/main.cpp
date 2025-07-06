@@ -2931,7 +2931,9 @@ static void set_display_server_environment_variables() {
 
 int main(int argc, char **argv) {
     setlocale(LC_ALL, "C"); // Sigh... stupid C
+#ifdef __linux__
     mallopt(M_MMAP_THRESHOLD, 65536);
+#endif
 
     signal(SIGINT, stop_handler);
     signal(SIGTERM, stop_handler);

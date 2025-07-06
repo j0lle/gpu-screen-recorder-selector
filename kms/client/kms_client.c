@@ -13,7 +13,12 @@
 #include <sys/wait.h>
 #include <poll.h>
 #include <sys/stat.h>
+#ifdef __linux__
 #include <sys/capability.h>
+#endif
+#ifdef __FreeBSD__
+#include <sys/sysctl.h>
+#endif
 
 #define GSR_SOCKET_PAIR_LOCAL  0
 #define GSR_SOCKET_PAIR_REMOTE 1
@@ -135,6 +140,7 @@ static bool create_socket_path(char *output_path, size_t output_path_size) {
     return true;
 }
 
+#ifdef __linux__
 static bool readlink_realpath(const char *filepath, char *buffer) {
     char symlinked_path[PATH_MAX];
     ssize_t bytes_written = readlink(filepath, symlinked_path, sizeof(symlinked_path) - 1);
@@ -152,6 +158,7 @@ static bool readlink_realpath(const char *filepath, char *buffer) {
 
     return true;
 }
+#endif
 
 static bool strcat_safe(char *str, int size, const char *str_to_add) {
     const int str_len = strlen(str);
@@ -223,10 +230,24 @@ int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
     }
 
     char server_filepath[PATH_MAX];
+#ifdef __linux__
     if(!readlink_realpath("/proc/self/exe", server_filepath)) {
         fprintf(stderr, "gsr error: gsr_kms_client_init: failed to resolve /proc/self/exe\n");
         return -1;
     }
+
+#elif defined(__FreeBSD__)
+    int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, getpid() };
+    size_t size = PATH_MAX;
+
+    if (sysctl(mib, 4, server_filepath, &size, NULL, 0) != 0) {
+        fprintf(stderr, "gsr error: gsr_kms_client_init: failed to resolve pathname using sysctl\n");
+        return -1;
+    }
+
+#else
+#error "Implement it by yourself"
+#endif
     file_get_directory(server_filepath);
 
     if(!strcat_safe(server_filepath, sizeof(server_filepath), "/gsr-kms-server")) {
@@ -253,6 +274,7 @@ int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
     if(geteuid() == 0) {
         has_perm = true;
     } else {
+#ifdef __linux__
         cap_t kms_server_cap = cap_get_file(server_filepath);
         if(kms_server_cap) {
             cap_flag_value_t res = CAP_CLEAR;
@@ -270,6 +292,9 @@ int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
             else
                 fprintf(stderr, "gsr info: gsr_kms_client_init: failed to get cap\n");
         }
+#else
+        fprintf(stderr, "gsr info: gsr_kms_client_init: platform doesn't support cap\n");
+#endif
     }
 
     if(socketpair(AF_UNIX, SOCK_STREAM, 0, self->socket_pair) == -1) {
