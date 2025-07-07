@@ -52,6 +52,7 @@ typedef void(*__GLXextFuncPtr)(void);
 #define EGL_OPENGL_ES3_BIT                      0x00000040
 #define EGL_NONE                                0x3038
 #define EGL_CONTEXT_CLIENT_VERSION              0x3098
+#define EGL_CONTEXT_OPENGL_DEBUG                0x31B0
 #define EGL_BACK_BUFFER                         0x3084
 #define EGL_GL_TEXTURE_2D                       0x30B1
 #define EGL_TRUE                                1
@@ -85,10 +86,6 @@ typedef void(*__GLXextFuncPtr)(void);
 #define EGL_ALPHA_SIZE                          0x3021
 #define EGL_BLUE_SIZE                           0x3022
 #define EGL_GREEN_SIZE                          0x3023
-#define EGL_CONTEXT_PRIORITY_LEVEL_IMG          0x3100
-#define EGL_CONTEXT_PRIORITY_HIGH_IMG           0x3101
-#define EGL_CONTEXT_PRIORITY_MEDIUM_IMG         0x3102
-#define EGL_CONTEXT_PRIORITY_LOW_IMG            0x3103
 #define EGL_DEVICE_EXT                          0x322C
 #define EGL_DRM_DEVICE_FILE_EXT                 0x3233
 
@@ -133,7 +130,7 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_BLEND                                0x0BE2
 #define GL_SRC_ALPHA                            0x0302
 #define GL_ONE_MINUS_SRC_ALPHA                  0x0303
-#define GL_DEBUG_OUTPUT                         0x92E0
+#define GL_DEBUG_OUTPUT_SYNCHRONOUS             0x8242
 #define GL_SCISSOR_TEST                         0x0C11
 #define GL_PACK_ALIGNMENT                       0x0D05
 #define GL_UNPACK_ALIGNMENT                     0x0CF5

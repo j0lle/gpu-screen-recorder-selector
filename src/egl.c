@@ -29,7 +29,7 @@
 #define GLX_RGBA_TYPE                      0x8014
 
 // TODO: Create egl context without surface (in other words, x11/wayland agnostic, doesn't require x11/wayland dependency)
-static bool gsr_egl_create_window(gsr_egl *self) {
+static bool gsr_egl_create_window(gsr_egl *self, bool enable_debug) {
     EGLConfig  ecfg;
     int32_t    num_config = 0;
 
@@ -39,10 +39,15 @@ static bool gsr_egl_create_window(gsr_egl *self) {
         EGL_NONE, EGL_NONE
     };
 
-    const int32_t ctxattr[] = {
+    int32_t ctxattr[] = {
         EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL_NONE, EGL_NONE
+        EGL_NONE, EGL_NONE, EGL_NONE
     };
+
+    if(enable_debug) {
+        ctxattr[2] = EGL_CONTEXT_OPENGL_DEBUG;
+        ctxattr[3] = EGL_TRUE;
+    }
 
     self->eglBindAPI(EGL_OPENGL_ES_API);
 
@@ -87,6 +92,7 @@ static bool gsr_egl_create_window(gsr_egl *self) {
 }
 
 static GLXFBConfig glx_fb_config_choose(gsr_egl *self, Display *display) {
+    // TODO: OpenGL debug context?
     const int glx_visual_attribs[] = {
         GLX_RENDER_TYPE, GLX_RGBA_BIT,
         GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
@@ -423,7 +429,7 @@ bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bo
     if(!gsr_egl_proc_load_egl(self))
         goto fail;
 
-    if(!gsr_egl_create_window(self))
+    if(!gsr_egl_create_window(self, enable_debug))
         goto fail;
 
     if(!gl_get_gpu_info(self, &self->gpu_info))
@@ -443,15 +449,15 @@ bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bo
             goto fail;
     }
 
+    if(enable_debug) {
+        self->glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        self->glDebugMessageCallback(debug_callback, NULL);
+    }
+
     self->glEnable(GL_BLEND);
     self->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     self->glPixelStorei(GL_PACK_ALIGNMENT, 1);
     self->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-    if(enable_debug) {
-        self->glEnable(GL_DEBUG_OUTPUT);
-        self->glDebugMessageCallback(debug_callback, NULL);
-    }
 
     gsr_egl_disable_vsync(self);
 
