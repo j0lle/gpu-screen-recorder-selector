@@ -254,7 +254,6 @@ static int load_graphics_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_gr
         "}                                                 \n");
 
     const char *main_code =
-        main_code =
             "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
             "  FragColor.x = (RGBtoYUV * vec4(pixel.rgb, 1.0)).x;                            \n"
             "  FragColor.w = pixel.a;                                                        \n";
@@ -317,7 +316,6 @@ static unsigned int load_graphics_shader_uv(gsr_shader *shader, gsr_egl *egl, gs
         "}                                               \n");
 
     const char *main_code =
-        main_code =
             "  vec4 pixel = texture(tex1, texcoords_out);                                          \n"
             "  FragColor.xy = (RGBtoYUV * vec4(pixel.rgb, 1.0)).yz;                                \n"
             "  FragColor.w = pixel.a;                                                              \n";
@@ -378,7 +376,6 @@ static unsigned int load_graphics_shader_rgb(gsr_shader *shader, gsr_egl *egl, g
         "}                                                 \n");
 
     const char *main_code =
-        main_code =
             "  vec4 pixel = texture(tex1, texcoords_out);                                          \n"
             "  FragColor = pixel;                                                                  \n";
 

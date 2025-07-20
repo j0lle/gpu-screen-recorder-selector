@@ -730,7 +730,7 @@ static EGLImage gsr_pipewire_video_create_egl_image_with_fallback(gsr_pipewire_v
     if(self->no_modifiers_fallback) {
         image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
     } else {
-        image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, true);
+        image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, self->format.info.raw.modifier != 0);
         if(!image) {
             if(self->renegotiated) {
                 fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, trying without modifiers\n");
