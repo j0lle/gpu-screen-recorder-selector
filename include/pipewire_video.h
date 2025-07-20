@@ -9,7 +9,7 @@
 #include <spa/param/video/format.h>
 
 #define GSR_PIPEWIRE_VIDEO_MAX_MODIFIERS 1024
-#define GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS 12
+#define GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS 10
 #define GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES 4
 
 typedef struct gsr_egl gsr_egl;

@@ -358,8 +358,8 @@ static int64_t spa_video_format_to_drm_format(const enum spa_video_format format
         case SPA_VIDEO_FORMAT_BGRA:       return DRM_FORMAT_ARGB8888;
         case SPA_VIDEO_FORMAT_RGB:        return DRM_FORMAT_XBGR8888;
         case SPA_VIDEO_FORMAT_BGR:        return DRM_FORMAT_XRGB8888;
-        case SPA_VIDEO_FORMAT_ARGB:       return DRM_FORMAT_BGRA8888;
-        case SPA_VIDEO_FORMAT_ABGR:       return DRM_FORMAT_RGBA8888;
+        //case SPA_VIDEO_FORMAT_ARGB:       return DRM_FORMAT_BGRA8888;
+        //case SPA_VIDEO_FORMAT_ABGR:       return DRM_FORMAT_RGBA8888;
 #if PW_CHECK_VERSION(0, 3, 41)
         case SPA_VIDEO_FORMAT_xRGB_210LE: return DRM_FORMAT_XRGB2101010;
         case SPA_VIDEO_FORMAT_xBGR_210LE: return DRM_FORMAT_XBGR2101010;
@@ -374,7 +374,7 @@ static int64_t spa_video_format_to_drm_format(const enum spa_video_format format
 #if PW_CHECK_VERSION(0, 3, 41)
 #define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS
 #else
-#define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS 8
+#define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS 6
 #endif
 
 static const enum spa_video_format video_formats[GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS] = {
@@ -382,16 +382,16 @@ static const enum spa_video_format video_formats[GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FO
     SPA_VIDEO_FORMAT_BGR,
     SPA_VIDEO_FORMAT_RGBx,
     SPA_VIDEO_FORMAT_RGB,
+    SPA_VIDEO_FORMAT_RGBA,
+    SPA_VIDEO_FORMAT_BGRA,
+    //SPA_VIDEO_FORMAT_ARGB,
+    //SPA_VIDEO_FORMAT_ABGR,
 #if PW_CHECK_VERSION(0, 3, 41)
     SPA_VIDEO_FORMAT_xRGB_210LE,
     SPA_VIDEO_FORMAT_xBGR_210LE,
     SPA_VIDEO_FORMAT_ARGB_210LE,
     SPA_VIDEO_FORMAT_ABGR_210LE,
 #endif
-    SPA_VIDEO_FORMAT_RGBA,
-    SPA_VIDEO_FORMAT_BGRA,
-    SPA_VIDEO_FORMAT_ARGB,
-    SPA_VIDEO_FORMAT_ABGR,
 };
 
 static bool gsr_pipewire_video_build_format_params(gsr_pipewire_video *self, struct spa_pod_builder *pod_builder, struct spa_pod **params, uint32_t *num_params) {
