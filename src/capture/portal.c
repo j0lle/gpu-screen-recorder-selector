@@ -319,6 +319,15 @@ static bool gsr_capture_portal_capture_has_synchronous_task(gsr_capture *cap) {
     return gsr_pipewire_video_should_restart(&self->pipewire);
 }
 
+static bool fourcc_has_alpha(uint32_t fourcc) {
+    const uint8_t *p = (const uint8_t*)&fourcc;
+    for(int i = 0; i < 4; ++i) {
+        if(p[i] == 'A')
+            return true;
+    }
+    return false;
+}
+
 static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     (void)color_conversion;
     gsr_capture_portal *self = cap->priv;
@@ -361,10 +370,14 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
 
     // TODO: Handle region crop
 
+    const bool fourcc_alpha = fourcc_has_alpha(self->pipewire_fourcc);
+    if(fourcc_alpha)
+        gsr_color_conversion_clear(color_conversion);
+
     gsr_color_conversion_draw(color_conversion, self->using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
-        target_pos, output_size,
-        (vec2i){self->region.x, self->region.y}, self->capture_size, self->capture_size,
-        GSR_ROT_0, GSR_SOURCE_COLOR_RGB, self->using_external_image, false);
+       target_pos, output_size,
+       (vec2i){self->region.x, self->region.y}, self->capture_size, self->capture_size,
+       GSR_ROT_0, GSR_SOURCE_COLOR_RGB, self->using_external_image, fourcc_alpha);
 
     if(self->params.record_cursor && self->texture_map.cursor_texture_id > 0 && self->cursor_region.width > 0) {
         const vec2d scale = {

@@ -354,17 +354,17 @@ static int64_t spa_video_format_to_drm_format(const enum spa_video_format format
     switch(format) {
         case SPA_VIDEO_FORMAT_RGBx:       return DRM_FORMAT_XBGR8888;
         case SPA_VIDEO_FORMAT_BGRx:       return DRM_FORMAT_XRGB8888;
-       // case SPA_VIDEO_FORMAT_RGBA:       return DRM_FORMAT_ABGR8888;
-        //case SPA_VIDEO_FORMAT_BGRA:       return DRM_FORMAT_ARGB8888;
+        case SPA_VIDEO_FORMAT_RGBA:       return DRM_FORMAT_ABGR8888;
+        case SPA_VIDEO_FORMAT_BGRA:       return DRM_FORMAT_ARGB8888;
         case SPA_VIDEO_FORMAT_RGB:        return DRM_FORMAT_XBGR8888;
         case SPA_VIDEO_FORMAT_BGR:        return DRM_FORMAT_XRGB8888;
-        //case SPA_VIDEO_FORMAT_ARGB:       return DRM_FORMAT_XRGB8888;
-        //case SPA_VIDEO_FORMAT_ABGR:       return DRM_FORMAT_XRGB8888;
+        case SPA_VIDEO_FORMAT_ARGB:       return DRM_FORMAT_BGRA8888;
+        case SPA_VIDEO_FORMAT_ABGR:       return DRM_FORMAT_RGBA8888;
 #if PW_CHECK_VERSION(0, 3, 41)
         case SPA_VIDEO_FORMAT_xRGB_210LE: return DRM_FORMAT_XRGB2101010;
         case SPA_VIDEO_FORMAT_xBGR_210LE: return DRM_FORMAT_XBGR2101010;
-      //  case SPA_VIDEO_FORMAT_ARGB_210LE: return DRM_FORMAT_ARGB2101010;
-      //  case SPA_VIDEO_FORMAT_ABGR_210LE: return DRM_FORMAT_ABGR2101010;
+        case SPA_VIDEO_FORMAT_ARGB_210LE: return DRM_FORMAT_ARGB2101010;
+        case SPA_VIDEO_FORMAT_ABGR_210LE: return DRM_FORMAT_ABGR2101010;
 #endif
         default:                          break;
     }
@@ -374,24 +374,24 @@ static int64_t spa_video_format_to_drm_format(const enum spa_video_format format
 #if PW_CHECK_VERSION(0, 3, 41)
 #define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS
 #else
-#define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS 4
+#define GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS 8
 #endif
 
 static const enum spa_video_format video_formats[GSR_PIPEWIRE_VIDEO_MAX_VIDEO_FORMATS] = {
-   // SPA_VIDEO_FORMAT_BGRA,
     SPA_VIDEO_FORMAT_BGRx,
     SPA_VIDEO_FORMAT_BGR,
     SPA_VIDEO_FORMAT_RGBx,
-   // SPA_VIDEO_FORMAT_RGBA,
     SPA_VIDEO_FORMAT_RGB,
-  //  SPA_VIDEO_FORMAT_ARGB,
-  //  SPA_VIDEO_FORMAT_ABGR,
 #if PW_CHECK_VERSION(0, 3, 41)
     SPA_VIDEO_FORMAT_xRGB_210LE,
     SPA_VIDEO_FORMAT_xBGR_210LE,
-  //  SPA_VIDEO_FORMAT_ARGB_210LE,
-  //  SPA_VIDEO_FORMAT_ABGR_210LE
+    SPA_VIDEO_FORMAT_ARGB_210LE,
+    SPA_VIDEO_FORMAT_ABGR_210LE,
 #endif
+    SPA_VIDEO_FORMAT_RGBA,
+    SPA_VIDEO_FORMAT_BGRA,
+    SPA_VIDEO_FORMAT_ARGB,
+    SPA_VIDEO_FORMAT_ABGR,
 };
 
 static bool gsr_pipewire_video_build_format_params(gsr_pipewire_video *self, struct spa_pod_builder *pod_builder, struct spa_pod **params, uint32_t *num_params) {
@@ -446,6 +446,8 @@ static bool spa_video_format_get_modifiers(gsr_pipewire_video *self, const enum 
         //modifiers[0] = DRM_FORMAT_MOD_LINEAR;
         //modifiers[1] = DRM_FORMAT_MOD_INVALID;
         //*num_modifiers = 2;
+        modifiers[0] = DRM_FORMAT_MOD_INVALID;
+        *num_modifiers = 1;
         return false;
     }
 
@@ -460,7 +462,8 @@ static bool spa_video_format_get_modifiers(gsr_pipewire_video *self, const enum 
         //modifiers[0] = DRM_FORMAT_MOD_LINEAR;
         //modifiers[1] = DRM_FORMAT_MOD_INVALID;
         //*num_modifiers = 2;
-        *num_modifiers = 0;
+        modifiers[0] = DRM_FORMAT_MOD_INVALID;
+        *num_modifiers = 1;
         return false;
     }
 
@@ -730,9 +733,9 @@ static EGLImage gsr_pipewire_video_create_egl_image_with_fallback(gsr_pipewire_v
     if(self->no_modifiers_fallback) {
         image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
     } else {
-        image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, self->format.info.raw.modifier != 0);
+        image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, true);
         if(!image) {
-            if(self->renegotiated) {
+            if(self->renegotiated || self->format.info.raw.modifier == DRM_FORMAT_MOD_INVALID) {
                 fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, trying without modifiers\n");
                 self->no_modifiers_fallback = true;
                 image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
