@@ -252,7 +252,7 @@ static void usage_full() {
     printf("        Required when using '-bm cbr' option.\n");
     printf("\n");
     printf("  -r    Replay buffer time in seconds. If this is set, then only the last seconds as set by this option will be stored\n");
-    printf("        and the video will only be saved when the gpu-screen-recorder is closed. This feature is similar to Nvidia's instant replay feature This option has be between 5 and 1200.\n");
+    printf("        and the video will only be saved when the gpu-screen-recorder is closed. This feature is similar to Nvidia's instant replay feature This option has be between 2 and 86400.\n");
     printf("        Note that the video data is stored in RAM (unless -replay-storage disk is used), so don't use too long replay buffer time and use constant bitrate option (-bm cbr) to prevent RAM usage from going too high in busy scenes.\n");
     printf("        Optional, disabled by default.\n");
     printf("\n");
