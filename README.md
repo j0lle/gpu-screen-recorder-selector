@@ -26,7 +26,7 @@ Supported image formats:
 * JPEG
 * PNG
 
-This software works on X11 and Wayland on AMD, Intel and NVIDIA. Replay data is stored in RAM by default but there is an option to store it on disk instead.
+This software works on X11 and Wayland on AMD, Intel and NVIDIA.
 ### TEMPORARY ISSUES
 1) Videos are in variable framerate format. Use MPV to play such videos, otherwise you might experience stuttering in the video if you are using a buggy video player. You can try saving the video into a .mkv file instead as some software may have better support for .mkv files (such as kdenlive). You can use the "-fm cfr" option to to use constant framerate mode.
 2) FLAC audio codec is disabled at the moment because of temporary issues.
@@ -136,8 +136,11 @@ Run `gpu-screen-recorder` with the `-c mp4` and `-r` option, for example: `gpu-s
 If `-df yes` is set, replays are save in folders based on the date.
 The file path to the saved replay is output to stdout. All other output from GPU Screen Recorder are output to stderr.
 You can also use the `-sc` option to specify a script that should be run (asynchronously) when the video has been saved and the script will have access to the location of the saved file as its first argument.
-This can be used for example to show a notification when a replay has been saved, to rename the video with a title that matches the game played (see `scripts/record-save-application-name.sh` as an example on how to do this on X11) or to re-encode the video.\
-The replay buffer is stored in ram (as encoded video), so don't use a too large replay time and/or video quality unless you have enough ram to store it.
+This can be used for example to show a notification when a replay has been saved, to rename the video with a title that matches the game played (see `scripts/record-save-application-name.sh` as an example on how to do this on X11) or to re-encode the video.
+
+The replay buffer is stored in ram (as encoded video) by default, so don't use a too large replay time and/or video quality unless you have enough ram to store it.\
+You can use the `-replay-storage disk` option to store the replay buffer on disk instead of ram (in the same location as the output video).\
+By default videos are recorded with constant quality, but with replay mode you might want to record in constant bitrate mode instead for consistent ram/disk usage in high motion scenes. You can do that by using the `-bm cbr` option (along with `-q` option, for example `-bm cbr -q 20000`).
 ## Recording while using replay/streaming
 You can record a regular video while using replay/streaming by launching GPU Screen Recorder with the `-ro` option to specify a directory where to save the recording.\
 To start/stop (and save) recording use the SIGRTMIN signal, for example `pkill -SIGRTMIN -f gpu-screen-recorder`. The name of the video will be displayed in stdout when saving the video.\
