@@ -141,20 +141,22 @@ typedef enum {
     PLANE_PROPERTY_Y          = 1 << 1,
     PLANE_PROPERTY_SRC_X      = 1 << 2,
     PLANE_PROPERTY_SRC_Y      = 1 << 3,
-    PLANE_PROPERTY_SRC_W      = 1 << 4,
-    PLANE_PROPERTY_SRC_H      = 1 << 5,
+    PLANE_PROPERTY_CRTC_W     = 1 << 4,
+    PLANE_PROPERTY_CRTC_H     = 1 << 5,
     PLANE_PROPERTY_IS_CURSOR  = 1 << 6,
     PLANE_PROPERTY_IS_PRIMARY = 1 << 7,
+    PLANE_PROPERTY_ROTATION   = 1 << 8,
 } plane_property_mask;
 
 /* Returns plane_property_mask */
-static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *x, int *y, int *src_x, int *src_y, int *src_w, int *src_h) {
+static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *x, int *y, int *src_x, int *src_y, int *crtc_w, int *crtc_h, gsr_kms_rotation *rotation) {
     *x = 0;
     *y = 0;
     *src_x = 0;
     *src_y = 0;
-    *src_w = 0;
-    *src_h = 0;
+    *crtc_w = 0;
+    *crtc_h = 0;
+    *rotation = KMS_ROT_0;
 
     plane_property_mask property_mask = 0;
 
@@ -182,12 +184,12 @@ static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *x, int *
         } else if((type & DRM_MODE_PROP_RANGE) && strcmp(prop->name, "SRC_Y") == 0) {
             *src_y = (int)(props->prop_values[i] >> 16);
             property_mask |= PLANE_PROPERTY_SRC_Y;
-        } else if((type & DRM_MODE_PROP_RANGE) && strcmp(prop->name, "SRC_W") == 0) {
-            *src_w = (int)(props->prop_values[i] >> 16);
-            property_mask |= PLANE_PROPERTY_SRC_W;
-        } else if((type & DRM_MODE_PROP_RANGE) && strcmp(prop->name, "SRC_H") == 0) {
-            *src_h = (int)(props->prop_values[i] >> 16);
-            property_mask |= PLANE_PROPERTY_SRC_H;
+        } else if((type & DRM_MODE_PROP_RANGE) && strcmp(prop->name, "CRTC_W") == 0) {
+            *crtc_w = props->prop_values[i];
+            property_mask |= PLANE_PROPERTY_CRTC_W;
+        } else if((type & DRM_MODE_PROP_RANGE) && strcmp(prop->name, "CRTC_H") == 0) {
+            *crtc_h = props->prop_values[i];
+            property_mask |= PLANE_PROPERTY_CRTC_H;
         } else if((type & DRM_MODE_PROP_ENUM) && strcmp(prop->name, "type") == 0) {
             const uint64_t current_enum_value = props->prop_values[i];
             for(int j = 0; j < prop->count_enums; ++j) {
@@ -199,6 +201,15 @@ static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *x, int *
                     break;
                 }
             }
+        } else if((type & DRM_MODE_PROP_BITMASK) && strcmp(prop->name, "rotation") == 0) {
+            const uint64_t rotation_bitmask = props->prop_values[i];
+            *rotation = KMS_ROT_0;
+            if(rotation_bitmask & 2)
+                *rotation = (*rotation + KMS_ROT_90) % 4;
+            if(rotation_bitmask & 4)
+                *rotation = (*rotation + KMS_ROT_180) % 4;
+            if(rotation_bitmask & 8)
+                *rotation = (*rotation + KMS_ROT_270) % 4;
         }
 
         drmModeFreeProperty(prop);
@@ -340,8 +351,9 @@ static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response) {
         // TODO: Check if dimensions have changed by comparing width and height to previous time this was called.
         // TODO: Support other plane formats than rgb (with multiple planes, such as direct YUV420 on wayland).
 
-        int x = 0, y = 0, src_x = 0, src_y = 0, src_w = 0, src_h = 0;
-        plane_property_mask property_mask = plane_get_properties(drm->drmfd, plane->plane_id, &x, &y, &src_x, &src_y, &src_w, &src_h);
+        int x = 0, y = 0, src_x = 0, src_y = 0, crtc_w = 0, crtc_h = 0;
+        gsr_kms_rotation rotation = KMS_ROT_0;
+        const uint32_t property_mask = plane_get_properties(drm->drmfd, plane->plane_id, &x, &y, &src_x, &src_y, &crtc_w, &crtc_h, &rotation);
         if(!(property_mask & PLANE_PROPERTY_IS_PRIMARY) && !(property_mask & PLANE_PROPERTY_IS_CURSOR))
             continue;
 
@@ -375,17 +387,18 @@ static int kms_get_fb(gsr_drm *drm, gsr_kms_response *response) {
         response->items[item_index].pixel_format = drmfb->pixel_format;
         response->items[item_index].modifier = drmfb->flags & DRM_MODE_FB_MODIFIERS ? drmfb->modifier : DRM_FORMAT_MOD_INVALID;
         response->items[item_index].connector_id = crtc_pair ? crtc_pair->connector_id : 0;
+        response->items[item_index].rotation = rotation;
         response->items[item_index].is_cursor = property_mask & PLANE_PROPERTY_IS_CURSOR;
         if(property_mask & PLANE_PROPERTY_IS_CURSOR) {
             response->items[item_index].x = x;
             response->items[item_index].y = y;
-            response->items[item_index].src_w = 0;
-            response->items[item_index].src_h = 0;
+            response->items[item_index].crtc_w = 0;
+            response->items[item_index].crtc_h = 0;
         } else {
             response->items[item_index].x = src_x;
             response->items[item_index].y = src_y;
-            response->items[item_index].src_w = src_w;
-            response->items[item_index].src_h = src_h;
+            response->items[item_index].crtc_w = crtc_w;
+            response->items[item_index].crtc_h = crtc_h;
         }
         ++response->num_items;
 

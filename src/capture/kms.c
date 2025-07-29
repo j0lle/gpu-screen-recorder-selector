@@ -418,6 +418,19 @@ static gsr_kms_response_item* find_cursor_drm_if_on_monitor(gsr_capture_kms *sel
     return cursor_drm_fd;
 }
 
+static gsr_monitor_rotation kms_rotation_to_gsr_monitor_rotation(gsr_kms_rotation rotation) {
+    // Right now both enums have the same values
+    return (gsr_monitor_rotation)rotation;
+}
+
+static int remainder_int(int a, int b) {
+    return a - (a / b) * b;
+}
+
+static gsr_monitor_rotation sub_rotations(gsr_monitor_rotation rot1, gsr_monitor_rotation rot2) {
+    return remainder_int(rot1 - rot2, 4);
+}
+
 static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color_conversion, const gsr_kms_response_item *cursor_drm_fd, vec2i target_pos, vec2i output_size, vec2i framebuffer_size) {
     const vec2d scale = {
         self->capture_size.x == 0 ? 0 : (double)output_size.x / (double)self->capture_size.x,
@@ -427,8 +440,11 @@ static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color
     const bool cursor_texture_id_is_external = self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_NVIDIA;
     const vec2i cursor_size = {cursor_drm_fd->width, cursor_drm_fd->height};
 
+    const gsr_monitor_rotation cursor_plane_rotation = kms_rotation_to_gsr_monitor_rotation(cursor_drm_fd->rotation);
+    const gsr_monitor_rotation rotation = sub_rotations(self->monitor_rotation, cursor_plane_rotation);
+
     vec2i cursor_pos = {cursor_drm_fd->x, cursor_drm_fd->y};
-    switch(self->monitor_rotation) {
+    switch(rotation) {
         case GSR_MONITOR_ROT_0:
             break;
         case GSR_MONITOR_ROT_90:
@@ -492,7 +508,7 @@ static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color
     gsr_color_conversion_draw(color_conversion, self->cursor_texture_id,
         cursor_pos, (vec2i){cursor_size.x * scale.x, cursor_size.y * scale.y},
         (vec2i){0, 0}, cursor_size, cursor_size,
-        gsr_monitor_rotation_to_rotation(self->monitor_rotation), GSR_SOURCE_COLOR_RGB, cursor_texture_id_is_external, true);
+        gsr_monitor_rotation_to_rotation(rotation), GSR_SOURCE_COLOR_RGB, cursor_texture_id_is_external, true);
 
     self->params.egl->glDisable(GL_SCISSOR_TEST);
 }
@@ -526,7 +542,7 @@ static void render_x11_cursor(gsr_capture_kms *self, gsr_color_conversion *color
 }
 
 static void gsr_capture_kms_update_capture_size_change(gsr_capture_kms *self, gsr_color_conversion *color_conversion, vec2i target_pos, const gsr_kms_response_item *drm_fd) {
-    if(target_pos.x != self->prev_target_pos.x || target_pos.y != self->prev_target_pos.y || drm_fd->src_w != self->prev_plane_size.x || drm_fd->src_h != self->prev_plane_size.y) {
+    if(target_pos.x != self->prev_target_pos.x || target_pos.y != self->prev_target_pos.y || drm_fd->crtc_w != self->prev_plane_size.x || drm_fd->crtc_h != self->prev_plane_size.y) {
         self->prev_target_pos = target_pos;
         self->prev_plane_size = self->capture_size;
         gsr_color_conversion_clear(color_conversion);
@@ -605,7 +621,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     if(drm_fd->has_hdr_metadata && self->params.hdr && hdr_metadata_is_supported_format(&drm_fd->hdr_metadata))
         gsr_kms_set_hdr_metadata(self, drm_fd);
 
-    self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
+    self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->crtc_w, drm_fd->crtc_h });
     const vec2i original_frame_size = self->capture_size;
     if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
         self->capture_size = self->params.region_size;
@@ -633,10 +649,13 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
         self->params.egl->eglDestroyImage(self->params.egl->egl_display, image);
     }
 
+    const gsr_monitor_rotation plane_rotation = kms_rotation_to_gsr_monitor_rotation(drm_fd->rotation);
+    const gsr_monitor_rotation rotation = sub_rotations(self->monitor_rotation, plane_rotation);
+
     gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
         target_pos, output_size,
         capture_pos, self->capture_size, original_frame_size,
-        gsr_monitor_rotation_to_rotation(self->monitor_rotation), GSR_SOURCE_COLOR_RGB, self->external_texture_fallback, false);
+        gsr_monitor_rotation_to_rotation(rotation), GSR_SOURCE_COLOR_RGB, self->external_texture_fallback, false);
 
     if(self->params.record_cursor) {
         gsr_kms_response_item *cursor_drm_fd = find_cursor_drm_if_on_monitor(self, drm_fd->connector_id, capture_is_combined_plane);
@@ -650,7 +669,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
             cursor_monitor_offset.y += self->params.region_position.y;
             render_x11_cursor(self, color_conversion, cursor_monitor_offset, target_pos, output_size);
         } else if(cursor_drm_fd) {
-            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
+            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->crtc_w, drm_fd->crtc_h });
             render_drm_cursor(self, color_conversion, cursor_drm_fd, target_pos, output_size, framebuffer_size);
         }
     }

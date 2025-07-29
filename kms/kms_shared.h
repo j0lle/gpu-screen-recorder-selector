@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <drm_mode.h>
 
-#define GSR_KMS_PROTOCOL_VERSION 4
+#define GSR_KMS_PROTOCOL_VERSION 5
 
 #define GSR_KMS_MAX_ITEMS 8
 #define GSR_KMS_MAX_DMA_BUFS 4
@@ -39,6 +39,13 @@ struct gsr_kms_response_dma_buf {
     uint32_t offset;
 };
 
+typedef enum {
+    KMS_ROT_0,
+    KMS_ROT_90,
+    KMS_ROT_180,
+    KMS_ROT_270
+} gsr_kms_rotation;
+
 struct gsr_kms_response_item {
     gsr_kms_response_dma_buf dma_buf[GSR_KMS_MAX_DMA_BUFS];
     int num_dma_bufs;
@@ -49,10 +56,11 @@ struct gsr_kms_response_item {
     uint32_t connector_id; /* 0 if unknown */
     bool is_cursor;
     bool has_hdr_metadata;
+    gsr_kms_rotation rotation;
     int x;
     int y;
-    int src_w;
-    int src_h;
+    int crtc_w;
+    int crtc_h;
     struct hdr_output_metadata hdr_metadata;
 };
 
