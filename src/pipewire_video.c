@@ -21,6 +21,29 @@
 #define SPA_POD_PROP_FLAG_DONT_FIXATE (1 << 4)
 #endif
 
+#if !PW_CHECK_VERSION(0, 3, 62)
+enum spa_meta_videotransform_value {
+    SPA_META_TRANSFORMATION_None = 0,    /**< no transform */
+    SPA_META_TRANSFORMATION_90,          /**< 90 degree counter-clockwise */
+    SPA_META_TRANSFORMATION_180,         /**< 180 degree counter-clockwise */
+    SPA_META_TRANSFORMATION_270,         /**< 270 degree counter-clockwise */
+    SPA_META_TRANSFORMATION_Flipped,     /**< 180 degree flipped around the vertical axis. Equivalent
+                                           * to a reflexion through the vertical line splitting the
+                                           * buffer in two equal sized parts */
+    SPA_META_TRANSFORMATION_Flipped90,   /**< flip then rotate around 90 degree counter-clockwise */
+    SPA_META_TRANSFORMATION_Flipped180,  /**< flip then rotate around 180 degree counter-clockwise */
+    SPA_META_TRANSFORMATION_Flipped270,  /**< flip then rotate around 270 degree counter-clockwise */
+};
+
+/** a transformation of the buffer */
+struct spa_meta_videotransform {
+    uint32_t transform;                  /**< orientation transformation that was applied to the buffer,
+                                           *  one of enum spa_meta_videotransform_value */
+};
+
+#define SPA_META_VideoTransform 8
+#endif
+
 #define CURSOR_META_SIZE(width, height)                                    \
     (sizeof(struct spa_meta_cursor) + sizeof(struct spa_meta_bitmap) + \
      width * height * 4)
@@ -157,6 +180,27 @@ static void on_process_cb(void *user_data) {
         self->crop.valid = false;
     }
 
+    struct spa_meta_videotransform *video_transform = spa_buffer_find_meta_data(buffer, SPA_META_VideoTransform, sizeof(*video_transform));
+    enum spa_meta_videotransform_value transform = SPA_META_TRANSFORMATION_None;
+    if(video_transform)
+        transform = video_transform->transform;
+
+    self->rotation = GSR_MONITOR_ROT_0;
+    switch(transform) {
+        case SPA_META_TRANSFORMATION_90:
+            self->rotation = GSR_MONITOR_ROT_90;
+            break;
+        case SPA_META_TRANSFORMATION_180:
+            self->rotation = GSR_MONITOR_ROT_180;
+            break;
+        case SPA_META_TRANSFORMATION_270:
+            self->rotation = GSR_MONITOR_ROT_270;
+            break;
+        default:
+            // TODO: Support other rotations. Wayland compositors dont use them yet so it's ok to not support it now
+            break;
+    }
+
     pthread_mutex_unlock(&self->mutex);
 
 read_metadata:
@@ -246,17 +290,18 @@ static void on_param_changed_cb(void *user_data, uint32_t id, const struct spa_p
     fprintf(stderr, "gsr info: pipewire:    Size: %dx%d\n", self->format.info.raw.size.width, self->format.info.raw.size.height);
     fprintf(stderr, "gsr info: pipewire:    Framerate: %d/%d\n", self->format.info.raw.framerate.num, self->format.info.raw.framerate.denom);
 
-    uint8_t params_buffer[1024];
+    uint8_t params_buffer[2048];
     struct spa_pod_builder pod_builder = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
-    const struct spa_pod *params[4];
+    const struct spa_pod *params[5];
+    int param_index = 0;
 
-    params[0] = spa_pod_builder_add_object(
+    params[param_index++] = spa_pod_builder_add_object(
         &pod_builder, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
         SPA_PARAM_META_type, SPA_POD_Id(SPA_META_VideoCrop),
         SPA_PARAM_META_size,
         SPA_POD_Int(sizeof(struct spa_meta_region)));
 
-    params[1] = spa_pod_builder_add_object(
+    params[param_index++] = spa_pod_builder_add_object(
         &pod_builder, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
         SPA_PARAM_META_type, SPA_POD_Id(SPA_META_VideoDamage),
         SPA_PARAM_META_size, SPA_POD_CHOICE_RANGE_Int(
@@ -264,7 +309,7 @@ static void on_param_changed_cb(void *user_data, uint32_t id, const struct spa_p
                                 sizeof(struct spa_meta_region) * 1,
                                 sizeof(struct spa_meta_region) * 16));
 
-    params[2] = spa_pod_builder_add_object(
+    params[param_index++] = spa_pod_builder_add_object(
         &pod_builder, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
         SPA_PARAM_META_type, SPA_POD_Id(SPA_META_Cursor),
         SPA_PARAM_META_size,
@@ -272,11 +317,22 @@ static void on_param_changed_cb(void *user_data, uint32_t id, const struct spa_p
                      CURSOR_META_SIZE(1, 1),
                      CURSOR_META_SIZE(1024, 1024)));
 
-    params[3] = spa_pod_builder_add_object(
+    params[param_index++] = spa_pod_builder_add_object(
         &pod_builder, SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
         SPA_PARAM_BUFFERS_dataType, SPA_POD_Int(buffer_types));
 
-    pw_stream_update_params(self->stream, params, 4);
+#if PW_CHECK_VERSION(0, 3, 62)
+	if (check_pw_version(&self->server_version, 0, 3, 62)) {
+		/* Video transformation */
+		params[param_index++] = spa_pod_builder_add_object(&pod_builder, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
+								SPA_PARAM_META_type,
+								SPA_POD_Id(SPA_META_VideoTransform),
+								SPA_PARAM_META_size,
+								SPA_POD_Int(sizeof(struct spa_meta_videotransform)));
+	}
+#endif
+
+    pw_stream_update_params(self->stream, params, param_index);
     self->negotiated = true;
 }
 
@@ -790,14 +846,15 @@ static void gsr_pipewire_video_update_cursor_texture(gsr_pipewire_video *self, g
     self->cursor.data = NULL;
 }
 
-bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map texture_map, gsr_pipewire_video_region *region, gsr_pipewire_video_region *cursor_region, gsr_pipewire_video_dmabuf_data *dmabuf_data, int *num_dmabuf_data, uint32_t *fourcc, uint64_t *modifiers, bool *using_external_image) {
+bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map texture_map, gsr_map_texture_output *output) {
     for(int i = 0; i < GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES; ++i) {
-        memset(&dmabuf_data[i], 0, sizeof(gsr_pipewire_video_dmabuf_data));
+        memset(&output->dmabuf_data[i], 0, sizeof(gsr_pipewire_video_dmabuf_data));
     }
-    *num_dmabuf_data = 0;
-    *using_external_image = self->external_texture_fallback;
-    *fourcc = 0;
-    *modifiers = 0;
+    output->num_dmabuf_data = 0;
+    output->using_external_image = self->external_texture_fallback;
+    output->fourcc = 0;
+    output->modifiers = 0;
+    output->rotation = GSR_MONITOR_ROT_0;
     pthread_mutex_lock(&self->mutex);
 
     if(!self->negotiated || self->dmabuf_data[0].fd <= 0) {
@@ -812,39 +869,47 @@ bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map te
     }
 
     gsr_pipewire_video_bind_image_to_texture_with_fallback(self, texture_map, image);
-    *using_external_image = self->external_texture_fallback;
+    output->using_external_image = self->external_texture_fallback;
     self->egl->eglDestroyImage(self->egl->egl_display, image);
 
     gsr_pipewire_video_update_cursor_texture(self, texture_map);
 
-    region->x = 0;
-    region->y = 0;
+    output->region.x = 0;
+    output->region.y = 0;
 
-    region->width = self->format.info.raw.size.width;
-    region->height = self->format.info.raw.size.height;
+    output->region.width = self->format.info.raw.size.width;
+    output->region.height = self->format.info.raw.size.height;
 
     if(self->crop.valid) {
-        region->x = self->crop.x;
-        region->y = self->crop.y;
+        output->region.x = self->crop.x;
+        output->region.y = self->crop.y;
 
-        region->width = self->crop.width;
-        region->height = self->crop.height;
+        output->region.width = self->crop.width;
+        output->region.height = self->crop.height;
+    }
+
+    // TODO: Test transform + cropping
+    if(self->rotation == GSR_MONITOR_ROT_90 || self->rotation == GSR_MONITOR_ROT_270) {
+        const int temp = output->region.width;
+        output->region.width = output->region.height;
+        output->region.height = temp;
     }
 
     /* TODO: Test if cursor hotspot is correct */
-    cursor_region->x = self->cursor.x - self->cursor.hotspot_x;
-    cursor_region->y = self->cursor.y - self->cursor.hotspot_y;
+    output->cursor_region.x = self->cursor.x - self->cursor.hotspot_x;
+    output->cursor_region.y = self->cursor.y - self->cursor.hotspot_y;
 
-    cursor_region->width = self->cursor.width;
-    cursor_region->height = self->cursor.height;
+    output->cursor_region.width = self->cursor.width;
+    output->cursor_region.height = self->cursor.height;
 
     for(size_t i = 0; i < self->dmabuf_num_planes; ++i) {
-        dmabuf_data[i] = self->dmabuf_data[i];
+        output->dmabuf_data[i] = self->dmabuf_data[i];
         self->dmabuf_data[i].fd = -1;
     }
-    *num_dmabuf_data = self->dmabuf_num_planes;
-    *fourcc = spa_video_format_to_drm_format(self->format.info.raw.format);
-    *modifiers = self->format.info.raw.modifier;
+    output->num_dmabuf_data = self->dmabuf_num_planes;
+    output->fourcc = spa_video_format_to_drm_format(self->format.info.raw.format);
+    output->modifiers = self->format.info.raw.modifier;
+    output->rotation = self->rotation;
     self->dmabuf_num_planes = 0;
 
     pthread_mutex_unlock(&self->mutex);

@@ -30,27 +30,21 @@ typedef struct {
 
     gsr_pipewire_video pipewire;
     vec2i capture_size;
-    gsr_pipewire_video_dmabuf_data dmabuf_data[GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES];
-    int num_dmabuf_data;
 
-    gsr_pipewire_video_region region;
-    gsr_pipewire_video_region cursor_region;
-    uint32_t pipewire_fourcc;
-    uint64_t pipewire_modifiers;
-    bool using_external_image;
+    gsr_map_texture_output pipewire_data;
 
     bool should_stop;
     bool stop_is_error;
 } gsr_capture_portal;
 
 static void gsr_capture_portal_cleanup_plane_fds(gsr_capture_portal *self) {
-    for(int i = 0; i < self->num_dmabuf_data; ++i) {
-        if(self->dmabuf_data[i].fd > 0) {
-            close(self->dmabuf_data[i].fd);
-            self->dmabuf_data[i].fd = 0;
+    for(int i = 0; i < self->pipewire_data.num_dmabuf_data; ++i) {
+        if(self->pipewire_data.dmabuf_data[i].fd > 0) {
+            close(self->pipewire_data.dmabuf_data[i].fd);
+            self->pipewire_data.dmabuf_data[i].fd = 0;
         }
     }
-    self->num_dmabuf_data = 0;
+    self->pipewire_data.num_dmabuf_data = 0;
 }
 
 static void gsr_capture_portal_stop(gsr_capture_portal *self) {
@@ -238,9 +232,9 @@ static bool gsr_capture_portal_get_frame_dimensions(gsr_capture_portal *self) {
 
     const double start_time = clock_get_monotonic_seconds();
     while(clock_get_monotonic_seconds() - start_time < 5.0) {
-        if(gsr_pipewire_video_map_texture(&self->pipewire, self->texture_map, &self->region, &self->cursor_region, self->dmabuf_data, &self->num_dmabuf_data, &self->pipewire_fourcc, &self->pipewire_modifiers, &self->using_external_image)) {
-            self->capture_size.x = self->region.width;
-            self->capture_size.y = self->region.height;
+        if(gsr_pipewire_video_map_texture(&self->pipewire, self->texture_map, &self->pipewire_data)) {
+            self->capture_size.x = self->pipewire_data.region.width;
+            self->capture_size.y = self->pipewire_data.region.height;
             fprintf(stderr, "gsr info: gsr_capture_portal_start: pipewire negotiation finished\n");
             return true;
         }
@@ -347,11 +341,11 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
     }
 
     /* TODO: Handle formats other than RGB(A) */
-    if(self->num_dmabuf_data == 0) {
-        if(gsr_pipewire_video_map_texture(&self->pipewire, self->texture_map, &self->region, &self->cursor_region, self->dmabuf_data, &self->num_dmabuf_data, &self->pipewire_fourcc, &self->pipewire_modifiers, &self->using_external_image)) {
-            if(self->region.width != self->capture_size.x || self->region.height != self->capture_size.y) {
-                self->capture_size.x = self->region.width;
-                self->capture_size.y = self->region.height;
+    if(self->pipewire_data.num_dmabuf_data == 0) {
+        if(gsr_pipewire_video_map_texture(&self->pipewire, self->texture_map, &self->pipewire_data)) {
+            if(self->pipewire_data.region.width != self->capture_size.x || self->pipewire_data.region.height != self->capture_size.y) {
+                self->capture_size.x = self->pipewire_data.region.width;
+                self->capture_size.y = self->pipewire_data.region.height;
                 gsr_color_conversion_clear(color_conversion);
             }
         } else {
@@ -370,32 +364,35 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
 
     // TODO: Handle region crop
 
-    const bool fourcc_alpha = fourcc_has_alpha(self->pipewire_fourcc);
+    const bool fourcc_alpha = fourcc_has_alpha(self->pipewire_data.fourcc);
     if(fourcc_alpha)
         gsr_color_conversion_clear(color_conversion);
 
-    gsr_color_conversion_draw(color_conversion, self->using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
+    gsr_color_conversion_draw(color_conversion, self->pipewire_data.using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
        target_pos, output_size,
-       (vec2i){self->region.x, self->region.y}, self->capture_size, self->capture_size,
-       GSR_ROT_0, GSR_SOURCE_COLOR_RGB, self->using_external_image, fourcc_alpha);
+       (vec2i){self->pipewire_data.region.x, self->pipewire_data.region.y}, self->capture_size, self->capture_size,
+       gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), GSR_SOURCE_COLOR_RGB, self->pipewire_data.using_external_image, fourcc_alpha);
 
-    if(self->params.record_cursor && self->texture_map.cursor_texture_id > 0 && self->cursor_region.width > 0) {
+    if(self->params.record_cursor && self->texture_map.cursor_texture_id > 0 && self->pipewire_data.cursor_region.width > 0) {
         const vec2d scale = {
             self->capture_size.x == 0 ? 0 : (double)output_size.x / (double)self->capture_size.x,
             self->capture_size.y == 0 ? 0 : (double)output_size.y / (double)self->capture_size.y
         };
 
         const vec2i cursor_pos = {
-            target_pos.x + (self->cursor_region.x * scale.x),
-            target_pos.y + (self->cursor_region.y * scale.y)
+            target_pos.x + (self->pipewire_data.cursor_region.x * scale.x),
+            target_pos.y + (self->pipewire_data.cursor_region.y * scale.y)
         };
 
         self->params.egl->glEnable(GL_SCISSOR_TEST);
         self->params.egl->glScissor(target_pos.x, target_pos.y, output_size.x, output_size.y);
         gsr_color_conversion_draw(color_conversion, self->texture_map.cursor_texture_id,
-            (vec2i){cursor_pos.x, cursor_pos.y}, (vec2i){self->cursor_region.width * scale.x, self->cursor_region.height * scale.y},
-            (vec2i){0, 0}, (vec2i){self->cursor_region.width, self->cursor_region.height}, (vec2i){self->cursor_region.width, self->cursor_region.height},
-            GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false, true);
+            (vec2i){cursor_pos.x, cursor_pos.y},
+            (vec2i){self->pipewire_data.cursor_region.width * scale.x, self->pipewire_data.cursor_region.height * scale.y},
+            (vec2i){0, 0},
+            (vec2i){self->pipewire_data.cursor_region.width, self->pipewire_data.cursor_region.height},
+            (vec2i){self->pipewire_data.cursor_region.width, self->pipewire_data.cursor_region.height},
+            gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), GSR_SOURCE_COLOR_RGB, false, true);
         self->params.egl->glDisable(GL_SCISSOR_TEST);
     }
 
