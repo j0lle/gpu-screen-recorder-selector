@@ -77,32 +77,51 @@ static bool profile_is_vp9(VAProfile profile) {
     }
 }
 
-static bool profile_supports_video_encoding(VADisplay va_dpy, VAProfile profile, bool *low_power) {
-    *low_power = false;
+/* Returns 0, 0 on error */
+static vec2i profile_entrypoint_get_max_resolution(VADisplay va_dpy, VAProfile profile, VAEntrypoint entrypoint) {
+    VAConfigAttrib attribs[2] = {
+        {
+            .type = VAConfigAttribMaxPictureWidth,
+        },
+        {
+            .type = VAConfigAttribMaxPictureHeight,
+        }
+    };
+    if(vaGetConfigAttributes(va_dpy, profile, entrypoint, attribs, 2) != VA_STATUS_SUCCESS)
+        return (vec2i){0, 0};
+
+    return (vec2i){ attribs[0].value, attribs[1].value };
+}
+
+/* Returns 0 on error or if none is supported */
+static VAEntrypoint profile_get_video_encoding_entrypoint(VADisplay va_dpy, VAProfile profile) {
     int num_entrypoints = vaMaxNumEntrypoints(va_dpy);
     if(num_entrypoints <= 0)
-        return false;
+        return 0;
 
     VAEntrypoint *entrypoint_list = calloc(num_entrypoints, sizeof(VAEntrypoint));
     if(!entrypoint_list)
-        return false;
+        return 0;
 
-    bool supports_encoding = false;
-    bool supports_low_power_encoding = false;
+    int encoding_entrypoint_index = -1;
+    int lower_power_entrypoint_index = -1;
     if(vaQueryConfigEntrypoints(va_dpy, profile, entrypoint_list, &num_entrypoints) == VA_STATUS_SUCCESS) {
         for(int i = 0; i < num_entrypoints; ++i) {
             if(entrypoint_list[i] == VAEntrypointEncSlice)
-                supports_encoding = true;
+                encoding_entrypoint_index = i;
             else if(entrypoint_list[i] == VAEntrypointEncSliceLP)
-                supports_low_power_encoding = true;
+                lower_power_entrypoint_index = i;
         }
     }
 
-    if(!supports_encoding && supports_low_power_encoding)
-        *low_power = true;
+    VAEntrypoint encoding_entrypoint = 0;
+    if(encoding_entrypoint_index != -1)
+        encoding_entrypoint = entrypoint_list[encoding_entrypoint_index];
+    else if(lower_power_entrypoint_index != -1)
+        encoding_entrypoint = entrypoint_list[lower_power_entrypoint_index];
 
     free(entrypoint_list);
-    return supports_encoding || supports_low_power_encoding;
+    return encoding_entrypoint;
 }
 
 static bool get_supported_video_codecs(VADisplay va_dpy, gsr_supported_video_codecs *video_codecs, bool cleanup) {
@@ -128,31 +147,45 @@ static bool get_supported_video_codecs(VADisplay va_dpy, gsr_supported_video_cod
         goto fail;
 
     for(int i = 0; i < num_profiles; ++i) {
-        bool low_power = false;
         if(profile_is_h264(profile_list[i])) {
-            if(profile_supports_video_encoding(va_dpy, profile_list[i], &low_power)) {
-                video_codecs->h264 = (gsr_supported_video_codec){ true, low_power };
+            const VAEntrypoint encoding_entrypoint = profile_get_video_encoding_entrypoint(va_dpy, profile_list[i]);
+            if(encoding_entrypoint != 0) {
+                const vec2i max_resolution = profile_entrypoint_get_max_resolution(va_dpy, profile_list[i], encoding_entrypoint);
+                video_codecs->h264 = (gsr_supported_video_codec){ true, encoding_entrypoint == VAEntrypointEncSliceLP, max_resolution };
             }
         } else if(profile_is_hevc_8bit(profile_list[i])) {
-            if(profile_supports_video_encoding(va_dpy, profile_list[i], &low_power))
-                video_codecs->hevc = (gsr_supported_video_codec){ true, low_power };
+            const VAEntrypoint encoding_entrypoint = profile_get_video_encoding_entrypoint(va_dpy, profile_list[i]);
+            if(encoding_entrypoint != 0) {
+                const vec2i max_resolution = profile_entrypoint_get_max_resolution(va_dpy, profile_list[i], encoding_entrypoint);
+                video_codecs->hevc = (gsr_supported_video_codec){ true, encoding_entrypoint == VAEntrypointEncSliceLP, max_resolution };
+            }
         } else if(profile_is_hevc_10bit(profile_list[i])) {
-            if(profile_supports_video_encoding(va_dpy, profile_list[i], &low_power)) {
-                video_codecs->hevc_hdr = (gsr_supported_video_codec){ true, low_power };
-                video_codecs->hevc_10bit = (gsr_supported_video_codec){ true, low_power };
+            const VAEntrypoint encoding_entrypoint = profile_get_video_encoding_entrypoint(va_dpy, profile_list[i]);
+            if(encoding_entrypoint != 0) {
+                const vec2i max_resolution = profile_entrypoint_get_max_resolution(va_dpy, profile_list[i], encoding_entrypoint);
+                video_codecs->hevc_hdr = (gsr_supported_video_codec){ true, encoding_entrypoint == VAEntrypointEncSliceLP, max_resolution };
+                video_codecs->hevc_10bit = (gsr_supported_video_codec){ true, encoding_entrypoint == VAEntrypointEncSliceLP, max_resolution };
             }
         } else if(profile_is_av1(profile_list[i])) {
-            if(profile_supports_video_encoding(va_dpy, profile_list[i], &low_power)) {
-                video_codecs->av1 = (gsr_supported_video_codec){ true, low_power };
-                video_codecs->av1_hdr = (gsr_supported_video_codec){ true, low_power };
-                video_codecs->av1_10bit = (gsr_supported_video_codec){ true, low_power };
+            const VAEntrypoint encoding_entrypoint = profile_get_video_encoding_entrypoint(va_dpy, profile_list[i]);
+            if(encoding_entrypoint != 0) {
+                const vec2i max_resolution = profile_entrypoint_get_max_resolution(va_dpy, profile_list[i], encoding_entrypoint);
+                video_codecs->av1 = (gsr_supported_video_codec){ true, encoding_entrypoint == VAEntrypointEncSliceLP, max_resolution };
+                video_codecs->av1_hdr = (gsr_supported_video_codec){ true, encoding_entrypoint == VAEntrypointEncSliceLP, max_resolution };
+                video_codecs->av1_10bit = (gsr_supported_video_codec){ true, encoding_entrypoint == VAEntrypointEncSliceLP, max_resolution };
             }
         } else if(profile_is_vp8(profile_list[i])) {
-            if(profile_supports_video_encoding(va_dpy, profile_list[i], &low_power))
-                video_codecs->vp8 = (gsr_supported_video_codec){ true, low_power };
+            const VAEntrypoint encoding_entrypoint = profile_get_video_encoding_entrypoint(va_dpy, profile_list[i]);
+            if(encoding_entrypoint != 0) {
+                const vec2i max_resolution = profile_entrypoint_get_max_resolution(va_dpy, profile_list[i], encoding_entrypoint);
+                video_codecs->vp8 = (gsr_supported_video_codec){ true, encoding_entrypoint == VAEntrypointEncSliceLP, max_resolution };
+            }
         } else if(profile_is_vp9(profile_list[i])) {
-            if(profile_supports_video_encoding(va_dpy, profile_list[i], &low_power))
-                video_codecs->vp9 = (gsr_supported_video_codec){ true, low_power };
+            const VAEntrypoint encoding_entrypoint = profile_get_video_encoding_entrypoint(va_dpy, profile_list[i]);
+            if(encoding_entrypoint != 0) {
+                const vec2i max_resolution = profile_entrypoint_get_max_resolution(va_dpy, profile_list[i], encoding_entrypoint);
+                video_codecs->vp9 = (gsr_supported_video_codec){ true, encoding_entrypoint == VAEntrypointEncSliceLP, max_resolution };
+            }
         }
     }
 

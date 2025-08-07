@@ -17,8 +17,6 @@ typedef struct {
     int width;
     int height;
     int fps;
-    AVCodecContext *video_codec_context; /* can be NULL */
-    AVFrame *frame; /* can be NULL, but will never be NULL if |video_codec_context| is set */
 } gsr_capture_metadata;
 
 struct gsr_capture {

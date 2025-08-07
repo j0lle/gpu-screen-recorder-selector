@@ -6,6 +6,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#define NVENCAPI_MAJOR_VERSION_470 11
+#define NVENCAPI_MINOR_VERSION_470 1
+#define NVENCAPI_VERSION_470 (NVENCAPI_MAJOR_VERSION_470 | (NVENCAPI_MINOR_VERSION_470 << 24))
+#define NVENCAPI_STRUCT_VERSION_CUSTOM(nvenc_api_version, struct_version)  ((uint32_t)(nvenc_api_version) | ((struct_version)<<16) | (0x7 << 28))
+
 static void* open_nvenc_library(void) {
     dlerror(); /* clear */
     void *lib = dlopen("libnvidia-encode.so.1", RTLD_LAZY);
@@ -75,7 +80,28 @@ static bool profile_is_av1(const GUID *profile_guid) {
     return false;
 }
 
-static bool encoder_get_supported_profiles(const NV_ENCODE_API_FUNCTION_LIST *function_list, void *nvenc_encoder, const GUID *encoder_guid, gsr_supported_video_codecs *supported_video_codecs) {
+/* Returns 0 on error */
+static int nvenc_get_encoding_capability(const NV_ENCODE_API_FUNCTION_LIST *function_list, void *nvenc_encoder, const GUID *encode_guid, uint32_t nvenc_api_version, NV_ENC_CAPS cap) {
+    NV_ENC_CAPS_PARAM param = {
+        .version = NVENCAPI_STRUCT_VERSION_CUSTOM(nvenc_api_version, 1),
+        .capsToQuery = cap
+    };
+
+    int value = 0;
+    if(function_list->nvEncGetEncodeCaps(nvenc_encoder, *encode_guid, &param, &value) != NV_ENC_SUCCESS)
+        return 0;
+
+    return value;
+}
+
+static vec2i encoder_get_max_resolution(const NV_ENCODE_API_FUNCTION_LIST *function_list, void *nvenc_encoder, const GUID *encode_guid, uint32_t nvenc_api_version) {
+    return (vec2i){
+        .x = nvenc_get_encoding_capability(function_list, nvenc_encoder, encode_guid, nvenc_api_version, NV_ENC_CAPS_WIDTH_MAX),
+        .y = nvenc_get_encoding_capability(function_list, nvenc_encoder, encode_guid, nvenc_api_version, NV_ENC_CAPS_HEIGHT_MAX),
+    };
+}
+
+static bool encoder_get_supported_profiles(const NV_ENCODE_API_FUNCTION_LIST *function_list, void *nvenc_encoder, const GUID *encoder_guid, gsr_supported_video_codecs *supported_video_codecs, uint32_t nvenc_api_version) {
     bool success = false;
     GUID *profile_guids = NULL;
 
@@ -99,18 +125,19 @@ static bool encoder_get_supported_profiles(const NV_ENCODE_API_FUNCTION_LIST *fu
         goto fail;
     }
 
+    const vec2i max_resolution = encoder_get_max_resolution(function_list, nvenc_encoder, encoder_guid, nvenc_api_version);
     for(uint32_t i = 0; i < profile_guid_count; ++i) {
         if(profile_is_h264(&profile_guids[i])) {
-            supported_video_codecs->h264 = (gsr_supported_video_codec){ true, false };
+            supported_video_codecs->h264 = (gsr_supported_video_codec){ true, false, max_resolution };
         } else if(profile_is_hevc(&profile_guids[i])) {
-            supported_video_codecs->hevc = (gsr_supported_video_codec){ true, false };
+            supported_video_codecs->hevc = (gsr_supported_video_codec){ true, false, max_resolution };
         } else if(profile_is_hevc_10bit(&profile_guids[i])) {
-            supported_video_codecs->hevc_hdr = (gsr_supported_video_codec){ true, false };
-            supported_video_codecs->hevc_10bit = (gsr_supported_video_codec){ true, false };
+            supported_video_codecs->hevc_hdr = (gsr_supported_video_codec){ true, false, max_resolution };
+            supported_video_codecs->hevc_10bit = (gsr_supported_video_codec){ true, false, max_resolution };
         } else if(profile_is_av1(&profile_guids[i])) {
-            supported_video_codecs->av1 = (gsr_supported_video_codec){ true, false };
-            supported_video_codecs->av1_hdr = (gsr_supported_video_codec){ true, false };
-            supported_video_codecs->av1_10bit = (gsr_supported_video_codec){ true, false };
+            supported_video_codecs->av1 = (gsr_supported_video_codec){ true, false, max_resolution };
+            supported_video_codecs->av1_hdr = (gsr_supported_video_codec){ true, false, max_resolution };
+            supported_video_codecs->av1_10bit = (gsr_supported_video_codec){ true, false, max_resolution };
         }
     }
 
@@ -123,7 +150,7 @@ static bool encoder_get_supported_profiles(const NV_ENCODE_API_FUNCTION_LIST *fu
     return success;
 }
 
-static bool get_supported_video_codecs(const NV_ENCODE_API_FUNCTION_LIST *function_list, void *nvenc_encoder, gsr_supported_video_codecs *supported_video_codecs) {
+static bool get_supported_video_codecs(const NV_ENCODE_API_FUNCTION_LIST *function_list, void *nvenc_encoder, gsr_supported_video_codecs *supported_video_codecs, uint32_t nvenc_api_version) {
     bool success = false;
     GUID *encoder_guids = NULL;
     *supported_video_codecs = (gsr_supported_video_codecs){0};
@@ -149,7 +176,7 @@ static bool get_supported_video_codecs(const NV_ENCODE_API_FUNCTION_LIST *functi
     }
 
     for(uint32_t i = 0; i < encode_guid_count; ++i) {
-        encoder_get_supported_profiles(function_list, nvenc_encoder, &encoder_guids[i], supported_video_codecs);
+        encoder_get_supported_profiles(function_list, nvenc_encoder, &encoder_guids[i], supported_video_codecs, nvenc_api_version);
     }
 
     success = true;
@@ -160,9 +187,6 @@ static bool get_supported_video_codecs(const NV_ENCODE_API_FUNCTION_LIST *functi
 
     return success;
 }
-
-#define NVENCAPI_VERSION_470 (11 | (1 << 24))
-#define NVENCAPI_STRUCT_VERSION_470(ver) ((uint32_t)NVENCAPI_VERSION_470 | ((ver)<<16) | (0x7 << 28))
 
 bool gsr_get_supported_video_codecs_nvenc(gsr_supported_video_codecs *video_codecs, bool cleanup) {
     memset(video_codecs, 0, sizeof(*video_codecs));
@@ -206,13 +230,13 @@ bool gsr_get_supported_video_codecs_nvenc(gsr_supported_video_codecs *video_code
     if(function_list.nvEncOpenEncodeSessionEx(&params, &nvenc_encoder) != NV_ENC_SUCCESS) {
         // Old nvidia gpus dont support the new nvenc api (which is required for av1).
         // In such cases fallback to old api version if possible and try again.
-        function_list.version = NVENCAPI_STRUCT_VERSION_470(2);
+        function_list.version = NVENCAPI_STRUCT_VERSION_CUSTOM(NVENCAPI_VERSION_470, 2);
         if(nvEncodeAPICreateInstance(&function_list) != NV_ENC_SUCCESS) {
             fprintf(stderr, "gsr error: gsr_get_supported_video_codecs_nvenc: nvEncodeAPICreateInstance (retry) failed\n");
             goto done;
         }
 
-        params.version = NVENCAPI_STRUCT_VERSION_470(1);
+        params.version = NVENCAPI_STRUCT_VERSION_CUSTOM(NVENCAPI_VERSION_470, 1);
         params.apiVersion = NVENCAPI_VERSION_470;
         if(function_list.nvEncOpenEncodeSessionEx(&params, &nvenc_encoder) != NV_ENC_SUCCESS) {
             fprintf(stderr, "gsr error: gsr_get_supported_video_codecs_nvenc: nvEncOpenEncodeSessionEx (retry) failed\n");
@@ -220,7 +244,7 @@ bool gsr_get_supported_video_codecs_nvenc(gsr_supported_video_codecs *video_code
         }
     }
 
-    success = get_supported_video_codecs(&function_list, nvenc_encoder, video_codecs);
+    success = get_supported_video_codecs(&function_list, nvenc_encoder, video_codecs, params.apiVersion);
 
     done:
     if(cleanup) {

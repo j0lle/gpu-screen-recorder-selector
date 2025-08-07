@@ -315,3 +315,10 @@ Colors are correct, but they look incorrect for thin elements, such as colored t
 Record first video/audio frame immediately.
 
 Disable GL_DEPTH_TEST, GL_CULL_FACE.
+
+kde plasma portal capture for screenshot doesn't work well because the portal ui is still visible when taking a screenshot because of its animation.
+
+It's possible for microphone audio to get desynced when recording together with desktop audio, when not recording app audio as well.
+    Test recording desktop audio and microphone audio together (-a "default_output|default_input") for around 30 minutes.
+
+We can use dri2connect/dri3open to get the /dev/dri/card device. Note that this doesn't work on nvidia x11.

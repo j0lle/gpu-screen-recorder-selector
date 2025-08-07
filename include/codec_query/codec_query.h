@@ -2,10 +2,12 @@
 #define GSR_CODEC_QUERY_H
 
 #include <stdbool.h>
+#include "../vec2.h"
 
 typedef struct {
     bool supported;
     bool low_power;
+    vec2i max_resolution;
 } gsr_supported_video_codec;
 
 typedef struct {

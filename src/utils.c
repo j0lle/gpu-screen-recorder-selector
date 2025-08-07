@@ -285,13 +285,9 @@ typedef struct {
     bool match_found;
 } get_monitor_by_connector_id_userdata;
 
-static bool vec2i_eql(vec2i a, vec2i b) {
-    return a.x == b.x && a.y == b.y;
-}
-
-static void get_monitor_by_name_and_size_callback(const gsr_monitor *monitor, void *userdata) {
+static void get_monitor_by_name_wayland_callback(const gsr_monitor *monitor, void *userdata) {
     get_monitor_by_connector_id_userdata *data = (get_monitor_by_connector_id_userdata*)userdata;
-    if(monitor->name && data->monitor->name && strcmp(monitor->name, data->monitor->name) == 0 && vec2i_eql(monitor->size, data->monitor->size)) {
+    if(monitor->name && data->monitor->name && strcmp(monitor->name, data->monitor->name) == 0) {
         data->rotation = monitor->rotation;
         data->position = monitor->pos;
         data->match_found = true;
@@ -320,7 +316,7 @@ bool drm_monitor_get_display_server_data(const gsr_window *window, const gsr_mon
             userdata.rotation = GSR_MONITOR_ROT_0;
             userdata.position = (vec2i){0, 0};
             userdata.match_found = false;
-            gsr_window_for_each_active_monitor_output_cached(window, get_monitor_by_name_and_size_callback, &userdata);
+            gsr_window_for_each_active_monitor_output_cached(window, get_monitor_by_name_wayland_callback, &userdata);
             if(userdata.match_found) {
                 *monitor_rotation = userdata.rotation;
                 *monitor_position = userdata.position;
