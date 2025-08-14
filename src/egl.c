@@ -40,7 +40,7 @@ static bool gsr_egl_create_window(gsr_egl *self, bool enable_debug) {
     };
 
     int32_t ctxattr[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 2,
+        EGL_CONTEXT_CLIENT_VERSION, 3,
         EGL_NONE, EGL_NONE, EGL_NONE
     };
 
