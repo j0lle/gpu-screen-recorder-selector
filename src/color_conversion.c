@@ -870,7 +870,7 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
     self->params.egl->glViewport(0, 0, dest_texture_size.x, dest_texture_size.y);
 
     /* TODO: this, also cleanup */
-    //self->params.egl->glBindBuffer(GL_ARRAY_BUFFER, self->vertex_buffer_object_id);
+    self->params.egl->glBindBuffer(GL_ARRAY_BUFFER, self->vertex_buffer_object_id);
     self->params.egl->glBufferSubData(GL_ARRAY_BUFFER, 0, 24 * sizeof(float), vertices);
 
     switch(self->params.destination_color) {

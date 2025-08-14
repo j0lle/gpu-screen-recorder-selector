@@ -26,6 +26,7 @@ extern "C" {
 #include "../include/color_conversion.h"
 #include "../include/image_writer.h"
 #include "../include/args_parser.h"
+#include "../include/plugins.h"
 }
 
 #include <assert.h>
@@ -3311,6 +3312,33 @@ int main(int argc, char **argv) {
     capture_metadata.width = video_codec_context->width;
     capture_metadata.height = video_codec_context->height;
 
+    const Arg *plugin_arg = args_parser_get_arg(&arg_parser, "-p");
+    assert(plugin_arg);
+
+    gsr_plugins plugins;
+    memset(&plugins, 0, sizeof(plugins));
+
+    if(plugin_arg->num_values > 0) {
+        const gsr_color_depth color_depth = video_codec_to_bit_depth(arg_parser.video_codec);
+        assert(color_depth == GSR_COLOR_DEPTH_8_BITS || color_depth == GSR_COLOR_DEPTH_10_BITS);
+
+        const gsr_plugin_init_params plugin_init_params = {
+            (unsigned int)capture_metadata.width,
+            (unsigned int)capture_metadata.height,
+            (unsigned int)arg_parser.fps,
+            color_depth == GSR_COLOR_DEPTH_8_BITS ? GSR_PLUGIN_COLOR_DEPTH_8_BITS : GSR_PLUGIN_COLOR_DEPTH_10_BITS,
+            egl.context_type == GSR_GL_CONTEXT_TYPE_GLX ? GSR_PLUGIN_GRAPHICS_API_GLX : GSR_PLUGIN_GRAPHICS_API_EGL_ES,
+        };
+
+        if(!gsr_plugins_init(&plugins, plugin_init_params, &egl))
+            _exit(1);
+
+        for(int i = 0; i < plugin_arg->num_values; ++i) {
+            if(!gsr_plugins_load_plugin(&plugins, plugin_arg->values[i]))
+                _exit(1);
+        }
+    }
+
     gsr_color_conversion_params color_conversion_params;
     memset(&color_conversion_params, 0, sizeof(color_conversion_params));
     color_conversion_params.color_range = arg_parser.color_range;
@@ -3325,6 +3353,8 @@ int main(int argc, char **argv) {
     }
 
     gsr_color_conversion_clear(&color_conversion);
+
+    gsr_color_conversion *output_color_conversion = plugins.num_plugins > 0 ? &plugins.color_conversion : &color_conversion;
 
     if(arg_parser.video_encoder == GSR_VIDEO_ENCODER_HW_CPU) {
         open_video_software(video_codec_context, arg_parser);
@@ -3728,7 +3758,15 @@ int main(int argc, char **argv) {
                 }
             }
 
-            gsr_capture_capture(capture, &capture_metadata, &color_conversion);
+            gsr_capture_capture(capture, &capture_metadata, output_color_conversion);
+
+            if(plugins.num_plugins > 0) {
+                gsr_plugins_draw(&plugins);
+                gsr_color_conversion_draw(&color_conversion, plugins.texture,
+                    {0, 0}, {capture_metadata.width, capture_metadata.height},
+                    {0, 0}, {capture_metadata.width, capture_metadata.height},
+                    {capture_metadata.width, capture_metadata.height}, GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false, true);
+            }
 
             if(capture_has_synchronous_task) {
                 paused_time_offset = paused_time_offset + (clock_get_monotonic_seconds() - paused_time_start);
@@ -3736,7 +3774,7 @@ int main(int argc, char **argv) {
             }
 
             gsr_egl_swap_buffers(&egl);
-            gsr_video_encoder_copy_textures_to_frame(video_encoder, video_frame, &color_conversion);
+            gsr_video_encoder_copy_textures_to_frame(video_encoder, video_frame, output_color_conversion);
 
             if(hdr && !hdr_metadata_set && !is_replaying && add_hdr_metadata_to_video_stream(capture, video_stream))
                 hdr_metadata_set = true;
@@ -3902,6 +3940,8 @@ int main(int argc, char **argv) {
                 run_recording_saved_script_async(arg_parser.recording_saved_script, save_replay_output_filepath.c_str(), "replay");
         }
     }
+
+    gsr_plugins_deinit(&plugins);
 
     if(replay_recording_start_result.av_format_context) {
         for(size_t id : replay_recording_items) {

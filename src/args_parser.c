@@ -190,7 +190,13 @@ static double args_get_double_by_key(Arg *args, int num_args, const char *key, d
 static void usage_header() {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] [-q <quality>] [-r <replay_buffer_size_sec>] [-replay-storage ram|disk] [-restart-replay-on-save yes|no] [-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] [-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] [-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] [--list-application-audio] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] "
+           "[-q <quality>] [-r <replay_buffer_size_sec>] [-replay-storage ram|disk] [-restart-replay-on-save yes|no] "
+           "[-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] "
+           "[-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-p <plugin_path>] "
+           "[-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] "
+           "[-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] [--list-application-audio] "
+           "[-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -307,6 +313,9 @@ static void usage_full() {
     printf("\n");
     printf("  -sc   Run a script on the saved video file (asynchronously). The first argument to the script is the filepath to the saved video file and the second argument is the recording type (either \"regular\" or \"replay\").\n");
     printf("        Not applicable for live streams.\n");
+    printf("        Note: the script has to be executable.\n");
+    printf("\n");
+    printf("  -p    A plugin (.so) to load. This can be specified multiple times to load multiple plugins.\n");
     printf("\n");
     printf("  -cursor\n");
     printf("        Record cursor. Optional, set to 'yes' by default.\n");
@@ -394,13 +403,14 @@ static void usage_full() {
     printf("  Send signal SIGRTMIN to gpu-screen-recorder (pkill -SIGRTMIN -f gpu-screen-recorder) to start/stop recording a regular video when in replay/streaming mode.\n");
     printf("\n");
     printf("EXAMPLES:\n");
+    printf("  %s -w screen -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -a default_input -o video.mp4\n", program_name);
     printf("  %s -w $(xdotool selectwindow) -f 60 -a default_output -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a \"default_output|default_input\" -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -c mkv -r 60 -o \"$HOME/Videos\"\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -c mkv -r 1800 -replay-storage disk -bm cbr -q 40000 -o \"$HOME/Videos\"\n", program_name);
-    printf("  %s -w screen -f 60 -a default_output -c mkv -sc script.sh -r 60 -o \"$HOME/Videos\"\n", program_name);
+    printf("  %s -w screen -f 60 -a default_output -c mkv -sc ./script.sh -r 60 -o \"$HOME/Videos\"\n", program_name);
     printf("  %s -w portal -f 60 -a default_output -restore-portal-session yes -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a default_output -bm cbr -q 15000 -o video.mp4\n", program_name);
     printf("  %s -w screen -f 60 -a \"app:firefox|app:csgo\" -o video.mp4\n", program_name);
@@ -411,6 +421,7 @@ static void usage_full() {
     printf("  %s -w region -region 640x480+100+100 -o video.mp4\n", program_name);
     printf("  %s -w region -region $(slop) -o video.mp4\n", program_name);
     printf("  %s -w region -region $(slurp -f \"%%wx%%h+%%x+%%y\") -o video.mp4\n", program_name);
+    printf("  %s -w screen -p ./plugin.so -o video.mp4\n", program_name);
     //fprintf(stderr, "  gpu-screen-recorder -w screen -f 60 -q ultra -pixfmt yuv444 -o video.mp4\n");
     fflush(stdout);
 }
@@ -745,6 +756,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     self->args[arg_index++] = (Arg){ .key = "-portal-session-token-filepath", .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
     self->args[arg_index++] = (Arg){ .key = "-encoder",                       .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = video_encoder_enums, .num_enum_values = sizeof(video_encoder_enums)/sizeof(ArgEnum) };
     self->args[arg_index++] = (Arg){ .key = "-replay-storage",                .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = replay_storage_enums, .num_enum_values = sizeof(replay_storage_enums)/sizeof(ArgEnum) };
+    self->args[arg_index++] = (Arg){ .key = "-p",                             .optional = true,  .list = true,  .type = ARG_TYPE_STRING };
     assert(arg_index == NUM_ARGS);
 
     for(int i = 1; i < argc; i += 2) {

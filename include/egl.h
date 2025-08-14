@@ -105,6 +105,7 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_RGBA                                 0x1908
 #define GL_RGB8                                 0x8051
 #define GL_RGBA8                                0x8058
+#define GL_RGBA16                               0x805B
 #define GL_R8                                   0x8229
 #define GL_RG8                                  0x822B
 #define GL_R16                                  0x822A

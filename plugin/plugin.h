@@ -1,0 +1,50 @@
+#ifndef GSR_PLUGIN_H
+#define GSR_PLUGIN_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdbool.h>
+
+typedef enum {
+    GSR_PLUGIN_GRAPHICS_API_EGL_ES,
+    GSR_PLUGIN_GRAPHICS_API_GLX,
+} gsr_plugin_graphics_api;
+
+typedef enum {
+    GSR_PLUGIN_COLOR_DEPTH_8_BITS,
+    GSR_PLUGIN_COLOR_DEPTH_10_BITS,
+} gsr_plugin_color_depth;
+
+typedef struct {
+    unsigned int width;
+    unsigned int height;
+} gsr_plugin_draw_params;
+
+typedef struct {
+    unsigned int width;
+    unsigned int height;
+    unsigned int fps;
+    gsr_plugin_color_depth color_depth;
+    gsr_plugin_graphics_api graphics_api;
+} gsr_plugin_init_params;
+
+typedef struct {
+    const char *name; /* Mandatory */
+    unsigned int version; /* Mandatory, can't be 0 */
+    void *userdata; /* Optional */
+
+    /* Optional, called when the plugin is expected to draw something to the current framebuffer */
+    void (*draw)(const gsr_plugin_draw_params *params, void *userdata);
+} gsr_plugin_init_return;
+
+/* The plugin is expected to implement these functions and export them: */
+bool gsr_plugin_init(const gsr_plugin_init_params *params, gsr_plugin_init_return *ret);
+void gsr_plugin_deinit(void *userdata);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* GSR_PLUGIN_H */

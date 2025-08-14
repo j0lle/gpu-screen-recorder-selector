@@ -43,6 +43,7 @@ src = [
     'src/image_writer.c',
     'src/args_parser.c',
     'src/defs.c',
+    'src/plugins.c',
     'src/sound.cpp',
     'src/main.cpp',
 ]
@@ -50,8 +51,12 @@ src = [
 subdir('protocol')
 src += protocol_src
 
+cc = meson.get_compiler('c')
+m_dep = cc.find_library('m', required : true)
+
 dep = [
     dependency('threads'),
+    m_dep,
     dependency('libavcodec'),
     dependency('libavformat'),
     dependency('libavutil'),
@@ -109,6 +114,8 @@ add_project_arguments('-DGSR_VERSION="' + meson.project_version() + '"', languag
 executable('gsr-kms-server', 'kms/server/kms_server.c', dependencies : dependency('libdrm'), c_args : '-fstack-protector-all', install : true)
 executable('gpu-screen-recorder', src, dependencies : dep, install : true)
 
+install_headers('plugin/plugin.h', install_dir : 'include/gsr')
+
 if get_option('systemd') == true
     install_data(files('extra/gpu-screen-recorder.service'), install_dir : 'lib/systemd/user')
 endif
@@ -119,4 +126,11 @@ endif
 
 if get_option('nvidia_suspend_fix') == true
     install_data(files('extra/gsr-nvidia.conf'), install_dir : 'lib/modprobe.d')
+endif
+
+if get_option('plugin_examples') == true
+    shared_library('triangle', 'plugin/examples/hello_triangle/triangle.c',
+        dependencies: [dependency('gl'), m_dep],
+        name_prefix : '',
+        name_suffix: 'so')
 endif

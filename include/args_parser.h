@@ -8,7 +8,7 @@
 
 typedef struct gsr_egl gsr_egl;
 
-#define NUM_ARGS 30
+#define NUM_ARGS 31
 
 typedef enum {
     ARG_TYPE_STRING,

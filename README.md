@@ -108,7 +108,7 @@ There are also additional dependencies needed at runtime depending on your GPU v
 * xnvctrl (libxnvctrl0, when using the `-oc` option)
 
 ## Optional dependencies
-When compiling GPU Screen Recorder with portal support (`-Dportal=true`, which is enabled by default) these dependencies are also needed:
+When building GPU Screen Recorder with portal support (`-Dportal=true` meson option, which is enabled by default) these dependencies are also needed:
 * libdbus
 * libpipewire (and libspa which is usually part of libpipewire)
 
@@ -159,6 +159,16 @@ If you installed GPU Screen Recorder from AUR or from source and you are running
 It's configured with `$HOME/.config/gpu-screen-recorder.env` (create it if it doesn't exist). You can look at [extra/gpu-screen-recorder.env](https://git.dec05eba.com/gpu-screen-recorder/plain/extra/gpu-screen-recorder.env) to see an example.
 You can see which variables that you can use in the `gpu-screen-recorder.env` file by looking at the `extra/gpu-screen-recorder.service` file. Note that all of the variables are optional, you only have to set the ones that are you interested in.
 You can use the `scripts/save-replay.sh` script to save a replay and by default the systemd service saves videos in `$HOME/Videos`.
+## Run a script when a video is saved
+Run `gpu-screen-recorder` with the `-sc` option to specify a script that should be run when a recording/replay a saved, for example `gpu-screen-recorder -w screen -sc ./script.sh -o video.mp4`.\
+The first argument to the script is the file path to the saved video. The second argument is either "regular" for regular recordings and "replay" for replays.\
+This can be used to for example showing a notification with the name of video or moving a video to a folder based on the name of the game that was recorded.
+## Plugins
+GPU Screen Recorder supports plugins for rendering additional graphics on top of the monitor/window capture. The plugin interface is defined in `plugin/plugin.h` and it gets installed to `gsr/plugin.h` in the systems include directory (usually `/usr/include`).
+An example plugin can be found at `plugin/examples/hello_triangle`.\
+Run `gpu-screen-recorder` with the `-p` option to specify a plugin to load, for example `gpu-screen-recorder -w screen -p ./triangle.so -o video.mp4`.
+`-p` can be specified multiple times to load multiple plugins.\
+Build GPU Screen Recorder with the `-Dplugin_examples=true` meson option to build plugin examples.
 # Issues
 ## NVIDIA
 Nvidia drivers have an issue where CUDA breaks if CUDA is running when suspend/hibernation happens, and it remains broken until you reload the nvidia driver. `extra/gsr-nvidia.conf` will be installed by default when you install GPU Screen Recorder and that should fix this issue. If this doesn't fix the issue for you then your distro may use a different path for modprobe files. In that case you have to install that `extra/gsr-nvidia.conf` yourself into that location.
