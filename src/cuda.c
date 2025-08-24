@@ -65,6 +65,7 @@ bool gsr_cuda_load(gsr_cuda *self, Display *display, bool do_overclock) {
         goto fail;
     }
 
+    // TODO: Use the device associated with the opengl graphics context
     CUdevice cu_dev;
     res = self->cuDeviceGet(&cu_dev, 0);
     if(res != CUDA_SUCCESS) {

@@ -161,7 +161,7 @@ You can see which variables that you can use in the `gpu-screen-recorder.env` fi
 You can use the `scripts/save-replay.sh` script to save a replay and by default the systemd service saves videos in `$HOME/Videos`.
 ## Run a script when a video is saved
 Run `gpu-screen-recorder` with the `-sc` option to specify a script that should be run when a recording/replay a saved, for example `gpu-screen-recorder -w screen -sc ./script.sh -o video.mp4`.\
-The first argument to the script is the file path to the saved video. The second argument is either "regular" for regular recordings and "replay" for replays.\
+The first argument to the script is the file path to the saved video. The second argument is either "regular" for regular recordings, "replay" for replays or "screenshot" for screenshots.\
 This can be used to for example showing a notification with the name of video or moving a video to a folder based on the name of the game that was recorded.
 ## Plugins
 GPU Screen Recorder supports plugins for rendering additional graphics on top of the monitor/window capture. The plugin interface is defined in `plugin/plugin.h` and it gets installed to `gsr/plugin.h` in the systems include directory (usually `/usr/include`).

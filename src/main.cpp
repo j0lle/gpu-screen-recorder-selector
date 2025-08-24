@@ -2347,11 +2347,16 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_ima
     }
 
     gsr_egl_swap_buffers(egl);
-    
-    const int image_quality = video_quality_to_image_quality_value(arg_parser.video_quality);
-    if(!gsr_image_writer_write_to_file(&image_writer, arg_parser.filename, image_format, image_quality)) {
-        fprintf(stderr, "gsr error: capture_image_to_file_wayland: failed to write opengl texture to image output file %s\n", arg_parser.filename);
-        _exit(1);
+
+    if(!should_stop_error) {
+        const int image_quality = video_quality_to_image_quality_value(arg_parser.video_quality);
+        if(!gsr_image_writer_write_to_file(&image_writer, arg_parser.filename, image_format, image_quality)) {
+            fprintf(stderr, "gsr error: capture_image_to_file_wayland: failed to write opengl texture to image output file %s\n", arg_parser.filename);
+            _exit(1);
+        }
+
+        if(arg_parser.recording_saved_script)
+            run_recording_saved_script_async(arg_parser.recording_saved_script, arg_parser.filename, "screenshot");
     }
 
     gsr_image_writer_deinit(&image_writer);

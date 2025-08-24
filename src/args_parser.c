@@ -311,7 +311,7 @@ static void usage_full() {
     printf("\n");
     printf("  -df   Organise replays in folders based on the current date.\n");
     printf("\n");
-    printf("  -sc   Run a script on the saved video file (asynchronously). The first argument to the script is the filepath to the saved video file and the second argument is the recording type (either \"regular\" or \"replay\").\n");
+    printf("  -sc   Run a script on the saved video file (asynchronously). The first argument to the script is the filepath to the saved video/screenshot file and the second argument is the recording type (either \"regular\", \"replay\" or \"screenshot\").\n");
     printf("        Not applicable for live streams.\n");
     printf("        Note: the script has to be executable.\n");
     printf("\n");

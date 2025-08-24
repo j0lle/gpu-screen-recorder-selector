@@ -322,3 +322,5 @@ It's possible for microphone audio to get desynced when recording together with 
     Test recording desktop audio and microphone audio together (-a "default_output|default_input") for around 30 minutes.
 
 We can use dri2connect/dri3open to get the /dev/dri/card device. Note that this doesn't work on nvidia x11.
+
+Add support for QVBR (QP with target bitrate).
