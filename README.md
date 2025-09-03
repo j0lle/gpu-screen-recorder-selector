@@ -67,7 +67,7 @@ Here are some known unofficial packages:
 * Debian/Ubuntu: [Pacstall](https://pacstall.dev/packages/gpu-screen-recorder)
 * Nix: [NixOS wiki](https://wiki.nixos.org/wiki/Gpu-screen-recorder)
 * openSUSE: [openSUSE software repository](https://software.opensuse.org/package/gpu-screen-recorder)
-* Fedora: [Copr](https://copr.fedorainfracloud.org/coprs/brycensranch/gpu-screen-recorder-git/)
+* Fedora, CentOS: [Copr](https://copr.fedorainfracloud.org/coprs/brycensranch/gpu-screen-recorder-git/)
 * OpenMandriva: [gpu-screen-recorder](https://github.com/OpenMandrivaAssociation/gpu-screen-recorder)
 * Solus: [gpu-screen-recorder](https://github.com/getsolus/packages/tree/main/packages/g/gpu-screen-recorder)
 * Nobara: [Nobara wiki](https://wiki.nobaraproject.org/en/general-usage/additional-software/GPU-Screen-Recorder)
