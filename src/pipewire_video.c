@@ -203,13 +203,9 @@ static void on_process_cb(void *user_data) {
             if(meta_region->region.size.width == 0 || meta_region->region.size.height == 0)
                 continue;
 
-            //fprintf(stderr, "video damage: %dx%d %dx%d\n", meta_region->region.position.x, meta_region->region.position.y, meta_region->region.size.width, meta_region->region.size.height);
             self->damaged = true;
             break;
         }
-
-        if(!self->damaged)
-            fprintf(stderr, "has damage: %s\n", self->damaged ? "yes" : "no");
     } else if(buffer_updated) {
         self->damaged = true;
     }
