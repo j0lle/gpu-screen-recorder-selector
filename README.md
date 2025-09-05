@@ -169,6 +169,11 @@ An example plugin can be found at `plugin/examples/hello_triangle`.\
 Run `gpu-screen-recorder` with the `-p` option to specify a plugin to load, for example `gpu-screen-recorder -w screen -p ./triangle.so -o video.mp4`.
 `-p` can be specified multiple times to load multiple plugins.\
 Build GPU Screen Recorder with the `-Dplugin_examples=true` meson option to build plugin examples.
+## Smoother recording
+If you record at your monitors refresh rate and enabled vsync in a game then there might be a desync between the game updating a frame and GPU Screen Recorder capturing a frame.
+This is an issue in some games.
+If you experience this issue then you might want to either disable vsync in the game or use the `-fm content` option to sync capture to the content on the screen. For example: `gpu-screen-recorder -w screen -fm content -o video.mp4`.\
+Note that this option is currently only available on X11 (it's not really possible to do on Wayland or it's a hit or miss).
 # Issues
 ## NVIDIA
 Nvidia drivers have an issue where CUDA breaks if CUDA is running when suspend/hibernation happens, and it remains broken until you reload the nvidia driver. `extra/gsr-nvidia.conf` will be installed by default when you install GPU Screen Recorder and that should fix this issue. If this doesn't fix the issue for you then your distro may use a different path for modprobe files. In that case you have to install that `extra/gsr-nvidia.conf` yourself into that location.
