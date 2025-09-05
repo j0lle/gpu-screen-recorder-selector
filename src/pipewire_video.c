@@ -116,8 +116,6 @@ static const struct pw_core_events core_events = {
 
 static void on_process_cb(void *user_data) {
     gsr_pipewire_video *self = user_data;
-    struct spa_meta_cursor *cursor = NULL;
-    //struct spa_meta *video_damage = NULL;
 
     /* Find the most recent buffer */
     struct pw_buffer *pw_buf = NULL;
@@ -137,12 +135,11 @@ static void on_process_cb(void *user_data) {
 
     struct spa_buffer *buffer = pw_buf->buffer;
     const bool has_buffer = buffer->datas[0].chunk->size != 0;
-    if(!has_buffer)
-        goto read_metadata;
 
     pthread_mutex_lock(&self->mutex);
 
-    if(buffer->datas[0].type == SPA_DATA_DmaBuf) {
+    bool buffer_updated = false;
+    if(has_buffer && buffer->datas[0].type == SPA_DATA_DmaBuf) {
         for(size_t i = 0; i < self->dmabuf_num_planes; ++i) {
             if(self->dmabuf_data[i].fd > 0) {
                 close(self->dmabuf_data[i].fd);
@@ -160,9 +157,7 @@ static void on_process_cb(void *user_data) {
             self->dmabuf_data[i].stride = buffer->datas[i].chunk->stride;
         }
 
-        self->damaged = true;
-    } else {
-        // TODO:
+        buffer_updated = true;
     }
 
     // TODO: Move down to read_metadata
@@ -201,32 +196,34 @@ static void on_process_cb(void *user_data) {
             break;
     }
 
-    pthread_mutex_unlock(&self->mutex);
+    const struct spa_meta *video_damage = spa_buffer_find_meta(buffer, SPA_META_VideoDamage);
+    if(video_damage) {
+        struct spa_meta_region *meta_region = NULL;
+        spa_meta_for_each(meta_region, video_damage) {
+            if(meta_region->region.size.width == 0 || meta_region->region.size.height == 0)
+                continue;
 
-read_metadata:
+            //fprintf(stderr, "video damage: %dx%d %dx%d\n", meta_region->region.position.x, meta_region->region.position.y, meta_region->region.size.width, meta_region->region.size.height);
+            self->damaged = true;
+            break;
+        }
 
-    // video_damage = spa_buffer_find_meta(buffer, SPA_META_VideoDamage);
-    // if(video_damage) {
-    //     struct spa_meta_region *r = spa_meta_first(video_damage);
-    //     if(spa_meta_check(r, video_damage)) {
-    //         //fprintf(stderr, "damage: %d,%d %ux%u\n", r->region.position.x, r->region.position.y, r->region.size.width, r->region.size.height);
-    //         pthread_mutex_lock(&self->mutex);
-    //         self->damaged = true;
-    //         pthread_mutex_unlock(&self->mutex);
-    //     }
-    // }
+        if(!self->damaged)
+            fprintf(stderr, "has damage: %s\n", self->damaged ? "yes" : "no");
+    } else if(buffer_updated) {
+        self->damaged = true;
+    }
 
-    cursor = spa_buffer_find_meta_data(buffer, SPA_META_Cursor, sizeof(*cursor));
+    const struct spa_meta_cursor *cursor = spa_buffer_find_meta_data(buffer, SPA_META_Cursor, sizeof(*cursor));
     self->cursor.valid = cursor && spa_meta_cursor_is_valid(cursor);
     
     if (self->cursor.visible && self->cursor.valid) {
-        pthread_mutex_lock(&self->mutex);
-
         struct spa_meta_bitmap *bitmap = NULL;
         if (cursor->bitmap_offset)
             bitmap = SPA_MEMBER(cursor, cursor->bitmap_offset, struct spa_meta_bitmap);
 
-        if (bitmap && bitmap->size.width > 0 && bitmap->size.height && is_cursor_format_supported(bitmap->format)) {
+        // TODO: Maybe check if the cursor is actually visible by checking if there are visible pixels
+        if (bitmap && bitmap->size.width > 0 && bitmap->size.height > 0 && is_cursor_format_supported(bitmap->format)) {
             const uint8_t *bitmap_data = SPA_MEMBER(bitmap, bitmap->offset, uint8_t);
             fprintf(stderr, "gsr info: pipewire: cursor bitmap update, size: %dx%d, format: %s\n",
                 (int)bitmap->size.width, (int)bitmap->size.height, spa_debug_type_find_name(spa_type_video_format, bitmap->format));
@@ -243,15 +240,19 @@ read_metadata:
             self->cursor.hotspot_y = cursor->hotspot.y;
             self->cursor.width = bitmap->size.width;
             self->cursor.height = bitmap->size.height;
+            self->damaged = true;
         }
+
+        if(cursor->position.x != self->cursor.x || cursor->position.y != self->cursor.y)
+            self->damaged = true;
 
         self->cursor.x = cursor->position.x;
         self->cursor.y = cursor->position.y;
-        pthread_mutex_unlock(&self->mutex);
 
         //fprintf(stderr, "gsr info: pipewire: cursor: %d %d %d %d\n", cursor->hotspot.x, cursor->hotspot.y, cursor->position.x, cursor->position.y);
     }
 
+    pthread_mutex_unlock(&self->mutex);
     pw_stream_queue_buffer(self->stream, pw_buf);
 }
 

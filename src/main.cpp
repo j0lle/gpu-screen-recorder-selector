@@ -3701,15 +3701,14 @@ int main(int argc, char **argv) {
     bool hdr_metadata_set = false;
     const bool hdr = video_codec_is_hdr(arg_parser.video_codec);
 
-    double damage_timeout_seconds = arg_parser.framerate_mode == GSR_FRAMERATE_MODE_CONTENT ? 0.5 : 0.1;
-    damage_timeout_seconds = std::max(damage_timeout_seconds, target_fps);
-
     bool use_damage_tracking = false;
     gsr_damage damage;
     memset(&damage, 0, sizeof(damage));
     if(gsr_window_get_display_server(window) == GSR_DISPLAY_SERVER_X11) {
         gsr_damage_init(&damage, &egl, arg_parser.record_cursor);
         use_damage_tracking = true;
+    } else if(!capture->is_damaged) {
+        fprintf(stderr, "gsr warning: \"-fm content\" has no effect on Wayland when recording a monitor. Either record a monitor on X11 or capture with desktop portal instead (-w portal)\n");
     }
 
     if(is_monitor_capture)

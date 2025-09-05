@@ -71,25 +71,15 @@ Test if p2 state can be worked around by using pure nvenc api and overwriting cu
 
 Drop frames if live streaming cant keep up with target fps, or dynamically change resolution/quality.
 
-Support low power option.
-
 Instead of sending a big list of drm data back to kms client, send the monitor we want to record to kms server and the server should respond with only the matching monitor, and cursor.
 
 Tonemap hdr to sdr when hdr is enabled and when hevc_hdr/av1_hdr is not used.
 
-Add 10 bit record option, h264_10bit, hevc_10bit and av1_10bit.
-
 Rotate cursor texture properly (around top left origin).
-
-Setup hardware video context so we can query constraints and capabilities for better default and better error messages.
-
-Use CAP_SYS_NICE in flatpak too on the main gpu screen recorder binary. It makes recording smoother, especially with constant framerate.
 
 Modify ffmpeg to accept opengl texture for nvenc encoding. Removes extra buffers and copies.
 
 When vulkan encode is added, mention minimum nvidia driver required. (550.54.14?).
-
-Support drm plane rotation. Neither X11 nor any Wayland compositor currently rotates drm planes so this might not be needed.
 
 Investigate if there is a way to do gpu->gpu copy directly without touching system ram to enable video encoding on a different gpu. On nvidia this is possible with cudaMemcpyPeer, but how about from an intel/amd gpu to an nvidia gpu or the other way around or any combination of iGPU and dedicated GPU?
     Maybe something with clEnqueueMigrateMemObjects? on AMD something with DirectGMA maybe?
@@ -330,8 +320,6 @@ Add support for QVBR (QP with target bitrate).
 
 KDE Plasma Wayland seems to use overlay planes now in non-fullscreen mode(limited to 1 overlay plane per gpu). Check if this is the case in the latest kde on arch linux.
     If it is, then support it in kms capture.
-
-Support -fm content with pipewire (enable damage tracking in pipewire again and check if it actually works).
 
 Check if pipewire audio link-factory is available before attempting to use app audio or merging audio with pipewire.
     Also do the same in supports_app_audio check in gpu-screen-recorder --info output.
