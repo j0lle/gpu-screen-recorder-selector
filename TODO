@@ -323,3 +323,8 @@ KDE Plasma Wayland seems to use overlay planes now in non-fullscreen mode(limite
 
 Check if pipewire audio link-factory is available before attempting to use app audio or merging audio with pipewire.
     Also do the same in supports_app_audio check in gpu-screen-recorder --info output.
+
+Move region capture to an option in the color conversion instead of having the region code in kms capture code. This would make it cleaner and make it work with all capture methods.
+    -w region would just be an option for selecting the monitor and -region would work with all capture methods (-w).
+
+Set top level window argument for portal capture. Same for gpu-screen-recorder-gtk global shortcuts.
