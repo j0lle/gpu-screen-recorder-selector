@@ -328,3 +328,10 @@ Move region capture to an option in the color conversion instead of having the r
     -w region would just be an option for selecting the monitor and -region would work with all capture methods (-w).
 
 Set top level window argument for portal capture. Same for gpu-screen-recorder-gtk global shortcuts.
+
+Remove unix domain socket code from kms-client/server and use socketpair directly. To make this possible always execute the kms server permission setup in flatpak, before starting recording (in gpu-screen-recorder-gtk).
+
+Application audio capture isn't good enough. It creates a sink that for some automatically gets selected as the default output device and it's visible as an output device.
+    When shutting down gpu screen recorder it will also cause audio applications to pause.
+    Fix some of these issues by setting gsr-app-sink media class to "Stream/Input/Audio" and node.virtual=true.
+    However that causes pulseaudio to be unable to record from gsr-app-sink, and it ends up being stuck in pa_sound_device_handle_reconnect in the loop with pa_mainloop_iterate.
