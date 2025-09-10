@@ -3140,6 +3140,11 @@ int main(int argc, char **argv) {
             return true;
         }, &app_audio_names);
     }
+#else
+    if(uses_app_audio) {
+        fprintf(stderr, "gsr error: application audio can't be recorded because GPU Screen Recorder is built without application audio support (-Dapp_audio option)\n");
+        _exit(2);
+    }
 #endif
 
     validate_merged_audio_inputs_app_audio(requested_audio_inputs, app_audio_names);
