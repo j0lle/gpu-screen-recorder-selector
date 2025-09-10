@@ -76,12 +76,6 @@ static const int VIDEO_STREAM_INDEX = 0;
 
 static thread_local char av_error_buffer[AV_ERROR_MAX_STRING_SIZE];
 
-enum class AudioMergeType {
-    NONE,
-    AMIX,
-    PIPEWIRE
-};
-
 typedef struct {
     const gsr_window *window;
 } MonitorOutputCallbackUserdata;
@@ -3125,24 +3119,12 @@ int main(int argc, char **argv) {
     std::vector<MergedAudioInputs> requested_audio_inputs = parse_audio_inputs(audio_devices, audio_input_arg);
 
     const bool uses_app_audio = merged_audio_inputs_has_app_audio(requested_audio_inputs);
-    AudioMergeType audio_merge_type = AudioMergeType::NONE;
     std::vector<std::string> app_audio_names;
 #ifdef GSR_APP_AUDIO
-    const bool audio_server_is_pipewire = audio_input_arg->num_values > 0 && pulseaudio_server_is_pipewire();
-    if(merged_audio_inputs_should_use_amix(requested_audio_inputs)) {
-        if(audio_server_is_pipewire || uses_app_audio)
-            audio_merge_type = AudioMergeType::PIPEWIRE;
-        else
-            audio_merge_type = AudioMergeType::AMIX;
-    }
-
     gsr_pipewire_audio pipewire_audio;
     memset(&pipewire_audio, 0, sizeof(pipewire_audio));
-    // TODO: When recording multiple audio devices and merging them (for example desktop audio and microphone) then one (or more) of the audio sources
-    // can get desynced. I'm unable to reproduce this but some others are. Instead of merging audio with ffmpeg amix, merge audio with pipewire (if available).
-    // This fixes the issue for people that had the issue.
-    if(audio_merge_type == AudioMergeType::PIPEWIRE || uses_app_audio) {
-        if(!audio_server_is_pipewire) {
+    if(uses_app_audio) {
+        if(!pulseaudio_server_is_pipewire()) {
             fprintf(stderr, "gsr error: your sound server is not PipeWire. Application audio is only available when running PipeWire audio server\n");
             _exit(2);
         }
@@ -3157,14 +3139,6 @@ int main(int argc, char **argv) {
             app_audio_names->push_back(app_name);
             return true;
         }, &app_audio_names);
-    }
-#else
-    if(merged_audio_inputs_should_use_amix(requested_audio_inputs))
-        audio_merge_type = AudioMergeType::AMIX;
-
-    if(uses_app_audio) {
-        fprintf(stderr, "gsr error: application audio can't be recorded because GPU Screen Recorder is built without application audio support (-Dapp_audio option)\n");
-        _exit(2);
     }
 #endif
 
@@ -3271,7 +3245,8 @@ int main(int argc, char **argv) {
     const bool force_no_audio_offset = arg_parser.is_livestream || arg_parser.is_output_piped || (file_extension != "mp4" && file_extension != "mkv" && file_extension != "webm");
     const double target_fps = 1.0 / (double)arg_parser.fps;
 
-    arg_parser.audio_codec = select_audio_codec_with_fallback(arg_parser.audio_codec, file_extension, audio_merge_type == AudioMergeType::AMIX);
+    const bool uses_amix = merged_audio_inputs_should_use_amix(requested_audio_inputs);
+    arg_parser.audio_codec = select_audio_codec_with_fallback(arg_parser.audio_codec, file_extension, uses_amix);
 
     gsr_capture *capture = create_capture_impl(arg_parser, &egl, false);
     
@@ -3428,7 +3403,7 @@ int main(int argc, char **argv) {
         std::vector<AVFilterContext*> src_filter_ctx;
         AVFilterGraph *graph = nullptr;
         AVFilterContext *sink = nullptr;
-        if(use_amix && audio_merge_type == AudioMergeType::AMIX) {
+        if(use_amix) {
             int err = init_filter_graph(audio_codec_context, &graph, &sink, src_filter_ctx, merged_audio_inputs.audio_inputs.size());
             if(err < 0) {
                 fprintf(stderr, "gsr error: failed to create audio filter\n");
@@ -3445,7 +3420,8 @@ int main(int argc, char **argv) {
         const double num_audio_frames_shift = audio_startup_time_seconds / timeout_sec;
 
         std::vector<AudioDeviceData> audio_track_audio_devices;
-        if((use_amix && audio_merge_type == AudioMergeType::PIPEWIRE) || audio_inputs_has_app_audio(merged_audio_inputs.audio_inputs)) {
+        if(audio_inputs_has_app_audio(merged_audio_inputs.audio_inputs)) {
+            assert(!use_amix);
 #ifdef GSR_APP_AUDIO
             audio_track_audio_devices.push_back(create_application_audio_audio_input(merged_audio_inputs, audio_codec_context, num_channels, num_audio_frames_shift, &pipewire_audio));
 #endif
@@ -3660,7 +3636,7 @@ int main(int argc, char **argv) {
     }
 
     std::thread amix_thread;
-    if(audio_merge_type == AudioMergeType::AMIX) {
+    if(uses_amix) {
         amix_thread = std::thread([&]() {
             AVFrame *aframe = av_frame_alloc();
             while(running) {

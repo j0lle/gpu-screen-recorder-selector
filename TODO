@@ -94,9 +94,6 @@ Enable b-frames.
 
 Support vfr matching games exact fps all the time. On x11 use damage tracking, on wayland? maybe there is drm plane damage tracking. But that may not be accurate as the compositor may update it every monitor hz anyways. On wayland maybe only support it for desktop portal + pipewire capture.
     Another method to track damage that works regardless of the display server would be to do a diff between frames with a shader.
-    A 1x1 texture could be created and then write to the texture with imageStore in glsl.
-    Multiple textures aren't needed for diff, the diff between the color conversion output can be done by using it as an input
-    as well, which would diff it against the previous frame.
 
 Support selecting which gpu to use. This can be done in egl with eglQueryDevicesEXT and then eglGetPlatformDisplayEXT. This will automatically work on AMD and Intel as vaapi uses the same device. On nvidia we need to use eglQueryDeviceAttribEXT with EGL_CUDA_DEVICE_NV.
     Maybe on glx (nvidia x11 nvfbc) we need to use __NV_PRIME_RENDER_OFFLOAD, __NV_PRIME_RENDER_OFFLOAD_PROVIDER, __GLX_VENDOR_LIBRARY_NAME, __VK_LAYER_NV_optimus, VK_ICD_FILENAMES instead. Just look at prime-run /usr/bin/prime-run.
