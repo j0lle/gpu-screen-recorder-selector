@@ -157,7 +157,7 @@ You have to reboot your computer after installing GPU Screen Recorder for the fi
 # Examples
 Look at the [scripts](https://git.dec05eba.com/gpu-screen-recorder/tree/scripts) directory for script examples. For example if you want to automatically save a recording/replay into a folder with the same name as the game you are recording.
 
-### AMD/Intel/Wayland root permission
+# AMD/Intel/Wayland root permission
 When recording a window or when using the `-w portal` option no special user permission is required,
 however when recording a monitor the program needs root permission (to access KMS).\
 This is safe in GPU Screen Recorder as the part that needs root access has been moved to its own small program that only does one thing.\
