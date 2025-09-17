@@ -404,8 +404,8 @@ static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
         //fprintf(stderr, "  node id: %u, node name: %s, media class: %s\n", id, node_name, media_class);
         const bool is_stream_output = media_class && strcmp(media_class, "Stream/Output/Audio") == 0;
         const bool is_stream_input = media_class && strcmp(media_class, "Stream/Input/Audio") == 0;
-        const bool is_sink = media_class && strcmp(media_class, "Audio/Sink") == 0;
-        const bool is_source = media_class && strcmp(media_class, "Audio/Source") == 0;
+        const bool is_sink = media_class && string_starts_with(media_class, "Audio/Sink"); // Matches Audio/Sink/Virtual as well
+        const bool is_source = media_class && string_starts_with(media_class, "Audio/Source"); // Matches Audio/Source/Virtual as well
         if(node_name && (is_stream_output || is_stream_input || is_sink || is_source)) {
             //const char *application_binary = spa_dict_lookup(props, PW_KEY_APP_PROCESS_BINARY);
             //const char *application_name = spa_dict_lookup(props, PW_KEY_APP_NAME);
