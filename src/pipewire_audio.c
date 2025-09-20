@@ -693,7 +693,9 @@ void gsr_pipewire_audio_deinit(gsr_pipewire_audio *self) {
 
 static struct pw_properties* gsr_pipewire_create_null_audio_sink(const char *name) {
     char props_str[512];
-    snprintf(props_str, sizeof(props_str), "{ factory.name=support.null-audio-sink node.name=\"%s\" media.class=Audio/Sink object.linger=false audio.position=[FL FR] monitor.channel-volumes=true monitor.passthrough=true adjust_time=0 node.description=gsr-app-sink slaves=\"\" }", name);
+    snprintf(props_str, sizeof(props_str),
+        "{ factory.name=support.null-audio-sink node.name=\"%s\" media.class=Audio/Sink object.linger=false audio.position=[FL FR]"
+        " monitor.channel-volumes=true monitor.passthrough=true adjust_time=0 node.description=gsr-app-sink slaves=\"\" priority.driver=1 priority.session=1 }", name);
     struct pw_properties *props = pw_properties_new_string(props_str);
     if(!props) {
         fprintf(stderr, "gsr error: gsr_pipewire_create_null_audio_sink: failed to create virtual sink properties\n");

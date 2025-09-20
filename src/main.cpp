@@ -3685,15 +3685,17 @@ int main(int argc, char **argv) {
     bool use_damage_tracking = false;
     gsr_damage damage;
     memset(&damage, 0, sizeof(damage));
-    if(gsr_window_get_display_server(window) == GSR_DISPLAY_SERVER_X11) {
-        gsr_damage_init(&damage, &egl, arg_parser.record_cursor);
-        use_damage_tracking = true;
-    } else if(!capture->is_damaged) {
-        fprintf(stderr, "gsr warning: \"-fm content\" has no effect on Wayland when recording a monitor. Either record a monitor on X11 or capture with desktop portal instead (-w portal)\n");
-    }
+    if(arg_parser.framerate_mode == GSR_FRAMERATE_MODE_CONTENT) {
+        if(gsr_window_get_display_server(window) == GSR_DISPLAY_SERVER_X11) {
+            gsr_damage_init(&damage, &egl, arg_parser.record_cursor);
+            use_damage_tracking = true;
+        } else if(!capture->is_damaged) {
+            fprintf(stderr, "gsr warning: \"-fm content\" has no effect on Wayland when recording a monitor. Either record a monitor on X11 or capture with desktop portal instead (-w portal)\n");
+        }
 
-    if(is_monitor_capture)
-        gsr_damage_set_target_monitor(&damage, arg_parser.window);
+        if(is_monitor_capture)
+            gsr_damage_set_target_monitor(&damage, arg_parser.window);
+    }
 
     while(running) {
         while(gsr_window_process_event(window)) {
