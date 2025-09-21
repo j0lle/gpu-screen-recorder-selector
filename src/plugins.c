@@ -33,6 +33,7 @@ bool gsr_plugins_init(gsr_plugins *self, gsr_plugin_init_params init_params, gsr
         .egl = egl,
         .destination_color = GSR_DESTINATION_COLOR_RGB8, /* TODO: Support 10-bits, use init_params.color_depth */
         .destination_textures[0] = self->texture,
+        .destination_textures_size[0] = (vec2i){ init_params.width, init_params.height },
         .num_destination_textures = 1,
         .color_range = GSR_COLOR_RANGE_FULL,
         .load_external_image_shader = false,

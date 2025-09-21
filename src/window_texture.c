@@ -20,6 +20,8 @@ int window_texture_init(WindowTexture *window_texture, Display *display, Window 
     window_texture->texture_id = 0;
     window_texture->redirected = 0;
     window_texture->egl = egl;
+    window_texture->window_width = 0;
+    window_texture->window_height = 0;
     
     if(!x11_supports_composite_named_window_pixmap(display))
         return 1;
@@ -66,6 +68,11 @@ int window_texture_on_resize(WindowTexture *self) {
         EGL_IMAGE_PRESERVED_KHR, EGL_TRUE,
         EGL_NONE,
     };
+
+    Window root_window;
+    int window_x, window_y;
+    unsigned int window_border, window_depth;
+    XGetGeometry(self->display, self->window, &root_window, &window_x, &window_y, &self->window_width, &self->window_height, &window_border, &window_depth);
 
     pixmap = XCompositeNameWindowPixmap(self->display, self->window);
     if(!pixmap) {

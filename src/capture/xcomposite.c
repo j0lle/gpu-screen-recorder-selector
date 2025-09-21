@@ -100,13 +100,8 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, gsr_capture_metadata *
         return -1;
     }
 
-    self->texture_size.x = 0;
-    self->texture_size.y = 0;
-
-    self->params.egl->glBindTexture(GL_TEXTURE_2D, window_texture_get_opengl_texture_id(&self->window_texture));
-    self->params.egl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &self->texture_size.x);
-    self->params.egl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &self->texture_size.y);
-    self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
+    self->texture_size.x = self->window_texture.window_width;
+    self->texture_size.y = self->window_texture.window_height;
 
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
         capture_metadata->width = self->texture_size.x;
@@ -148,13 +143,8 @@ static void gsr_capture_xcomposite_tick(gsr_capture *cap) {
             window_texture_deinit(&self->window_texture);
             window_texture_init(&self->window_texture, self->display, self->window, self->params.egl); // TODO: Do not do the below window_texture_on_resize after this
 
-            self->texture_size.x = 0;
-            self->texture_size.y = 0;
-
-            self->params.egl->glBindTexture(GL_TEXTURE_2D, window_texture_get_opengl_texture_id(&self->window_texture));
-            self->params.egl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &self->texture_size.x);
-            self->params.egl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &self->texture_size.y);
-            self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
+            self->texture_size.x = self->window_texture.window_width;
+            self->texture_size.y = self->window_texture.window_height;
 
             self->window_resized = false;
             self->clear_background = true;
@@ -172,13 +162,8 @@ static void gsr_capture_xcomposite_tick(gsr_capture *cap) {
             return;
         }
 
-        self->texture_size.x = 0;
-        self->texture_size.y = 0;
-
-        self->params.egl->glBindTexture(GL_TEXTURE_2D, window_texture_get_opengl_texture_id(&self->window_texture));
-        self->params.egl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &self->texture_size.x);
-        self->params.egl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &self->texture_size.y);
-        self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
+        self->texture_size.x = self->window_texture.window_width;
+        self->texture_size.y = self->window_texture.window_height;
 
         self->clear_background = true;
     }

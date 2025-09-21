@@ -22,7 +22,7 @@ void gsr_video_encoder_copy_textures_to_frame(gsr_video_encoder *encoder, AVFram
         encoder->copy_textures_to_frame(encoder, frame, color_conversion);
 }
 
-void gsr_video_encoder_get_textures(gsr_video_encoder *encoder, unsigned int *textures, int *num_textures, gsr_destination_color *destination_color) {
+void gsr_video_encoder_get_textures(gsr_video_encoder *encoder, unsigned int *textures, vec2i *texture_sizes, int *num_textures, gsr_destination_color *destination_color) {
     assert(encoder->started);
-    encoder->get_textures(encoder, textures, num_textures, destination_color);
+    encoder->get_textures(encoder, textures, texture_sizes, num_textures, destination_color);
 }

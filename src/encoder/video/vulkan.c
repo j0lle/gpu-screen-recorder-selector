@@ -16,6 +16,7 @@
 typedef struct {
     gsr_video_encoder_vulkan_params params;
     unsigned int target_textures[2];
+    vec2i texture_sizes[2];
     AVBufferRef *device_ctx;
 } gsr_video_encoder_vulkan;
 
@@ -224,6 +225,9 @@ static bool gsr_video_encoder_vulkan_setup_textures(gsr_video_encoder_vulkan *se
 
         fprintf(stderr, "3 gl error: %d\n", self->params.egl->glGetError());
         self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
+
+        self->texture_sizes[0] = (vec2i){ frame->width, frame->height };
+        self->texture_sizes[1] = (vec2i){ frame->width/2, frame->height/2 };
      }
 #endif
     return true;
@@ -270,10 +274,12 @@ void gsr_video_encoder_vulkan_stop(gsr_video_encoder_vulkan *self, AVCodecContex
         av_buffer_unref(&self->device_ctx);
 }
 
-static void gsr_video_encoder_vulkan_get_textures(gsr_video_encoder *encoder, unsigned int *textures, int *num_textures, gsr_destination_color *destination_color) {
+static void gsr_video_encoder_vulkan_get_textures(gsr_video_encoder *encoder, unsigned int *textures, vec2i *texture_sizes, int *num_textures, gsr_destination_color *destination_color) {
     gsr_video_encoder_vulkan *self = encoder->priv;
     textures[0] = self->target_textures[0];
     textures[1] = self->target_textures[1];
+    texture_sizes[0] = self->texture_sizes[0];
+    texture_sizes[1] = self->texture_sizes[1];
     *num_textures = 2;
     *destination_color = self->params.color_depth == GSR_COLOR_DEPTH_10_BITS ? GSR_DESTINATION_COLOR_P010 : GSR_DESTINATION_COLOR_NV12;
 }

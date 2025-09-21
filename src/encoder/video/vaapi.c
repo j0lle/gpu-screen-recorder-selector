@@ -16,6 +16,7 @@ typedef struct {
     gsr_video_encoder_vaapi_params params;
 
     unsigned int target_textures[2];
+    vec2i texture_sizes[2];
 
     AVBufferRef *device_ctx;
     VADisplay va_dpy;
@@ -112,6 +113,7 @@ static bool gsr_video_encoder_vaapi_setup_textures(gsr_video_encoder_vaapi *self
             intptr_t img_attr[44];
             setup_dma_buf_attrs(img_attr, formats[i], self->prime.width / div[i], self->prime.height / div[i],
                 fds, offsets, pitches, modifiers, self->prime.layers[layer].num_planes, true);
+            self->texture_sizes[i] = (vec2i){ self->prime.width / div[i], self->prime.height / div[i] };
 
             while(self->params.egl->eglGetError() != EGL_SUCCESS){}
             EGLImage image = self->params.egl->eglCreateImage(self->params.egl->egl_display, 0, EGL_LINUX_DMA_BUF_EXT, NULL, img_attr);
@@ -214,10 +216,12 @@ void gsr_video_encoder_vaapi_stop(gsr_video_encoder_vaapi *self, AVCodecContext 
     }
 }
 
-static void gsr_video_encoder_vaapi_get_textures(gsr_video_encoder *encoder, unsigned int *textures, int *num_textures, gsr_destination_color *destination_color) {
+static void gsr_video_encoder_vaapi_get_textures(gsr_video_encoder *encoder, unsigned int *textures, vec2i *texture_sizes, int *num_textures, gsr_destination_color *destination_color) {
     gsr_video_encoder_vaapi *self = encoder->priv;
     textures[0] = self->target_textures[0];
     textures[1] = self->target_textures[1];
+    texture_sizes[0] = self->texture_sizes[0];
+    texture_sizes[1] = self->texture_sizes[1];
     *num_textures = 2;
     *destination_color = self->params.color_depth == GSR_COLOR_DEPTH_10_BITS ? GSR_DESTINATION_COLOR_P010 : GSR_DESTINATION_COLOR_NV12;
 }

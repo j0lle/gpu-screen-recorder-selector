@@ -11,6 +11,8 @@ typedef struct {
     unsigned int texture_id;
     int redirected;
     gsr_egl *egl;
+    unsigned int window_width;
+    unsigned int window_height;
 } WindowTexture;
 
 /* Returns 0 on success */

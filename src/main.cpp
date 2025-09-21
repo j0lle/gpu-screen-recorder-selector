@@ -2315,6 +2315,7 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_ima
     color_conversion_params.load_external_image_shader = gsr_capture_uses_external_image(capture);
 
     color_conversion_params.destination_textures[0] = image_writer.texture;
+    color_conversion_params.destination_textures_size[0] = { capture_metadata.width, capture_metadata.height };
     color_conversion_params.num_destination_textures = 1;
     color_conversion_params.destination_color = GSR_DESTINATION_COLOR_RGB8;
 
@@ -3354,7 +3355,7 @@ int main(int argc, char **argv) {
     color_conversion_params.color_range = arg_parser.color_range;
     color_conversion_params.egl = &egl;
     color_conversion_params.load_external_image_shader = gsr_capture_uses_external_image(capture);
-    gsr_video_encoder_get_textures(video_encoder, color_conversion_params.destination_textures, &color_conversion_params.num_destination_textures, &color_conversion_params.destination_color);
+    gsr_video_encoder_get_textures(video_encoder, color_conversion_params.destination_textures, color_conversion_params.destination_textures_size, &color_conversion_params.num_destination_textures, &color_conversion_params.destination_color);
 
     gsr_color_conversion color_conversion;
     if(gsr_color_conversion_init(&color_conversion, &color_conversion_params) != 0) {

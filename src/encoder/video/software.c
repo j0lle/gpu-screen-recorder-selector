@@ -13,6 +13,7 @@ typedef struct {
     gsr_video_encoder_software_params params;
 
     unsigned int target_textures[2];
+    vec2i texture_sizes[2];
 } gsr_video_encoder_software;
 
 static bool gsr_video_encoder_software_setup_textures(gsr_video_encoder_software *self, AVCodecContext *video_codec_context, AVFrame *frame) {
@@ -34,7 +35,8 @@ static bool gsr_video_encoder_software_setup_textures(gsr_video_encoder_software
     const int div[2] = {1, 2}; // divide UV texture size by 2 because chroma is half size
 
     for(int i = 0; i < 2; ++i) {
-        self->target_textures[i] = gl_create_texture(self->params.egl, video_codec_context->width / div[i], video_codec_context->height / div[i], self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? internal_formats_nv12[i] : internal_formats_p010[i], formats[i], GL_NEAREST);
+        self->texture_sizes[i] = (vec2i){ video_codec_context->width / div[i], video_codec_context->height / div[i] };
+        self->target_textures[i] = gl_create_texture(self->params.egl, self->texture_sizes[i].x, self->texture_sizes[i].y, self->params.color_depth == GSR_COLOR_DEPTH_8_BITS ? internal_formats_nv12[i] : internal_formats_p010[i], formats[i], GL_NEAREST);
         if(self->target_textures[i] == 0) {
             fprintf(stderr, "gsr error: gsr_capture_kms_setup_cuda_textures: failed to create opengl texture\n");
             return false;
@@ -86,10 +88,12 @@ static void gsr_video_encoder_software_copy_textures_to_frame(gsr_video_encoder 
     //self->params.egl->glFinish();
 }
 
-static void gsr_video_encoder_software_get_textures(gsr_video_encoder *encoder, unsigned int *textures, int *num_textures, gsr_destination_color *destination_color) {
+static void gsr_video_encoder_software_get_textures(gsr_video_encoder *encoder, unsigned int *textures, vec2i *texture_sizes, int *num_textures, gsr_destination_color *destination_color) {
     gsr_video_encoder_software *self = encoder->priv;
     textures[0] = self->target_textures[0];
     textures[1] = self->target_textures[1];
+    texture_sizes[0] = self->texture_sizes[0];
+    texture_sizes[1] = self->texture_sizes[1];
     *num_textures = 2;
     *destination_color = self->params.color_depth == GSR_COLOR_DEPTH_10_BITS ? GSR_DESTINATION_COLOR_P010 : GSR_DESTINATION_COLOR_NV12;
 }

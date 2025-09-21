@@ -46,6 +46,7 @@ typedef struct {
     gsr_destination_color destination_color;
 
     unsigned int destination_textures[2];
+    vec2i destination_textures_size[2];
     int num_destination_textures;
 
     gsr_color_range color_range;

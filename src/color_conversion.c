@@ -824,13 +824,7 @@ static void gsr_color_conversion_dispatch_compute_shader(gsr_color_conversion *s
 }
 
 static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsigned int texture_id, bool external_texture, float rotation_matrix[2][2], vec2i source_position, vec2i source_size, vec2i destination_pos, vec2i texture_size, vec2f scale, gsr_source_color source_color) {
-    /* TODO: Do not call this every frame? */
-    vec2i dest_texture_size = {0, 0};
-    self->params.egl->glBindTexture(GL_TEXTURE_2D, self->params.destination_textures[0]);
-    self->params.egl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &dest_texture_size.x);
-    self->params.egl->glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &dest_texture_size.y);
-    self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
-
+    const vec2i dest_texture_size = self->params.destination_textures_size[0];
     const int texture_target = external_texture ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D;
 
     self->params.egl->glBindTexture(texture_target, texture_id);
