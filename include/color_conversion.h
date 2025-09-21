@@ -6,7 +6,6 @@
 #include "vec2.h"
 #include <stdbool.h>
 
-#define GSR_COLOR_CONVERSION_MAX_COMPUTE_SHADERS 12
 #define GSR_COLOR_CONVERSION_MAX_GRAPHICS_SHADERS 6
 #define GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS 2
 
@@ -34,13 +33,6 @@ typedef struct {
 } gsr_color_graphics_uniforms;
 
 typedef struct {
-    int rotation_matrix;
-    int source_position;
-    int target_position;
-    int scale;
-} gsr_color_compute_uniforms;
-
-typedef struct {
     gsr_egl *egl;
 
     gsr_destination_color destination_color;
@@ -51,27 +43,18 @@ typedef struct {
 
     gsr_color_range color_range;
     bool load_external_image_shader;
-    bool force_graphics_shader;
 } gsr_color_conversion_params;
 
 typedef struct {
     gsr_color_conversion_params params;
-    gsr_color_compute_uniforms compute_uniforms[GSR_COLOR_CONVERSION_MAX_COMPUTE_SHADERS];
-    gsr_shader compute_shaders[GSR_COLOR_CONVERSION_MAX_COMPUTE_SHADERS];
 
-    /* These are only loader if compute shaders (of the same type) fail to load */
     gsr_color_graphics_uniforms graphics_uniforms[GSR_COLOR_CONVERSION_MAX_GRAPHICS_SHADERS];
     gsr_shader graphics_shaders[GSR_COLOR_CONVERSION_MAX_GRAPHICS_SHADERS];
-
-    bool compute_shaders_failed_to_load;
-    bool external_compute_shaders_failed_to_load;
 
     unsigned int framebuffers[GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS];
 
     unsigned int vertex_array_object_id;
     unsigned int vertex_buffer_object_id;
-
-    int max_local_size_dim;
 } gsr_color_conversion;
 
 int gsr_color_conversion_init(gsr_color_conversion *self, const gsr_color_conversion_params *params);

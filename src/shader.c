@@ -38,10 +38,9 @@ static unsigned int load_shader(gsr_egl *egl, unsigned int type, const char *sou
     return shader_id;
 }
 
-static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const char *fragment_shader, const char *compute_shader) {
+static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const char *fragment_shader) {
     unsigned int vertex_shader_id = 0;
     unsigned int fragment_shader_id = 0;
-    unsigned int compute_shader_id = 0;
     unsigned int program_id = 0;
     int linked = 0;
     bool success = false;
@@ -58,12 +57,6 @@ static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const 
             goto done;
     }
 
-    if(compute_shader) {
-        compute_shader_id = load_shader(egl, GL_COMPUTE_SHADER, compute_shader);
-        if(compute_shader_id == 0)
-            goto done;
-    }
-
     program_id = egl->glCreateProgram();
     if(program_id == 0) {
         fprintf(stderr, "gsr error: load_program: failed to create shader program, error: %d\n", egl->glGetError());
@@ -75,9 +68,6 @@ static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const 
 
     if(fragment_shader_id)
         egl->glAttachShader(program_id, fragment_shader_id);
-
-    if(compute_shader_id)
-        egl->glAttachShader(program_id, compute_shader_id);
 
     egl->glLinkProgram(program_id);
 
@@ -102,8 +92,6 @@ static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const 
         if(program_id)
             egl->glDeleteProgram(program_id);
     }
-    if(compute_shader_id)
-        egl->glDeleteShader(compute_shader_id);
     if(fragment_shader_id)
         egl->glDeleteShader(fragment_shader_id);
     if(vertex_shader_id)
@@ -111,17 +99,17 @@ static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const 
     return program_id;
 }
 
-int gsr_shader_init(gsr_shader *self, gsr_egl *egl, const char *vertex_shader, const char *fragment_shader, const char *compute_shader) {
+int gsr_shader_init(gsr_shader *self, gsr_egl *egl, const char *vertex_shader, const char *fragment_shader) {
     assert(egl);
     self->egl = egl;
     self->program_id = 0;
 
-    if(!vertex_shader && !fragment_shader && !compute_shader) {
-        fprintf(stderr, "gsr error: gsr_shader_init: vertex, fragment shader and compute shaders can't be NULL at the same time\n");
+    if(!vertex_shader && !fragment_shader) {
+        fprintf(stderr, "gsr error: gsr_shader_init: vertex and fragment shader can't be NULL at the same time\n");
         return -1;
     }
 
-    self->program_id = load_program(self->egl, vertex_shader, fragment_shader, compute_shader);
+    self->program_id = load_program(self->egl, vertex_shader, fragment_shader);
     if(self->program_id == 0)
         return -1;
 

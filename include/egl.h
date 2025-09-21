@@ -136,7 +136,6 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_READ_ONLY                            0x88B8
 #define GL_WRITE_ONLY                           0x88B9
 #define GL_READ_WRITE                           0x88BA
-#define GL_MAX_COMPUTE_FIXED_GROUP_INVOCATIONS  0x90EB
 #define GL_TEXTURE0                             0x84C0
 #define GL_TEXTURE1                             0x84C1
 #define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT      0x00000020
@@ -150,7 +149,6 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_INFO_LOG_LENGTH                      0x8B84
 #define GL_FRAGMENT_SHADER                      0x8B30
 #define GL_VERTEX_SHADER                        0x8B31
-#define GL_COMPUTE_SHADER                       0x91B9
 #define GL_COMPILE_STATUS                       0x8B81
 #define GL_LINK_STATUS                          0x8B82
 
@@ -258,7 +256,6 @@ struct gsr_egl {
     void (*glTexParameteri)(unsigned int target, unsigned int pname, int param);
     void (*glTexParameteriv)(unsigned int target, unsigned int pname, const int *params);
     void (*glTexParameterfv)(unsigned int target, unsigned int pname, const float *params);
-    void (*glGetTexLevelParameteriv)(unsigned int target, int level, unsigned int pname, int *params);
     void (*glTexImage2D)(unsigned int target, int level, int internalFormat, int width, int height, int border, unsigned int format, unsigned int type, const void *pixels);
     void (*glTexSubImage2D)(unsigned int target, int level, int xoffset, int yoffset, int width, int height, unsigned format, unsigned type, const void *pixels);
     void (*glTexStorage2D)(unsigned int target, int levels, unsigned int internalformat, int width, int height);
@@ -266,7 +263,7 @@ struct gsr_egl {
     void (*glGenFramebuffers)(int n, unsigned int *framebuffers);
     void (*glBindFramebuffer)(unsigned int target, unsigned int framebuffer);
     void (*glDeleteFramebuffers)(int n, const unsigned int *framebuffers);
-    void (*glDispatchCompute)(unsigned int num_groups_x, unsigned int num_groups_y, unsigned int num_groups_z);
+    /* TODO: Note: this is only available since OpenGL ES 3.1 */
     void (*glMemoryBarrier)(unsigned int barriers);
     void (*glViewport)(int x, int y, int width, int height);
     void (*glFramebufferTexture2D)(unsigned int target, unsigned int attachment, unsigned int textarget, unsigned int texture, int level);
