@@ -2701,6 +2701,8 @@ static vec2i codec_get_max_resolution(gsr_video_codec video_codec, bool use_soft
 }
 
 static bool codec_supports_resolution(vec2i codec_max_resolution, vec2i capture_resolution) {
+    if(codec_max_resolution.x == 0 || codec_max_resolution.y == 0)
+        return true;
     return codec_max_resolution.x >= capture_resolution.x && codec_max_resolution.y >= capture_resolution.y;
 }
 

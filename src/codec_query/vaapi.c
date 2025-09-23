@@ -87,7 +87,7 @@ static vec2i profile_entrypoint_get_max_resolution(VADisplay va_dpy, VAProfile p
             .type = VAConfigAttribMaxPictureHeight,
         }
     };
-    if(vaGetConfigAttributes(va_dpy, profile, entrypoint, attribs, 2) != VA_STATUS_SUCCESS)
+    if(vaGetConfigAttributes(va_dpy, profile, entrypoint, attribs, 2) != VA_STATUS_SUCCESS || (attribs[0].value & VA_ATTRIB_NOT_SUPPORTED) || (attribs[1].value & VA_ATTRIB_NOT_SUPPORTED))
         return (vec2i){0, 0};
 
     return (vec2i){ attribs[0].value, attribs[1].value };
