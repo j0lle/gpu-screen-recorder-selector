@@ -622,7 +622,6 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
         gsr_kms_set_hdr_metadata(self, drm_fd);
 
     self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->crtc_w, drm_fd->crtc_h });
-    const vec2i original_frame_size = self->capture_size;
     if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
         self->capture_size = self->params.region_size;
 
@@ -654,7 +653,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
 
     gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
         target_pos, output_size,
-        capture_pos, self->capture_size, original_frame_size,
+        capture_pos, self->capture_size, (vec2i){ drm_fd->width, drm_fd->height },
         gsr_monitor_rotation_to_rotation(rotation), GSR_SOURCE_COLOR_RGB, self->external_texture_fallback, false);
 
     if(self->params.record_cursor) {

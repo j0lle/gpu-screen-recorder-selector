@@ -476,7 +476,10 @@ static void gsr_color_conversion_swizzle_reset(gsr_color_conversion *self, gsr_s
     }
 }
 
-static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsigned int texture_id, bool external_texture, float rotation_matrix[2][2], vec2i source_position, vec2i source_size, vec2i destination_pos, vec2i texture_size, vec2f scale, gsr_source_color source_color) {
+static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsigned int texture_id, bool external_texture, gsr_rotation rotation, float rotation_matrix[2][2], vec2i source_position, vec2i source_size, vec2i destination_pos, vec2i texture_size, vec2f scale, gsr_source_color source_color) {
+    if(source_size.x == 0 || source_size.y == 0)
+        return;
+
     const vec2i dest_texture_size = self->params.destination_textures_size[0];
     const int texture_target = external_texture ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D;
 
@@ -498,10 +501,17 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
         (float)source_position.y / (texture_size.y == 0 ? 1.0f : (float)texture_size.y),
     };
 
-    const vec2f texture_size_norm = {
+    vec2f texture_size_norm = {
         (float)source_size.x / (texture_size.x == 0 ? 1.0f : (float)texture_size.x),
         (float)source_size.y / (texture_size.y == 0 ? 1.0f : (float)texture_size.y),
     };
+
+    if(rotation == GSR_ROT_90 || rotation == GSR_ROT_270) {
+        const float ratio_x = (double)source_size.x / (double)source_size.y;
+        const float ratio_y = (double)source_size.y / (double)source_size.x;
+        texture_size_norm.x *= ratio_y;
+        texture_size_norm.y *= ratio_x;
+    }
 
     const float vertices[] = {
         -1.0f + 0.0f,               -1.0f + 0.0f + size_norm.y, texture_pos_norm.x,                       texture_pos_norm.y + texture_size_norm.y,
@@ -585,7 +595,7 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
 
     source_position.x += source_pos.x;
     source_position.y += source_pos.y;
-    gsr_color_conversion_draw_graphics(self, texture_id, external_texture, rotation_matrix, source_position, source_size, destination_pos, texture_size, scale, source_color);
+    gsr_color_conversion_draw_graphics(self, texture_id, external_texture, rotation, rotation_matrix, source_position, source_size, destination_pos, texture_size, scale, source_color);
 
     self->params.egl->glFlush();
     // TODO: Use the minimal barrier required
