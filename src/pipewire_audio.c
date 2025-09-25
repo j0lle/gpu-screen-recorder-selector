@@ -392,12 +392,12 @@ static void registry_event_global(void *data, uint32_t id, uint32_t permissions,
                   const struct spa_dict *props)
 {
     //fprintf(stderr, "add: id: %d, type: %s\n", (int)id, type);
-    if(!props || !type)
+    gsr_pipewire_audio *self = (gsr_pipewire_audio*)data;
+    if(!props || !type || !self->running)
         return;
 
     //pw_properties_new_dict(props);
 
-    gsr_pipewire_audio *self = (gsr_pipewire_audio*)data;
     if(strcmp(type, PW_TYPE_INTERFACE_Node) == 0) {
         const char *node_name = spa_dict_lookup(props, PW_KEY_NODE_NAME);
         const char *media_class = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
@@ -547,6 +547,7 @@ static const struct pw_registry_events registry_events = {
 
 bool gsr_pipewire_audio_init(gsr_pipewire_audio *self) {
     memset(self, 0, sizeof(*self));
+    self->running = true;
 
     pw_init(NULL, NULL);
     
@@ -594,8 +595,49 @@ bool gsr_pipewire_audio_init(gsr_pipewire_audio *self) {
     return true;
 }
 
+static gsr_pipewire_audio_link* gsr_pipewire_audio_get_first_link_to_node(gsr_pipewire_audio *self, uint32_t node_id) {
+    for(size_t i = 0; i < self->num_links; ++i) {
+        if(self->links[i].input_node_id == node_id)
+            return &self->links[i];
+    }
+    return NULL;
+}
+
+static void gsr_pipewire_audio_destroy_requested_links(gsr_pipewire_audio *self) {
+    pw_thread_loop_lock(self->thread_loop);
+
+    self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, self->server_version_sync);
+    pw_thread_loop_wait(self->thread_loop);
+
+    for(size_t requested_link_index = 0; requested_link_index < self->num_requested_links; ++requested_link_index) {
+        const gsr_pipewire_audio_node_type requested_link_node_type = self->requested_links[requested_link_index].input_type == GSR_PIPEWIRE_AUDIO_LINK_INPUT_TYPE_STREAM ? GSR_PIPEWIRE_AUDIO_NODE_TYPE_STREAM_INPUT : GSR_PIPEWIRE_AUDIO_NODE_TYPE_SINK_OR_SOURCE;
+        const gsr_pipewire_audio_node *stream_input_node = gsr_pipewire_audio_get_node_by_name_case_insensitive(self, self->requested_links[requested_link_index].input_name, requested_link_node_type);
+        if(!stream_input_node)
+            continue;
+
+        for(;;) {
+            gsr_pipewire_audio_link *link = gsr_pipewire_audio_get_first_link_to_node(self, stream_input_node->id);
+            if(!link)
+                break;
+
+            pw_registry_destroy(self->registry, link->id);
+
+            self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, self->server_version_sync);
+            pw_thread_loop_wait(self->thread_loop);
+
+            usleep(10 * 1000);
+        }
+    }
+
+    pw_thread_loop_unlock(self->thread_loop);
+}
+
 void gsr_pipewire_audio_deinit(gsr_pipewire_audio *self) {
+    self->running = false;
+
     if(self->thread_loop) {
+        /* We need to manually destroy links first, otherwise the linked audio sources will be paused when closing the program */
+        gsr_pipewire_audio_destroy_requested_links(self);
         //pw_thread_loop_wait(self->thread_loop);
         pw_thread_loop_stop(self->thread_loop);
     }

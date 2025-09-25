@@ -97,6 +97,8 @@ typedef struct {
     struct pw_proxy **virtual_sink_proxies;
     size_t num_virtual_sink_proxies;
     size_t virtual_sink_proxies_capacity_items;
+
+    bool running;
 } gsr_pipewire_audio;
 
 bool gsr_pipewire_audio_init(gsr_pipewire_audio *self);
