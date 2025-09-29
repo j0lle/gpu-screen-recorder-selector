@@ -48,7 +48,6 @@ extern "C" {
 extern "C" {
 #include <libavutil/pixfmt.h>
 #include <libavcodec/avcodec.h>
-#include <libavcodec/defs.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
 #include <libswresample/swresample.h>
