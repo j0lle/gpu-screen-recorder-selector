@@ -871,6 +871,9 @@ bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map te
 
     gsr_pipewire_video_update_cursor_texture(self, texture_map);
 
+    output->texture_width = self->format.info.raw.size.width;
+    output->texture_height = self->format.info.raw.size.height;
+
     output->region.x = 0;
     output->region.y = 0;
 

@@ -356,8 +356,10 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
     const bool is_scaled = self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0;
     vec2i output_size = is_scaled ? self->params.output_resolution : self->capture_size;
     output_size = scale_keep_aspect_ratio(self->capture_size, output_size);
-    
+
     const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
+
+    const vec2i actual_texture_size = {self->pipewire_data.texture_width, self->pipewire_data.texture_height};
 
     //self->params.egl->glFlush();
     //self->params.egl->glFinish();
@@ -370,7 +372,7 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
 
     gsr_color_conversion_draw(color_conversion, self->pipewire_data.using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
        target_pos, output_size,
-       (vec2i){self->pipewire_data.region.x, self->pipewire_data.region.y}, self->capture_size, self->capture_size,
+       (vec2i){self->pipewire_data.region.x, self->pipewire_data.region.y}, (vec2i){self->pipewire_data.region.width, self->pipewire_data.region.height}, actual_texture_size,
        gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), GSR_SOURCE_COLOR_RGB, self->pipewire_data.using_external_image, fourcc_alpha);
 
     if(self->params.record_cursor && self->texture_map.cursor_texture_id > 0 && self->pipewire_data.cursor_region.width > 0) {

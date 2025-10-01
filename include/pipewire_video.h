@@ -58,6 +58,8 @@ typedef struct {
     uint64_t modifiers;
     bool using_external_image;
     gsr_monitor_rotation rotation;
+    int texture_width;
+    int texture_height;
 } gsr_map_texture_output;
 
 typedef struct {
