@@ -181,6 +181,8 @@ static bool supports_hevc_without_padding(const char *card_path) {
         goto done;
     }
 
+    vaSetInfoCallback(va_dpy, NULL, NULL);
+
     if(vaInitialize(va_dpy, &va_major, &va_minor) != VA_STATUS_SUCCESS) {
         fprintf(stderr, "gsr error: supports_hevc_without_padding: vaInitialize failed\n");
         goto done;
