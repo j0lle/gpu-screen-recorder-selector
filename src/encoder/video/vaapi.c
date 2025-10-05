@@ -6,6 +6,8 @@
 #include <libavutil/hwcontext_vaapi.h>
 #include <libavutil/intreadwrite.h>
 
+#include <va/va.h>
+#include <va/va_drm.h>
 #include <va/va_drmcommon.h>
 
 #include <stdlib.h>
@@ -150,13 +152,100 @@ static bool gsr_video_encoder_vaapi_setup_textures(gsr_video_encoder_vaapi *self
 
 static void gsr_video_encoder_vaapi_stop(gsr_video_encoder_vaapi *self, AVCodecContext *video_codec_context);
 
+static bool supports_hevc_without_padding(const char *card_path) {
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 28, 100) && VA_CHECK_VERSION(1, 21, 0)
+    VAStatus va_status;
+    VAConfigID va_config = 0;
+    unsigned int num_surface_attr = 0;
+    VASurfaceAttrib *surface_attr_list = NULL;
+    bool supports_surface_attrib_alignment_size = false;
+    int va_major = 0;
+    int va_minor = 0;
+    bool initialized = false;
+
+    char render_path[128];
+    if(!gsr_card_path_get_render_path(card_path, render_path)) {
+        fprintf(stderr, "gsr error: supports_hevc_without_padding: failed to get /dev/dri/renderDXXX file from %s\n", card_path);
+        return false;
+    }
+
+    const int drm_fd = open(render_path, O_RDWR);
+    if(drm_fd == -1) {
+        fprintf(stderr, "gsr error: supports_hevc_without_padding: failed to open device %s\n", render_path);
+        return false;
+    }
+
+    const VADisplay va_dpy = vaGetDisplayDRM(drm_fd);
+    if(!va_dpy) {
+        fprintf(stderr, "gsr error: supports_hevc_without_padding: failed to get vaapi display for device %s\n", render_path);
+        goto done;
+    }
+
+    if(vaInitialize(va_dpy, &va_major, &va_minor) != VA_STATUS_SUCCESS) {
+        fprintf(stderr, "gsr error: supports_hevc_without_padding: vaInitialize failed\n");
+        goto done;
+    }
+    initialized = true;
+
+    va_status = vaCreateConfig(va_dpy, VAProfileHEVCMain, VAEntrypointEncSlice, NULL, 0, &va_config);
+    if(va_status != VA_STATUS_SUCCESS) {
+        va_status = vaCreateConfig(va_dpy, VAProfileHEVCMain, VAEntrypointEncSliceLP, NULL, 0, &va_config);
+        if(va_status != VA_STATUS_SUCCESS) {
+            fprintf(stderr, "gsr error: supports_hevc_without_padding: failed to create hevc vaapi config, error: %s (%d)\n", vaErrorStr(va_status), va_status);
+            return false;
+        }
+    }
+
+    va_status = vaQuerySurfaceAttributes(va_dpy, va_config, 0, &num_surface_attr);
+    if(va_status != VA_STATUS_SUCCESS) {
+        fprintf(stderr, "gsr error: supports_hevc_without_padding: failed to query vaapi surface attributes size, error: %s (%d)\n", vaErrorStr(va_status), va_status);
+        goto done;
+    }
+
+    surface_attr_list = malloc(num_surface_attr * sizeof(VASurfaceAttrib));
+    if(!surface_attr_list) {
+        fprintf(stderr, "gsr error: supports_hevc_without_padding: failed to allocate memory for %u vaapi surface attributes, error: %s (%d)\n", num_surface_attr, vaErrorStr(va_status), va_status);
+        goto done;
+    }
+
+    va_status = vaQuerySurfaceAttributes(va_dpy, va_config, surface_attr_list, &num_surface_attr);
+    if(va_status != VA_STATUS_SUCCESS) {
+        fprintf(stderr, "gsr error: supports_hevc_without_padding: failed to query vaapi surface attributes data, error: %s (%d)\n", vaErrorStr(va_status), va_status);
+        goto done;
+    }
+
+    for(unsigned int i = 0; i < num_surface_attr; ++i) {
+        if(surface_attr_list[i].type == VASurfaceAttribAlignmentSize) {
+            supports_surface_attrib_alignment_size = true;
+            break;
+        }
+    }
+
+    done:
+    free(surface_attr_list);
+    if(va_config > 0)
+        vaDestroyConfig(va_dpy, va_config);
+    if(initialized)
+        vaTerminate(va_dpy);
+    if(drm_fd > 0)
+        close(drm_fd);
+    return supports_surface_attrib_alignment_size;
+#else
+    return false;
+#endif
+}
+
 static bool gsr_video_encoder_vaapi_start(gsr_video_encoder *encoder, AVCodecContext *video_codec_context, AVFrame *frame) {
     gsr_video_encoder_vaapi *self = encoder->priv;
 
     if(self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && video_codec_context->codec_id == AV_CODEC_ID_HEVC) {
-        // TODO: dont do this if using ffmpeg reports that this is not needed (AMD driver bug that was fixed recently)
-        video_codec_context->width = FFALIGN(video_codec_context->width, 64);
-        video_codec_context->height = FFALIGN(video_codec_context->height, 16);
+        if(supports_hevc_without_padding(self->params.egl->card_path)) {
+            video_codec_context->width = FFALIGN(video_codec_context->width, 2);
+            video_codec_context->height = FFALIGN(video_codec_context->height, 2);
+        } else {
+            video_codec_context->width = FFALIGN(video_codec_context->width, 64);
+            video_codec_context->height = FFALIGN(video_codec_context->height, 16);
+        }
     } else if(self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && video_codec_context->codec_id == AV_CODEC_ID_AV1) {
         // TODO: Dont do this for VCN 5 and forward which should fix this hardware bug
         video_codec_context->width = FFALIGN(video_codec_context->width, 64);

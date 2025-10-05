@@ -293,8 +293,9 @@ static void usage_full() {
     printf("        Works only if your have \"Coolbits\" set to \"12\" in NVIDIA X settings, see README for more information. Note! use at your own risk! Optional, disabled by default.\n");
     printf("\n");
     printf("  -fm   Framerate mode. Should be either 'cfr' (constant frame rate), 'vfr' (variable frame rate) or 'content'. Optional, set to 'vfr' by default.\n");
-    printf("        'vfr' is recommended for recording for less issue with very high system load but some applications such as video editors may not support it properly.\n");
+    printf("        'vfr' is recommended for general recording for less issue with very high system load but some applications such as video editors may not support it properly.\n");
     printf("        'content' is currently only supported on X11 or when using portal capture option. The 'content' option matches the recording frame rate to the captured content.\n");
+    printf("        'content' is the best option to use when possible as it avoids capturing duplicate frames, which results in a smoother video.\n");
     printf("\n");
     printf("  -bm   Bitrate mode. Should be either 'auto', 'qp' (constant quality), 'vbr' (variable bitrate) or 'cbr' (constant bitrate). Optional, set to 'auto' by default which defaults to 'qp' on all devices\n");
     printf("        except steam deck that has broken drivers and doesn't support qp.\n");

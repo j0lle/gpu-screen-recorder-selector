@@ -380,8 +380,9 @@ static AVCodecContext *create_video_codec_context(AVPixelFormat pix_fmt, const A
         codec_context->colorspace = AVCOL_SPC_BT709;
     }
     //codec_context->chroma_sample_location = AVCHROMA_LOC_CENTER;
-    if(codec->id == AV_CODEC_ID_HEVC)
-        codec_context->codec_tag = MKTAG('h', 'v', 'c', '1'); // QuickTime on MacOS requires this or the video wont be playable
+    // Can't use this because it's fucking broken in ffmpeg 8 or new mesa. It produces garbage output
+    //if(codec->id == AV_CODEC_ID_HEVC)
+    //    codec_context->codec_tag = MKTAG('h', 'v', 'c', '1'); // QuickTime on MacOS requires this or the video wont be playable
 
     if(arg_parser.bitrate_mode == GSR_BITRATE_MODE_CBR) {
         codec_context->bit_rate = arg_parser.video_bitrate;
