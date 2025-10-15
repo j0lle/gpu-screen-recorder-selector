@@ -329,3 +329,6 @@ Application audio capture isn't good enough. It creates a sink that for some aut
 Add -k best/best_hdr/best_10bit option, to automatically choose the best codec (prefer av1, then hevc and then h264. For webm files choose vp9 and then vp8).
 
 Check if region capture works properly with fractional scaling on wayland.
+
+Add option to specify medium/high/very high/ultra for -bm cbr as well, which should automatically pick bitrate based on resolution and framerate.
+    This should also be reflected in gsr ui.

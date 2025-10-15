@@ -226,7 +226,8 @@ You have to use external software for that, such as Easy Effects or NoiseTorch.
 It's not really possible except in some cases. You can only record with the GPU that is displaying the graphics on your monitor.\
 Some laptops have display adapters that connect external monitors directly to the external GPU (if you have one)
 and on Wayland the external GPU will display the graphics for that monitor.
-In that case you can record the monitor with the external GPU by launching GPU Screen Recorder with [prime-run or by setting the DRI_PRIME environment variable](https://wiki.archlinux.org/title/PRIME) depending on your GPU brand.\
+In that case you can record the monitor with the external GPU by launching GPU Screen Recorder with [prime-run or by setting the DRI_PRIME environment variable](https://wiki.archlinux.org/title/PRIME) depending on your GPU brand.
+Alternatively you can capture with the desktop portal option (`-w portal`), which should allow you to capture any monitor.\
 However if you really want to change which GPU you want to record and encode with with then you can instead configure your display server (Xorg or Wayland compositor) to run with that GPU,
 then GPU Screen Recorder will automatically use that same GPU for recording and encoding.
 ## The rotation of the video is incorrect when the monitor is rotated when using desktop portal capture
