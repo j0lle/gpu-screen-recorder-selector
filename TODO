@@ -266,7 +266,8 @@ Add the option to set audio track name, for example with -a "track-name:blabla|d
 Maybe disable qp/vbr for replay. In that case we can preallocate all replay data (for both ram and disk) and write to that directly when receiving packet (dont do that when also recording at the same time).
     That could improve performance/disk write optimization and maybe even reduce ram usage because of less blocks/fragmentation.
 
-When rpc is added add the option to add/remove audio devices/app audio and also overlays (from new capture sources).
+When rpc is added add the option to add/remove audio devices/app audio and also overlays (from new capture sources). It should also be possible to save a replay of any duration (below duration set with -r).
+    Have an rpc info/status command that just returns the status. This is to check if gpu screen recorder is running.
 
 Support hdr screenshot.
 
@@ -332,3 +333,5 @@ Check if region capture works properly with fractional scaling on wayland.
 
 Add option to specify medium/high/very high/ultra for -bm cbr as well, which should automatically pick bitrate based on resolution and framerate.
     This should also be reflected in gsr ui.
+
+Create a manpage and move --help text there and mention the manpage command to view it (and make it work in flatpak, maybe with man <link-to-manpage-file>).

@@ -2706,6 +2706,23 @@ static bool codec_supports_resolution(vec2i codec_max_resolution, vec2i capture_
     return codec_max_resolution.x >= capture_resolution.x && codec_max_resolution.y >= capture_resolution.y;
 }
 
+static void print_codec_error(gsr_video_codec video_codec) {
+    if(video_codec == (gsr_video_codec)GSR_VIDEO_CODEC_AUTO)
+        video_codec = GSR_VIDEO_CODEC_H264;
+
+    const char *video_codec_name = video_codec_to_string(video_codec);
+    fprintf(stderr, "gsr error: your gpu does not support '%s' video codec. If you are sure that your gpu does support '%s' video encoding and you are using an AMD/Intel GPU,\n"
+        "  then make sure you have installed the GPU specific vaapi packages (intel-media-driver, libva-intel-driver, libva-mesa-driver and linux-firmware).\n"
+        "  It's also possible that your distro has disabled hardware accelerated video encoding for '%s' video codec.\n"
+        "  This may be the case on corporate distros such as Manjaro, Fedora or OpenSUSE.\n"
+        "  You can test this by running 'vainfo | grep VAEntrypointEncSlice' to see if it matches any H264/HEVC/AV1/VP8/VP9 profile.\n"
+        "  On such distros, you need to manually install mesa from source to enable H264/HEVC hardware acceleration, or use a more user friendly distro. Alternatively record with AV1 if supported by your GPU.\n"
+        "  You can alternatively use the flatpak version of GPU Screen Recorder (https://flathub.org/apps/com.dec05eba.gpu_screen_recorder) which bypasses system issues with patented H264/HEVC codecs.\n"
+        "  Make sure you have mesa-extra freedesktop runtime installed when using the flatpak (this should be the default), which can be installed with this command:\n"
+        "  flatpak install --system org.freedesktop.Platform.GL.default//23.08-extra\n"
+        "  If your GPU doesn't support hardware accelerated video encoding then you can use '-encoder cpu' option to encode with your cpu instead.\n", video_codec_name, video_codec_name, video_codec_name);
+}
+
 static const AVCodec* pick_video_codec(gsr_video_codec *video_codec, gsr_egl *egl, bool use_software_video_encoder, bool video_codec_auto, bool is_flv, bool *low_power, gsr_supported_video_codecs *supported_video_codecs) {
     // TODO: software encoder for hevc, av1, vp8 and vp9
     *low_power = false;
@@ -2748,6 +2765,7 @@ static const AVCodec* pick_video_codec(gsr_video_codec *video_codec, gsr_egl *eg
                 // Need to do a query again because this time it's without vulkan
                 if(!get_supported_video_codecs(egl, *video_codec, use_software_video_encoder, true, supported_video_codecs)) {
                     fprintf(stderr, "gsr error: failed to query for supported video codecs\n");
+                    print_codec_error(*video_codec);
                     _exit(11);
                 }
                 if(supported_video_codecs->h264.supported)
@@ -2760,6 +2778,7 @@ static const AVCodec* pick_video_codec(gsr_video_codec *video_codec, gsr_egl *eg
                 // Need to do a query again because this time it's without vulkan
                 if(!get_supported_video_codecs(egl, *video_codec, use_software_video_encoder, true, supported_video_codecs)) {
                     fprintf(stderr, "gsr error: failed to query for supported video codecs\n");
+                    print_codec_error(*video_codec);
                     _exit(11);
                 }
                 if(supported_video_codecs->hevc.supported)
@@ -2770,17 +2789,7 @@ static const AVCodec* pick_video_codec(gsr_video_codec *video_codec, gsr_egl *eg
     }
 
     if(!video_codec_f) {
-        const char *video_codec_name = video_codec_to_string(*video_codec);
-        fprintf(stderr, "gsr error: your gpu does not support '%s' video codec. If you are sure that your gpu does support '%s' video encoding and you are using an AMD/Intel GPU,\n"
-            "  then make sure you have installed the GPU specific vaapi packages (intel-media-driver, libva-intel-driver, libva-mesa-driver and linux-firmware).\n"
-            "  It's also possible that your distro has disabled hardware accelerated video encoding for '%s' video codec.\n"
-            "  This may be the case on corporate distros such as Manjaro, Fedora or OpenSUSE.\n"
-            "  You can test this by running 'vainfo | grep VAEntrypointEncSlice' to see if it matches any H264/HEVC/AV1/VP8/VP9 profile.\n"
-            "  On such distros, you need to manually install mesa from source to enable H264/HEVC hardware acceleration, or use a more user friendly distro. Alternatively record with AV1 if supported by your GPU.\n"
-            "  You can alternatively use the flatpak version of GPU Screen Recorder (https://flathub.org/apps/com.dec05eba.gpu_screen_recorder) which bypasses system issues with patented H264/HEVC codecs.\n"
-            "  Make sure you have mesa-extra freedesktop runtime installed when using the flatpak (this should be the default), which can be installed with this command:\n"
-            "  flatpak install --system org.freedesktop.Platform.GL.default//23.08-extra\n"
-            "  If your GPU doesn't support hardware accelerated video encoding then you can use '-encoder cpu' option to encode with your cpu instead.\n", video_codec_name, video_codec_name, video_codec_name);
+        print_codec_error(*video_codec);
         _exit(54);
     }
 
@@ -2814,6 +2823,7 @@ static const AVCodec* select_video_codec_with_fallback(gsr_capture_metadata capt
     gsr_supported_video_codecs supported_video_codecs;
     if(!get_supported_video_codecs(egl, *video_codec, use_software_video_encoder, true, &supported_video_codecs)) {
         fprintf(stderr, "gsr error: failed to query for supported video codecs\n");
+        print_codec_error(*video_codec);
         _exit(11);
     }
     set_supported_video_codecs_ffmpeg(&supported_video_codecs, nullptr, egl->gpu_info.vendor);
