@@ -1637,6 +1637,27 @@ static bool get_supported_video_codecs(gsr_egl *egl, gsr_video_codec video_codec
     return false;
 }
 
+static bool get_supported_video_codecs_with_cpu_fallback(gsr_egl *egl, args_parser *args_parser, bool cleanup, gsr_supported_video_codecs *video_codecs) {
+    if(get_supported_video_codecs(egl, args_parser->video_codec, args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU, cleanup, video_codecs))
+        return true;
+
+    if(args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU || !args_parser->fallback_cpu_encoding)
+        return false;
+
+    fprintf(stderr, "gsr warning: gpu encoding is not available on your system, trying cpu encoding instead because -fallback-cpu-encoding is enabled. Install the proper vaapi drivers on your system (if supported) if you experience performance issues\n");
+
+    if(get_supported_video_codecs(egl, GSR_VIDEO_CODEC_H264, true, cleanup, video_codecs)) {
+        if(args_parser->video_codec != (gsr_video_codec)GSR_VIDEO_CODEC_AUTO && args_parser->video_codec != GSR_VIDEO_CODEC_H264) {
+            fprintf(stderr, "gsr warning: cpu encoding is used but video codec isn't set to h264. Forcing video codec to h264\n");
+            args_parser->video_codec = GSR_VIDEO_CODEC_H264;
+        }
+        args_parser->video_encoder = GSR_VIDEO_ENCODER_HW_CPU;
+        return true;
+    }
+
+    return false;
+}
+
 static void xwayland_check_callback(const gsr_monitor *monitor, void *userdata) {
     bool *xwayland_found = (bool*)userdata;
     if(monitor->name_len >= 8 && strncmp(monitor->name, "XWAYLAND", 8) == 0)
@@ -2723,36 +2744,30 @@ static void print_codec_error(gsr_video_codec video_codec) {
         "  If your GPU doesn't support hardware accelerated video encoding then you can use '-encoder cpu' option to encode with your cpu instead.\n", video_codec_name, video_codec_name, video_codec_name);
 }
 
-static const AVCodec* pick_video_codec(gsr_video_codec *video_codec, gsr_egl *egl, bool use_software_video_encoder, bool video_codec_auto, bool is_flv, bool *low_power, gsr_supported_video_codecs *supported_video_codecs) {
+static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, bool is_flv, bool *low_power, gsr_supported_video_codecs *supported_video_codecs) {
     // TODO: software encoder for hevc, av1, vp8 and vp9
     *low_power = false;
-    const AVCodec *video_codec_f = get_av_codec_if_supported(*video_codec, egl, use_software_video_encoder, supported_video_codecs);
+    const AVCodec *video_codec_f = get_av_codec_if_supported(args_parser->video_codec, egl, args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU, supported_video_codecs);
 
-    if(!video_codec_auto && !video_codec_f && !is_flv) {
-        switch(*video_codec) {
+    if(!video_codec_f && !is_flv && args_parser->video_encoder != GSR_VIDEO_ENCODER_HW_CPU) {
+        switch(args_parser->video_codec) {
             case GSR_VIDEO_CODEC_H264: {
                 fprintf(stderr, "gsr warning: selected video codec h264 is not supported, trying hevc instead\n");
-                *video_codec = GSR_VIDEO_CODEC_HEVC;
-                if(supported_video_codecs->hevc.supported)
-                    video_codec_f = get_ffmpeg_video_codec(*video_codec, egl->gpu_info.vendor);
+                args_parser->video_codec = GSR_VIDEO_CODEC_HEVC;
                 break;
             }
             case GSR_VIDEO_CODEC_HEVC:
             case GSR_VIDEO_CODEC_HEVC_HDR:
             case GSR_VIDEO_CODEC_HEVC_10BIT: {
                 fprintf(stderr, "gsr warning: selected video codec hevc is not supported, trying h264 instead\n");
-                *video_codec = GSR_VIDEO_CODEC_H264;
-                if(supported_video_codecs->h264.supported)
-                    video_codec_f = get_ffmpeg_video_codec(*video_codec, egl->gpu_info.vendor);
+                args_parser->video_codec = GSR_VIDEO_CODEC_H264;
                 break;
             }
             case GSR_VIDEO_CODEC_AV1:
             case GSR_VIDEO_CODEC_AV1_HDR:
             case GSR_VIDEO_CODEC_AV1_10BIT: {
                 fprintf(stderr, "gsr warning: selected video codec av1 is not supported, trying h264 instead\n");
-                *video_codec = GSR_VIDEO_CODEC_H264;
-                if(supported_video_codecs->h264.supported)
-                    video_codec_f = get_ffmpeg_video_codec(*video_codec, egl->gpu_info.vendor);
+                args_parser->video_codec = GSR_VIDEO_CODEC_H264;
                 break;
             }
             case GSR_VIDEO_CODEC_VP8:
@@ -2761,39 +2776,37 @@ static const AVCodec* pick_video_codec(gsr_video_codec *video_codec, gsr_egl *eg
                 break;
             case GSR_VIDEO_CODEC_H264_VULKAN: {
                 fprintf(stderr, "gsr warning: selected video codec h264_vulkan is not supported, trying h264 instead\n");
-                *video_codec = GSR_VIDEO_CODEC_H264;
+                args_parser->video_codec = GSR_VIDEO_CODEC_H264;
                 // Need to do a query again because this time it's without vulkan
-                if(!get_supported_video_codecs(egl, *video_codec, use_software_video_encoder, true, supported_video_codecs)) {
+                if(!get_supported_video_codecs_with_cpu_fallback(egl, args_parser, true, supported_video_codecs)) {
                     fprintf(stderr, "gsr error: failed to query for supported video codecs\n");
-                    print_codec_error(*video_codec);
+                    print_codec_error(args_parser->video_codec);
                     _exit(11);
                 }
-                if(supported_video_codecs->h264.supported)
-                    video_codec_f = get_ffmpeg_video_codec(*video_codec, egl->gpu_info.vendor);
                 break;
             }
             case GSR_VIDEO_CODEC_HEVC_VULKAN: {
                 fprintf(stderr, "gsr warning: selected video codec hevc_vulkan is not supported, trying hevc instead\n");
-                *video_codec = GSR_VIDEO_CODEC_HEVC;
+                args_parser->video_codec = GSR_VIDEO_CODEC_HEVC;
                 // Need to do a query again because this time it's without vulkan
-                if(!get_supported_video_codecs(egl, *video_codec, use_software_video_encoder, true, supported_video_codecs)) {
+                if(!get_supported_video_codecs_with_cpu_fallback(egl, args_parser, true, supported_video_codecs)) {
                     fprintf(stderr, "gsr error: failed to query for supported video codecs\n");
-                    print_codec_error(*video_codec);
+                    print_codec_error(args_parser->video_codec);
                     _exit(11);
                 }
-                if(supported_video_codecs->hevc.supported)
-                    video_codec_f = get_ffmpeg_video_codec(*video_codec, egl->gpu_info.vendor);
                 break;
             }
         }
+
+        video_codec_f = get_av_codec_if_supported(args_parser->video_codec, egl, args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU, supported_video_codecs);
     }
 
     if(!video_codec_f) {
-        print_codec_error(*video_codec);
+        print_codec_error(args_parser->video_codec);
         _exit(54);
     }
 
-    *low_power = video_codec_only_supports_low_power_mode(*supported_video_codecs, *video_codec);
+    *low_power = video_codec_only_supports_low_power_mode(*supported_video_codecs, args_parser->video_codec);
 
     return video_codec_f;
 }
@@ -2819,26 +2832,33 @@ static gsr_video_codec select_appropriate_video_codec_automatically(gsr_capture_
     }
 }
 
-static const AVCodec* select_video_codec_with_fallback(gsr_capture_metadata capture_metadata, gsr_video_codec *video_codec, const char *file_extension, bool use_software_video_encoder, gsr_egl *egl, bool *low_power) {
+static const AVCodec* select_video_codec_with_fallback(gsr_capture_metadata capture_metadata, args_parser *args_parser, const char *file_extension, gsr_egl *egl, bool *low_power) {
     gsr_supported_video_codecs supported_video_codecs;
-    if(!get_supported_video_codecs(egl, *video_codec, use_software_video_encoder, true, &supported_video_codecs)) {
+    if(!get_supported_video_codecs_with_cpu_fallback(egl, args_parser, true, &supported_video_codecs)) {
         fprintf(stderr, "gsr error: failed to query for supported video codecs\n");
-        print_codec_error(*video_codec);
+        print_codec_error(args_parser->video_codec);
         _exit(11);
     }
-    set_supported_video_codecs_ffmpeg(&supported_video_codecs, nullptr, egl->gpu_info.vendor);
 
-    const bool video_codec_auto = *video_codec == (gsr_video_codec)GSR_VIDEO_CODEC_AUTO;
+    if(args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU && args_parser->video_codec != (gsr_video_codec)GSR_VIDEO_CODEC_AUTO && args_parser->video_codec != GSR_VIDEO_CODEC_H264) {
+        fprintf(stderr, "gsr warning: cpu encoding is used but video codec isn't set to h264. Forcing video codec to h264\n");
+        args_parser->video_codec = GSR_VIDEO_CODEC_H264;
+    }
+
+    if(args_parser->video_encoder != GSR_VIDEO_ENCODER_HW_CPU)
+        set_supported_video_codecs_ffmpeg(&supported_video_codecs, nullptr, egl->gpu_info.vendor);
+
+    const bool video_codec_auto = args_parser->video_codec == (gsr_video_codec)GSR_VIDEO_CODEC_AUTO;
     if(video_codec_auto) {
         if(strcmp(file_extension, "webm") == 0) {
             fprintf(stderr, "gsr info: using vp8 encoder because a codec was not specified and the file extension is .webm\n");
-            *video_codec = GSR_VIDEO_CODEC_VP8;
-        } else if(use_software_video_encoder) {
+            args_parser->video_codec = GSR_VIDEO_CODEC_VP8;
+        } else if(args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU) {
             fprintf(stderr, "gsr info: using h264 encoder because a codec was not specified\n");
-            *video_codec = GSR_VIDEO_CODEC_H264;
+            args_parser->video_codec = GSR_VIDEO_CODEC_H264;
         } else {
-            *video_codec = select_appropriate_video_codec_automatically(capture_metadata, &supported_video_codecs);
-            if(*video_codec == (gsr_video_codec)-1) {
+            args_parser->video_codec = select_appropriate_video_codec_automatically(capture_metadata, &supported_video_codecs);
+            if(args_parser->video_codec == (gsr_video_codec)-1) {
                 fprintf(stderr, "gsr error: no video encoder was specified and neither h264, hevc nor av1 are supported on your system or you are trying to capture at a resolution higher than your system supports for each codec\n");
                 _exit(52);
             }
@@ -2848,8 +2868,8 @@ static const AVCodec* select_video_codec_with_fallback(gsr_capture_metadata capt
     // TODO: Allow hevc, vp9 and av1 in (enhanced) flv (supported since ffmpeg 6.1)
     const bool is_flv = strcmp(file_extension, "flv") == 0;
     if(is_flv) {
-        if(*video_codec != GSR_VIDEO_CODEC_H264) {
-            *video_codec = GSR_VIDEO_CODEC_H264;
+        if(args_parser->video_codec != GSR_VIDEO_CODEC_H264) {
+            args_parser->video_codec = GSR_VIDEO_CODEC_H264;
             fprintf(stderr, "gsr warning: hevc/av1 is not compatible with flv, falling back to h264 instead.\n");
         }
 
@@ -2862,8 +2882,8 @@ static const AVCodec* select_video_codec_with_fallback(gsr_capture_metadata capt
 
     const bool is_hls = strcmp(file_extension, "m3u8") == 0;
     if(is_hls) {
-        if(video_codec_is_av1(*video_codec)) {
-            *video_codec = GSR_VIDEO_CODEC_HEVC;
+        if(video_codec_is_av1(args_parser->video_codec)) {
+            args_parser->video_codec = GSR_VIDEO_CODEC_HEVC;
             fprintf(stderr, "gsr warning: av1 is not compatible with hls (m3u8), falling back to hevc instead.\n");
         }
 
@@ -2874,18 +2894,12 @@ static const AVCodec* select_video_codec_with_fallback(gsr_capture_metadata capt
         // }
     }
 
-    if(use_software_video_encoder && *video_codec != GSR_VIDEO_CODEC_H264) {
-        fprintf(stderr, "gsr error: \"-encoder cpu\" option is currently only available when using h264 codec option (-k)\n");
-        args_parser_print_usage();
-        _exit(1);
-    }
+    const AVCodec *codec = pick_video_codec(egl, args_parser, is_flv, low_power, &supported_video_codecs);
 
-    const AVCodec *codec = pick_video_codec(video_codec, egl, use_software_video_encoder, video_codec_auto, is_flv, low_power, &supported_video_codecs);
-
-    const vec2i codec_max_resolution = codec_get_max_resolution(*video_codec, use_software_video_encoder, &supported_video_codecs);
+    const vec2i codec_max_resolution = codec_get_max_resolution(args_parser->video_codec, args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU, &supported_video_codecs);
     const vec2i capture_size = {capture_metadata.width, capture_metadata.height};
     if(!codec_supports_resolution(codec_max_resolution, capture_size)) {
-        const char *video_codec_name = video_codec_to_string(*video_codec);
+        const char *video_codec_name = video_codec_to_string(args_parser->video_codec);
         fprintf(stderr, "gsr error: The max resolution for video codec %s is %dx%d while you are trying to capture at resolution %dx%d. Change capture resolution or video codec and try again\n",
             video_codec_name, codec_max_resolution.x, codec_max_resolution.y, capture_size.x, capture_size.y);
         _exit(53);
@@ -3292,7 +3306,7 @@ int main(int argc, char **argv) {
     std::vector<AudioTrack> audio_tracks;
 
     bool low_power = false;
-    const AVCodec *video_codec_f = select_video_codec_with_fallback(capture_metadata, &arg_parser.video_codec, file_extension.c_str(), arg_parser.video_encoder == GSR_VIDEO_ENCODER_HW_CPU, &egl, &low_power);
+    const AVCodec *video_codec_f = select_video_codec_with_fallback(capture_metadata, &arg_parser, file_extension.c_str(), &egl, &low_power);
 
     const enum AVPixelFormat video_pix_fmt = get_pixel_format(arg_parser.video_codec, egl.gpu_info.vendor, arg_parser.video_encoder == GSR_VIDEO_ENCODER_HW_CPU);
     AVCodecContext *video_codec_context = create_video_codec_context(video_pix_fmt, video_codec_f, egl, arg_parser, capture_metadata.width, capture_metadata.height);

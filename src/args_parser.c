@@ -195,7 +195,7 @@ static void usage_header() {
            "[-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] "
            "[-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-p <plugin_path>] "
            "[-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] "
-           "[-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] [--list-application-audio] "
+           "[-fallback-cpu-encoding yes|no] [-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] [--list-application-audio] "
            "[-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
@@ -342,6 +342,12 @@ static void usage_full() {
     printf("        Which device should be used for video encoding. Should either be 'gpu' or 'cpu'. 'cpu' option currently only work with h264 codec option (-k).\n");
     printf("        Optional, set to 'gpu' by default.\n");
     printf("\n");
+    printf("  -fallback-cpu-encoding\n");
+    printf("        If this is set to 'yes' and GPU encoding is not available on the system then CPU encoding will be used instead. Optional, set to 'no' by default.\n");
+    printf("        If the fallback to CPU encoding happens then h264 codec will forcefully be used.\n");
+    printf("        This should ideally not be used. Instead properly install vaapi on your system to encode the video with your GPU.\n");
+    printf("        Some very old GPUs dont support video encoding in which case this option may be used.\n");
+    printf("\n");
     printf("  --info\n");
     printf("        List info about the system. Lists the following information (prints them to stdout and exits):\n");
     printf("        Supported video codecs (h264, h264_software, hevc, hevc_hdr, hevc_10bit, av1, av1_hdr, av1_10bit, vp8, vp9) and image codecs (jpeg, png) (if supported).\n");
@@ -470,6 +476,7 @@ static bool args_parser_set_values(args_parser *self) {
     self->restore_portal_session = args_get_boolean_by_key(self->args, NUM_ARGS, "-restore-portal-session", false);
     self->restart_replay_on_save = args_get_boolean_by_key(self->args, NUM_ARGS, "-restart-replay-on-save", false);
     self->overclock = args_get_boolean_by_key(self->args, NUM_ARGS, "-oc", false);
+    self->fallback_cpu_encoding = args_get_boolean_by_key(self->args, NUM_ARGS, "-fallback-cpu-encoding", false);
 
     self->audio_bitrate = args_get_i64_by_key(self->args, NUM_ARGS, "-ab", 0);
     self->audio_bitrate *= 1000LL;
@@ -756,6 +763,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     self->args[arg_index++] = (Arg){ .key = "-restore-portal-session",        .optional = true,  .list = false, .type = ARG_TYPE_BOOLEAN };
     self->args[arg_index++] = (Arg){ .key = "-portal-session-token-filepath", .optional = true,  .list = false, .type = ARG_TYPE_STRING  };
     self->args[arg_index++] = (Arg){ .key = "-encoder",                       .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = video_encoder_enums, .num_enum_values = sizeof(video_encoder_enums)/sizeof(ArgEnum) };
+    self->args[arg_index++] = (Arg){ .key = "-fallback-cpu-encoding",         .optional = true,  .list = false, .type = ARG_TYPE_BOOLEAN };
     self->args[arg_index++] = (Arg){ .key = "-replay-storage",                .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = replay_storage_enums, .num_enum_values = sizeof(replay_storage_enums)/sizeof(ArgEnum) };
     self->args[arg_index++] = (Arg){ .key = "-p",                             .optional = true,  .list = true,  .type = ARG_TYPE_STRING };
     assert(arg_index == NUM_ARGS);

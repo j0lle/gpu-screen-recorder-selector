@@ -8,7 +8,7 @@
 
 typedef struct gsr_egl gsr_egl;
 
-#define NUM_ARGS 31
+#define NUM_ARGS 32
 
 typedef enum {
     ARG_TYPE_STRING,
@@ -76,6 +76,7 @@ typedef struct {
     const char *recording_saved_script;
     bool verbose;
     bool gl_debug;
+    bool fallback_cpu_encoding;
     bool record_cursor;
     bool date_folders;
     bool restore_portal_session;
