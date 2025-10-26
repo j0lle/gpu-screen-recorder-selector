@@ -55,14 +55,14 @@ GPU Screen Recorder uses meson build system so you need to install `meson` to bu
 ## Build dependencies
 These are the dependencies needed to build GPU Screen Recorder:
 
-* vulkan-headers
-* ffmpeg (libavcodec, libavformat, libavutil, libswresample, libavfilter)
 * x11 (libx11, libxcomposite, libxrandr, libxfixes, libxdamage)
-* libpulse
+* wayland (wayland-client, wayland-egl, wayland-scanner)
+* ffmpeg (libavcodec, libavformat, libavutil, libswresample, libavfilter)
 * libva (and libva-drm)
+* libpulse
 * libdrm
 * libcap
-* wayland (wayland-client, wayland-egl, wayland-scanner)
+* vulkan-headers
 
 ## Optional dependencies
 When building GPU Screen Recorder with portal support (`-Dportal=true` meson option, which is enabled by default) these dependencies are also needed:
@@ -80,7 +80,7 @@ There are also additional dependencies needed at runtime depending on your GPU v
 
 ### Intel
 * mesa
-* vaapi (intel-media-driver/libva-intel-driver/linux-firmware-intel, depending on which intel iGPU you have)
+* vaapi (intel-media-driver/libva-intel-driver/linux-firmware-intel, depending on which intel GPU you have)
 
 ### NVIDIA
 * cuda runtime (libcuda.so.1) (libnvidia-compute)

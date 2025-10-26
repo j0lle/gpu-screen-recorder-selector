@@ -1651,7 +1651,12 @@ static bool get_supported_video_codecs_with_cpu_fallback(gsr_egl *egl, args_pars
             fprintf(stderr, "gsr warning: cpu encoding is used but video codec isn't set to h264. Forcing video codec to h264\n");
             args_parser->video_codec = GSR_VIDEO_CODEC_H264;
         }
+
         args_parser->video_encoder = GSR_VIDEO_ENCODER_HW_CPU;
+        if(args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU && args_parser->bitrate_mode == GSR_BITRATE_MODE_VBR) {
+            fprintf(stderr, "gsr warning: bitrate mode has been forcefully set to qp because software encoding option doesn't support vbr option\n");
+            args_parser->bitrate_mode = GSR_BITRATE_MODE_QP;
+        }
         return true;
     }
 

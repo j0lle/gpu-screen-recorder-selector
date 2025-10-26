@@ -305,7 +305,7 @@ It's possible for microphone audio to get desynced when recording together with 
 
 We can use dri2connect/dri3open to get the /dev/dri/card device. Note that this doesn't work on nvidia x11.
 
-Add support for QVBR (QP with target bitrate).
+Add support for QVBR (QP with target bitrate). Maybe use VBR instead, since nvidia doesn't support QVBR and neither does vulkan.
 
 KDE Plasma Wayland seems to use overlay planes now in non-fullscreen mode(limited to 1 overlay plane per gpu). Check if this is the case in the latest kde on arch linux.
     If it is, then support it in kms capture.
@@ -332,3 +332,9 @@ Add option to specify medium/high/very high/ultra for -bm cbr as well, which sho
     This should also be reflected in gsr ui.
 
 Create a manpage and move --help text there and mention the manpage command to view it (and make it work in flatpak, maybe with man <link-to-manpage-file>).
+
+Implement webcam support by using mjpeg with v4l2 and use ffmpeg mjpeg decoder.
+
+After adding rpc, making recording while in replay/streaming work differently. Start recording should take audio as an argument, to optionally specify different audio for recording than replay/stream.
+
+After adding rpc, make it possible to add/remove audio and video. The same number of audio tracks should remain, but the audio devices/app should be possible to configure. You should be able to configure the capture sources however you want.
