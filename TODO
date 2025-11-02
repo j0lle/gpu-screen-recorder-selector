@@ -338,3 +338,11 @@ Implement webcam support by using mjpeg with v4l2 and use ffmpeg mjpeg decoder.
 After adding rpc, making recording while in replay/streaming work differently. Start recording should take audio as an argument, to optionally specify different audio for recording than replay/stream.
 
 After adding rpc, make it possible to add/remove audio and video. The same number of audio tracks should remain, but the audio devices/app should be possible to configure. You should be able to configure the capture sources however you want.
+
+It takes a while to shutdown gpu screen recorder when using replay with a long replay time (when the replay buffer is for example 6gb). Maybe this has to do with cleaning up so much memory. Try if _exit(0) is faster, ignoring cleanup of anything (assuming the gpu driver is happy with that, nvidia doesn't like such things. GPU drivers are often buggy when it comes to automatic cleanup).
+
+Support desktop portal hdr capture when this gets merged: https://invent.kde.org/plasma/kwin/-/merge_requests/8293 note that it only works with pipewire >= 1.5.81. If codec is set to non-hdr codec when use desktop portal without hdr (convert to sdr, remove the code that forces non-hdr equivalent of the codec). Update gsr-gtk and gsr-ui accordingly.
+
+Add option to save screenshot as .qoi. Use that then in gsr-ui for the background for the window (capture the monitor that the ui is going to show on). Do that on cosmic and hyprland, which are unable to display things behind the fullscreen window.
+
+Support pausing recording when recording while replay/streaming.

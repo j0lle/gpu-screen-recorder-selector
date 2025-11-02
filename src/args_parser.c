@@ -594,8 +594,8 @@ static bool args_parser_set_values(args_parser *self) {
             return false;
         }
 
-        if(self->region_size.x < 0 || self->region_size.y < 0 || self->region_position.x < 0 || self->region_position.y < 0) {
-            fprintf(stderr, "gsr error: invalid value for option -region '%s', expected width, height, x and y to be greater or equal to 0\n", region_str);
+        if(self->region_size.x < 0 || self->region_size.y < 0) {
+            fprintf(stderr, "gsr error: invalid value for option -region '%s', expected width and height to be greater or equal to 0\n", region_str);
             usage();
             return false;
         }
