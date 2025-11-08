@@ -55,40 +55,6 @@ static uint32_t get_output_id_from_display_name(NVFBC_RANDR_OUTPUT_INFO *outputs
     return 0;
 }
 
-/* TODO: Test with optimus and open kernel modules */
-static bool get_driver_version(int *major, int *minor) {
-    *major = 0;
-    *minor = 0;
-
-    FILE *f = fopen("/proc/driver/nvidia/version", "rb");
-    if(!f) {
-        fprintf(stderr, "gsr warning: failed to get nvidia driver version (failed to read /proc/driver/nvidia/version)\n");
-        return false;
-    }
-
-    char buffer[2048];
-    size_t bytes_read = fread(buffer, 1, sizeof(buffer) - 1, f);
-    buffer[bytes_read] = '\0';
-
-    bool success = false;
-    const char *p = strstr(buffer, "Kernel Module");
-    if(p) {
-        p += 13;
-        int driver_major_version = 0, driver_minor_version = 0;
-        if(sscanf(p, "%d.%d", &driver_major_version, &driver_minor_version) == 2) {
-            *major = driver_major_version;
-            *minor = driver_minor_version;
-            success = true;
-        }
-    }
-
-    if(!success)
-        fprintf(stderr, "gsr warning: failed to get nvidia driver version\n");
-
-    fclose(f);
-    return success;
-}
-
 static bool version_at_least(int major, int minor, int expected_major, int expected_minor) {
     return major > expected_major || (major == expected_major && minor >= expected_minor);
 }
@@ -288,7 +254,7 @@ static int gsr_capture_nvfbc_start(gsr_capture *cap, gsr_capture_metadata *captu
     self->supports_direct_cursor = false;
     int driver_major_version = 0;
     int driver_minor_version = 0;
-    if(self->params.direct_capture && get_driver_version(&driver_major_version, &driver_minor_version)) {
+    if(self->params.direct_capture && get_nvidia_driver_version(&driver_major_version, &driver_minor_version)) {
         fprintf(stderr, "gsr info: detected nvidia version: %d.%d\n", driver_major_version, driver_minor_version);
 
         // TODO:

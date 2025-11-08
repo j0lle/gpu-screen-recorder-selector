@@ -606,3 +606,37 @@ unsigned int gl_create_texture(gsr_egl *egl, int width, int height, int internal
     egl->glBindTexture(GL_TEXTURE_2D, 0);
     return texture_id;
 }
+
+/* TODO: Test with optimus and open kernel modules */
+bool get_nvidia_driver_version(int *major, int *minor) {
+    *major = 0;
+    *minor = 0;
+
+    FILE *f = fopen("/proc/driver/nvidia/version", "rb");
+    if(!f) {
+        fprintf(stderr, "gsr warning: failed to get nvidia driver version (failed to read /proc/driver/nvidia/version)\n");
+        return false;
+    }
+
+    char buffer[2048];
+    size_t bytes_read = fread(buffer, 1, sizeof(buffer) - 1, f);
+    buffer[bytes_read] = '\0';
+
+    bool success = false;
+    const char *p = strstr(buffer, "Kernel Module");
+    if(p) {
+        p += 13;
+        int driver_major_version = 0, driver_minor_version = 0;
+        if(sscanf(p, "%d.%d", &driver_major_version, &driver_minor_version) == 2) {
+            *major = driver_major_version;
+            *minor = driver_minor_version;
+            success = true;
+        }
+    }
+
+    if(!success)
+        fprintf(stderr, "gsr warning: failed to get nvidia driver version\n");
+
+    fclose(f);
+    return success;
+}

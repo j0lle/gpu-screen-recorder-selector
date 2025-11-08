@@ -3143,6 +3143,15 @@ int main(int argc, char **argv) {
     if(!args_parser_parse(&arg_parser, argc, argv, &arg_handlers, NULL))
         _exit(1);
 
+    if(arg_parser.overclock) {
+        int driver_major_version = 0;
+        int driver_minor_version = 0;
+        if(get_nvidia_driver_version(&driver_major_version, &driver_minor_version) && (driver_major_version > 580 || (driver_major_version == 580 && driver_minor_version >= 105))) {
+            fprintf(stderr, "gsr info: overclocking was set by has been forcefully disabled since your gpu supports CUDA_DISABLE_PERF_BOOST to workaround driver issue (overclocking is not needed)\n");
+            arg_parser.overclock = false;
+        }
+    }
+
     //av_log_set_level(AV_LOG_TRACE);
 
     const Arg *audio_input_arg = args_parser_get_arg(&arg_parser, "-a");
