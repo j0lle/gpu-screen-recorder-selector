@@ -483,6 +483,12 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
     const vec2i dest_texture_size = self->params.destination_textures_size[0];
     const int texture_target = external_texture ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D;
 
+    if(rotation == GSR_ROT_90 || rotation == GSR_ROT_270) {
+        const float tmp = texture_size.x;
+        texture_size.x = texture_size.y;
+        texture_size.y = tmp;
+    }
+
     self->params.egl->glBindTexture(texture_target, texture_id);
     gsr_color_conversion_swizzle_texture_source(self, source_color);
 
@@ -501,17 +507,10 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
         (float)source_position.y / (texture_size.y == 0 ? 1.0f : (float)texture_size.y),
     };
 
-    vec2f texture_size_norm = {
+    const vec2f texture_size_norm = {
         (float)source_size.x / (texture_size.x == 0 ? 1.0f : (float)texture_size.x),
         (float)source_size.y / (texture_size.y == 0 ? 1.0f : (float)texture_size.y),
     };
-
-    if(rotation == GSR_ROT_90 || rotation == GSR_ROT_270) {
-        const float ratio_x = (double)source_size.x / (double)source_size.y;
-        const float ratio_y = (double)source_size.y / (double)source_size.x;
-        texture_size_norm.x *= ratio_y;
-        texture_size_norm.y *= ratio_x;
-    }
 
     const float vertices[] = {
         -1.0f + 0.0f,               -1.0f + 0.0f + size_norm.y, texture_pos_norm.x,                       texture_pos_norm.y + texture_size_norm.y,
