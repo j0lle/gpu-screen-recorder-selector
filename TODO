@@ -346,3 +346,5 @@ Support desktop portal hdr capture when this gets merged: https://invent.kde.org
 Add option to save screenshot as .qoi. Use that then in gsr-ui for the background for the window (capture the monitor that the ui is going to show on). Do that on cosmic and hyprland, which are unable to display things behind the fullscreen window.
 
 Support pausing recording when recording while replay/streaming.
+
+Maybe use VK_VALVE_video_encode_rgb_conversion with vulkan encoding for shader-less rgb to yuv conversion. That would allow screen capture with no gpu processing.

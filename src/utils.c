@@ -148,6 +148,8 @@ int get_connector_type_by_name(const char *name) {
         return 3;
     else if(len >= 4 && strncmp(name, "eDP-", 4) == 0)
         return 4;
+    else if(len >= 4 && strncmp(name, "DVI-", 4) == 0)
+        return 5;
     else
         return -1;
 }
