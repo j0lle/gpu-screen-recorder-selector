@@ -363,7 +363,7 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *cap
     gsr_color_conversion_draw(color_conversion, self->setup_params.dwTextures[grab_params.dwTextureIndex],
         target_pos, (vec2i){output_size.x, output_size.y},
         self->params.region_position, frame_size, original_frame_size,
-        GSR_ROT_0, GSR_SOURCE_COLOR_BGR, false, false);
+        GSR_ROT_0, GSR_SOURCE_COLOR_BGR, false);
 
     //self->params.egl->glFlush();
     //self->params.egl->glFinish();

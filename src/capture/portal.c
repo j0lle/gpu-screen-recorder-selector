@@ -373,7 +373,7 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
     gsr_color_conversion_draw(color_conversion, self->pipewire_data.using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
        target_pos, output_size,
        (vec2i){self->pipewire_data.region.x, self->pipewire_data.region.y}, (vec2i){self->pipewire_data.region.width, self->pipewire_data.region.height}, actual_texture_size,
-       gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), GSR_SOURCE_COLOR_RGB, self->pipewire_data.using_external_image, fourcc_alpha);
+       gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), GSR_SOURCE_COLOR_RGB, self->pipewire_data.using_external_image);
 
     if(self->params.record_cursor && self->texture_map.cursor_texture_id > 0 && self->pipewire_data.cursor_region.width > 0) {
         const vec2d scale = {
@@ -394,7 +394,7 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
             (vec2i){0, 0},
             (vec2i){self->pipewire_data.cursor_region.width, self->pipewire_data.cursor_region.height},
             (vec2i){self->pipewire_data.cursor_region.width, self->pipewire_data.cursor_region.height},
-            gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), GSR_SOURCE_COLOR_RGB, false, true);
+            gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), GSR_SOURCE_COLOR_RGB, false);
         self->params.egl->glDisable(GL_SCISSOR_TEST);
     }
 

@@ -39,10 +39,6 @@
                             "                           0.060118,  0.429412, -0.038049, 0.000000,\n" \
                             "                           0.062745,  0.500000,  0.500000, 1.000000);\n"
 
-static int max_int(int a, int b) {
-    return a > b ? a : b;
-}
-
 static const char* color_format_range_get_transform_matrix(gsr_destination_color color_format, gsr_color_range color_range) {
     switch(color_format) {
         case GSR_DESTINATION_COLOR_NV12: {
@@ -573,7 +569,7 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
     self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i source_pos, vec2i source_size, vec2i texture_size, gsr_rotation rotation, gsr_source_color source_color, bool external_texture, bool alpha_blending) {
+void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i source_pos, vec2i source_size, vec2i texture_size, gsr_rotation rotation, gsr_source_color source_color, bool external_texture) {
     assert(!external_texture || self->params.load_external_image_shader);
     if(external_texture && !self->params.load_external_image_shader) {
         fprintf(stderr, "gsr error: gsr_color_conversion_draw: external texture not loaded\n");

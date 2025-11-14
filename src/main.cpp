@@ -3821,7 +3821,7 @@ int main(int argc, char **argv) {
                 gsr_color_conversion_draw(&color_conversion, plugins.texture,
                     {0, 0}, {capture_metadata.width, capture_metadata.height},
                     {0, 0}, {capture_metadata.width, capture_metadata.height},
-                    {capture_metadata.width, capture_metadata.height}, GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false, true);
+                    {capture_metadata.width, capture_metadata.height}, GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false);
             }
 
             if(capture_has_synchronous_task) {
