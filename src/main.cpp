@@ -2310,7 +2310,7 @@ static int video_quality_to_image_quality_value(gsr_video_quality video_quality)
         case GSR_VIDEO_QUALITY_HIGH:
             return 85;
         case GSR_VIDEO_QUALITY_VERY_HIGH:
-            return 91;
+            return 91; // Quality above 90 makes the jpeg image encoder (stb_image_writer) use yuv444 instead of yuv420, which greatly improves small colored text quality on dark background
         case GSR_VIDEO_QUALITY_ULTRA:
             return 97;
     }
