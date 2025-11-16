@@ -1268,6 +1268,11 @@ static RecordingStartAudio* get_recording_start_item_by_stream_index(RecordingSt
     return nullptr;
 }
 
+struct AudioPtsOffset {
+    int64_t pts_offset = 0;
+    int stream_index = 0;
+};
+
 static void save_replay_async(AVCodecContext *video_codec_context, int video_stream_index, const std::vector<AudioTrack> &audio_tracks, gsr_replay_buffer *replay_buffer, std::string output_dir, const char *container_format, const std::string &file_extension, bool date_folders, bool hdr, gsr_capture *capture, int current_save_replay_seconds) {
     if(save_replay_thread.valid())
         return;
@@ -1279,14 +1284,15 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
         return;
     }
 
-    const gsr_replay_buffer_iterator audio_start_iterator = gsr_replay_buffer_find_keyframe(replay_buffer, video_start_iterator, video_stream_index, true);
-    // if(audio_start_index == (size_t)-1) {
-    //     fprintf(stderr, "gsr error: failed to save replay: failed to find an audio keyframe. perhaps replay was saved too fast, before anything has been recorded\n");
-    //     return;
-    // }
-
     const int64_t video_pts_offset = gsr_replay_buffer_iterator_get_packet(replay_buffer, video_start_iterator)->pts;
-    const int64_t audio_pts_offset = audio_start_iterator.packet_index == (size_t)-1 ? 0 : gsr_replay_buffer_iterator_get_packet(replay_buffer, audio_start_iterator)->pts;
+
+    std::vector<AudioPtsOffset> audio_pts_offsets;
+    audio_pts_offsets.reserve(audio_tracks.size());
+    for(const AudioTrack &audio_track : audio_tracks) {
+        const gsr_replay_buffer_iterator audio_start_iterator = gsr_replay_buffer_find_keyframe(replay_buffer, video_start_iterator, audio_track.stream_index, false);
+        const int64_t audio_pts_offset = audio_start_iterator.packet_index == (size_t)-1 ? 0 : gsr_replay_buffer_iterator_get_packet(replay_buffer, audio_start_iterator)->pts;
+        audio_pts_offsets.push_back(AudioPtsOffset{audio_pts_offset, audio_track.stream_index});
+    }
 
     gsr_replay_buffer *cloned_replay_buffer = gsr_replay_buffer_clone(replay_buffer);
     if(!cloned_replay_buffer) {
@@ -1302,7 +1308,7 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
 
     save_replay_output_filepath = std::move(output_filepath);
 
-    save_replay_thread = std::async(std::launch::async, [video_stream_index, recording_start_result, video_start_iterator, video_pts_offset, audio_pts_offset, video_codec_context, cloned_replay_buffer]() mutable {
+    save_replay_thread = std::async(std::launch::async, [video_stream_index, recording_start_result, video_start_iterator, video_pts_offset, audio_pts_offsets{std::move(audio_pts_offsets)}, video_codec_context, cloned_replay_buffer]() mutable {
         gsr_replay_buffer_iterator replay_iterator = video_start_iterator;
         for(;;) {
             AVPacket *replay_packet = gsr_replay_buffer_iterator_get_packet(cloned_replay_buffer, replay_iterator);
@@ -1350,8 +1356,10 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
                 stream = recording_start_audio->stream;
                 codec_context = audio_track->codec_context;
 
-                av_packet.pts -= audio_pts_offset;
-                av_packet.dts -= audio_pts_offset;
+                const AudioPtsOffset &audio_pts_offset = audio_pts_offsets[av_packet.stream_index - 1];
+                assert(audio_pts_offset.stream_index == av_packet.stream_index);
+                av_packet.pts -= audio_pts_offset.pts_offset;
+                av_packet.dts -= audio_pts_offset.pts_offset;
             }
 
             //av_packet.stream_index = stream->index;
@@ -3105,6 +3113,7 @@ int main(int argc, char **argv) {
     // Linux nvidia driver 580.105.08 added the environment variable CUDA_DISABLE_PERF_BOOST to disable the p2 power level issue,
     // where running cuda (which includes nvenc) causes the gpu to be forcefully set to p2 power level which on many nvidia gpus
     // decreases gpu performance in games. On my GTX 1080 it decreased game performance by 10% for absolutely no reason.
+    // TODO: This only seems to allow the gpu to go to lower power level states, but not higher than p2.
     setenv("CUDA_DISABLE_PERF_BOOST", "1", true);
     // Stop nvidia driver from buffering frames
     setenv("__GL_MaxFramesAllowed", "1", true);
