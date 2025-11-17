@@ -185,10 +185,10 @@ static uint32_t plane_get_properties(int drmfd, uint32_t plane_id, int *x, int *
             *src_y = (int)(props->prop_values[i] >> 16);
             property_mask |= PLANE_PROPERTY_SRC_Y;
         } else if((type & DRM_MODE_PROP_RANGE) && strcmp(prop->name, "SRC_W") == 0) {
-            *src_w = props->prop_values[i];
+            *src_w = (int)(props->prop_values[i] >> 16);
             property_mask |= PLANE_PROPERTY_SRC_W;
         } else if((type & DRM_MODE_PROP_RANGE) && strcmp(prop->name, "SRC_H") == 0) {
-            *src_h = props->prop_values[i];
+            *src_h = (int)(props->prop_values[i] >> 16);
             property_mask |= PLANE_PROPERTY_SRC_H;
         } else if((type & DRM_MODE_PROP_ENUM) && strcmp(prop->name, "type") == 0) {
             const uint64_t current_enum_value = props->prop_values[i];
