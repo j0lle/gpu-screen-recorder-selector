@@ -542,7 +542,7 @@ static void render_x11_cursor(gsr_capture_kms *self, gsr_color_conversion *color
 }
 
 static void gsr_capture_kms_update_capture_size_change(gsr_capture_kms *self, gsr_color_conversion *color_conversion, vec2i target_pos, const gsr_kms_response_item *drm_fd) {
-    if(target_pos.x != self->prev_target_pos.x || target_pos.y != self->prev_target_pos.y || drm_fd->crtc_w != self->prev_plane_size.x || drm_fd->crtc_h != self->prev_plane_size.y) {
+    if(target_pos.x != self->prev_target_pos.x || target_pos.y != self->prev_target_pos.y || drm_fd->src_w != self->prev_plane_size.x || drm_fd->src_h != self->prev_plane_size.y) {
         self->prev_target_pos = target_pos;
         self->prev_plane_size = self->capture_size;
         gsr_color_conversion_clear(color_conversion);
@@ -621,7 +621,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     if(drm_fd->has_hdr_metadata && self->params.hdr && hdr_metadata_is_supported_format(&drm_fd->hdr_metadata))
         gsr_kms_set_hdr_metadata(self, drm_fd);
 
-    self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->crtc_w, drm_fd->crtc_h });
+    self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
     if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
         self->capture_size = self->params.region_size;
 
@@ -665,7 +665,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
             cursor_monitor_offset.y += self->params.region_position.y;
             render_x11_cursor(self, color_conversion, cursor_monitor_offset, target_pos, output_size);
         } else if(cursor_drm_fd) {
-            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->crtc_w, drm_fd->crtc_h });
+            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
             render_drm_cursor(self, color_conversion, cursor_drm_fd, target_pos, output_size, framebuffer_size);
         }
     }

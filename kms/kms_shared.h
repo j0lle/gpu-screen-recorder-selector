@@ -59,8 +59,8 @@ struct gsr_kms_response_item {
     gsr_kms_rotation rotation;
     int x;
     int y;
-    int crtc_w;
-    int crtc_h;
+    int src_w;
+    int src_h;
     struct hdr_output_metadata hdr_metadata;
 };
 
