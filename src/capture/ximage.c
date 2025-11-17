@@ -147,14 +147,11 @@ static bool gsr_capture_ximage_upload_to_texture(gsr_capture_ximage *self, int x
     return success;
 }
 
-static int gsr_capture_ximage_capture(gsr_capture *cap, gsr_capture_metadata *capture_metdata, gsr_color_conversion *color_conversion) {
+static int gsr_capture_ximage_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     gsr_capture_ximage *self = cap->priv;
 
-    const bool is_scaled = self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0;
-    vec2i output_size = is_scaled ? self->params.output_resolution : self->capture_size;
-    output_size = scale_keep_aspect_ratio(self->capture_size, output_size);
-
-    const vec2i target_pos = { max_int(0, capture_metdata->width / 2 - output_size.x / 2), max_int(0, capture_metdata->height / 2 - output_size.y / 2) };
+    const vec2i output_size = scale_keep_aspect_ratio(self->capture_size, (vec2i){capture_metadata->width, capture_metadata->height});
+    const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
     gsr_capture_ximage_upload_to_texture(self, self->capture_pos.x + self->params.region_position.x, self->capture_pos.y + self->params.region_position.y, self->capture_size.x, self->capture_size.y);
 
     gsr_color_conversion_draw(color_conversion, self->texture_id,

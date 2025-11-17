@@ -224,7 +224,7 @@ static bool gsr_capture_xcomposite_should_stop(gsr_capture *cap, bool *err) {
     return false;
 }
 
-static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata *capture_metdata, gsr_color_conversion *color_conversion) {
+static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     gsr_capture_xcomposite *self = cap->priv;
 
     if(self->clear_background) {
@@ -232,11 +232,8 @@ static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata
         gsr_color_conversion_clear(color_conversion);
     }
 
-    const bool is_scaled = self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0;
-    vec2i output_size = is_scaled ? self->params.output_resolution : self->texture_size;
-    output_size = scale_keep_aspect_ratio(self->texture_size, output_size);
-
-    const vec2i target_pos = { max_int(0, capture_metdata->width / 2 - output_size.x / 2), max_int(0, capture_metdata->height / 2 - output_size.y / 2) };
+    const vec2i output_size = scale_keep_aspect_ratio(self->texture_size, (vec2i){capture_metadata->width, capture_metadata->height});
+    const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
 
     //self->params.egl->glFlush();
     //self->params.egl->glFinish();

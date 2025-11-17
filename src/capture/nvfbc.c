@@ -333,10 +333,7 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *cap
     if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
         frame_size = self->params.region_size;
 
-    const bool is_scaled = self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0;
-    vec2i output_size = is_scaled ? self->params.output_resolution : frame_size;
-    output_size = scale_keep_aspect_ratio(frame_size, output_size);
-
+    const vec2i output_size = scale_keep_aspect_ratio(frame_size, (vec2i){capture_metadata->width, capture_metadata->height});
     const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
 
     NVFBC_FRAME_GRAB_INFO frame_info;
