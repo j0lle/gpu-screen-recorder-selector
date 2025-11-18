@@ -104,11 +104,11 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, gsr_capture_metadata *
     self->texture_size.y = self->window_texture.window_height;
 
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
-        capture_metadata->width = self->texture_size.x;
-        capture_metadata->height = self->texture_size.y;
+        capture_metadata->video_width = self->texture_size.x;
+        capture_metadata->video_height = self->texture_size.y;
     } else {
-        capture_metadata->width = self->params.output_resolution.x;
-        capture_metadata->height = self->params.output_resolution.y;
+        capture_metadata->video_width = self->params.output_resolution.x;
+        capture_metadata->video_height = self->params.output_resolution.y;
     }
 
     self->window_resize_timer = clock_get_monotonic_seconds();
@@ -232,8 +232,8 @@ static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata
         gsr_color_conversion_clear(color_conversion);
     }
 
-    const vec2i output_size = scale_keep_aspect_ratio(self->texture_size, (vec2i){capture_metadata->width, capture_metadata->height});
-    const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
+    const vec2i output_size = scale_keep_aspect_ratio(self->texture_size, (vec2i){capture_metadata->recording_width, capture_metadata->recording_height});
+    const vec2i target_pos = { max_int(0, capture_metadata->video_width / 2 - output_size.x / 2), max_int(0, capture_metadata->video_height / 2 - output_size.y / 2) };
 
     //self->params.egl->glFlush();
     //self->params.egl->glFinish();

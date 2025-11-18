@@ -293,12 +293,12 @@ static int gsr_capture_portal_start(gsr_capture *cap, gsr_capture_metadata *capt
     }
 
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
-        capture_metadata->width = self->capture_size.x;
-        capture_metadata->height = self->capture_size.y;
+        capture_metadata->video_width = self->capture_size.x;
+        capture_metadata->video_height = self->capture_size.y;
     } else {
         self->params.output_resolution = scale_keep_aspect_ratio(self->capture_size, self->params.output_resolution);
-        capture_metadata->width = self->params.output_resolution.x;
-        capture_metadata->height = self->params.output_resolution.y;
+        capture_metadata->video_width = self->params.output_resolution.x;
+        capture_metadata->video_height = self->params.output_resolution.y;
     }
 
     return 0;
@@ -353,8 +353,8 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
         }
     }
 
-    const vec2i output_size = scale_keep_aspect_ratio(self->capture_size, (vec2i){capture_metadata->width, capture_metadata->height});
-    const vec2i target_pos = { max_int(0, capture_metadata->width / 2 - output_size.x / 2), max_int(0, capture_metadata->height / 2 - output_size.y / 2) };
+    const vec2i output_size = scale_keep_aspect_ratio(self->capture_size, (vec2i){capture_metadata->recording_width, capture_metadata->recording_height});
+    const vec2i target_pos = { max_int(0, capture_metadata->video_width / 2 - output_size.x / 2), max_int(0, capture_metadata->video_height / 2 - output_size.y / 2) };
 
     const vec2i actual_texture_size = {self->pipewire_data.texture_width, self->pipewire_data.texture_height};
 

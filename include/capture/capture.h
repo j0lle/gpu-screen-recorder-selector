@@ -14,13 +14,17 @@ typedef struct AVContentLightMetadata AVContentLightMetadata;
 typedef struct gsr_capture gsr_capture;
 
 typedef struct {
-    int width;
-    int height;
+    // Width and height of the video
+    int video_width;
+    int video_height;
+    // Width and height of the frame at the start of capture, the target size
+    int recording_width;
+    int recording_height;
     int fps;
 } gsr_capture_metadata;
 
 struct gsr_capture {
-    /* These methods should not be called manually. Call gsr_capture_* instead. |capture_metadata->width| and |capture_metadata->height| should be set by this function */
+    /* These methods should not be called manually. Call gsr_capture_* instead. |capture_metadata->video_width| and |capture_metadata->video_height| should be set by this function */
     int (*start)(gsr_capture *cap, gsr_capture_metadata *capture_metadata);
     void (*on_event)(gsr_capture *cap, gsr_egl *egl); /* can be NULL */
     void (*tick)(gsr_capture *cap); /* can be NULL. If there is an event then |on_event| is called before this */

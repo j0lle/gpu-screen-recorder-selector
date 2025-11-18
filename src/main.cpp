@@ -2326,8 +2326,10 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_ima
     gsr_capture *capture = create_capture_impl(arg_parser, egl, prefer_ximage);
 
     gsr_capture_metadata capture_metadata;
-    capture_metadata.width = 0;
-    capture_metadata.height = 0;
+    capture_metadata.video_width = 0;
+    capture_metadata.video_height = 0;
+    capture_metadata.recording_width = 0;
+    capture_metadata.recording_height = 0;
     capture_metadata.fps = fps;
 
     int capture_result = gsr_capture_start(capture, &capture_metadata);
@@ -2336,8 +2338,11 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_ima
         _exit(capture_result);
     }
 
+    capture_metadata.recording_width = capture_metadata.video_width;
+    capture_metadata.recording_height = capture_metadata.video_height;
+
     gsr_image_writer image_writer;
-    if(!gsr_image_writer_init_opengl(&image_writer, egl, capture_metadata.width, capture_metadata.height)) {
+    if(!gsr_image_writer_init_opengl(&image_writer, egl, capture_metadata.video_width, capture_metadata.video_height)) {
         fprintf(stderr, "gsr error: capture_image_to_file_wayland: gsr_image_write_gl_init failed\n");
         _exit(1);
     }
@@ -2349,7 +2354,7 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_ima
     color_conversion_params.load_external_image_shader = gsr_capture_uses_external_image(capture);
 
     color_conversion_params.destination_textures[0] = image_writer.texture;
-    color_conversion_params.destination_textures_size[0] = { capture_metadata.width, capture_metadata.height };
+    color_conversion_params.destination_textures_size[0] = { capture_metadata.video_width, capture_metadata.video_height };
     color_conversion_params.num_destination_textures = 1;
     color_conversion_params.destination_color = GSR_DESTINATION_COLOR_RGB8;
 
@@ -2826,7 +2831,7 @@ static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, b
 
 /* Returns -1 if none is available */
 static gsr_video_codec select_appropriate_video_codec_automatically(gsr_capture_metadata capture_metadata, const gsr_supported_video_codecs *supported_video_codecs) {
-    const vec2i capture_size = {capture_metadata.width, capture_metadata.height};
+    const vec2i capture_size = {capture_metadata.video_width, capture_metadata.video_height};
     if(supported_video_codecs->h264.supported && codec_supports_resolution(supported_video_codecs->h264.max_resolution, capture_size)) {
         fprintf(stderr, "gsr info: using h264 encoder because a codec was not specified\n");
         return GSR_VIDEO_CODEC_H264;
@@ -2910,7 +2915,7 @@ static const AVCodec* select_video_codec_with_fallback(gsr_capture_metadata capt
     const AVCodec *codec = pick_video_codec(egl, args_parser, is_flv, low_power, &supported_video_codecs);
 
     const vec2i codec_max_resolution = codec_get_max_resolution(args_parser->video_codec, args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU, &supported_video_codecs);
-    const vec2i capture_size = {capture_metadata.width, capture_metadata.height};
+    const vec2i capture_size = {capture_metadata.video_width, capture_metadata.video_height};
     if(!codec_supports_resolution(codec_max_resolution, capture_size)) {
         const char *video_codec_name = video_codec_to_string(args_parser->video_codec);
         fprintf(stderr, "gsr error: The max resolution for video codec %s is %dx%d while you are trying to capture at resolution %dx%d. Change capture resolution or video codec and try again\n",
@@ -3310,8 +3315,10 @@ int main(int argc, char **argv) {
     gsr_capture *capture = create_capture_impl(arg_parser, &egl, false);
     
     gsr_capture_metadata capture_metadata;
-    capture_metadata.width = 0;
-    capture_metadata.height = 0;
+    capture_metadata.video_width = 0;
+    capture_metadata.video_height = 0;
+    capture_metadata.recording_width = 0;
+    capture_metadata.recording_height = 0;
     capture_metadata.fps = arg_parser.fps;
 
     int capture_result = gsr_capture_start(capture, &capture_metadata);
@@ -3336,7 +3343,7 @@ int main(int argc, char **argv) {
     const AVCodec *video_codec_f = select_video_codec_with_fallback(capture_metadata, &arg_parser, file_extension.c_str(), &egl, &low_power);
 
     const enum AVPixelFormat video_pix_fmt = get_pixel_format(arg_parser.video_codec, egl.gpu_info.vendor, arg_parser.video_encoder == GSR_VIDEO_ENCODER_HW_CPU);
-    AVCodecContext *video_codec_context = create_video_codec_context(video_pix_fmt, video_codec_f, egl, arg_parser, capture_metadata.width, capture_metadata.height);
+    AVCodecContext *video_codec_context = create_video_codec_context(video_pix_fmt, video_codec_f, egl, arg_parser, capture_metadata.video_width, capture_metadata.video_height);
     if(!is_replaying)
         video_stream = create_stream(av_format_context, video_codec_context);
 
@@ -3346,8 +3353,8 @@ int main(int argc, char **argv) {
         _exit(1);
     }
     video_frame->format = video_codec_context->pix_fmt;
-    video_frame->width = capture_metadata.width;
-    video_frame->height = capture_metadata.height;
+    video_frame->width = capture_metadata.video_width;
+    video_frame->height = capture_metadata.video_height;
     video_frame->color_range = video_codec_context->color_range;
     video_frame->color_primaries = video_codec_context->color_primaries;
     video_frame->color_trc = video_codec_context->color_trc;
@@ -3372,9 +3379,12 @@ int main(int argc, char **argv) {
         _exit(1);
     }
 
+    capture_metadata.recording_width = capture_metadata.video_width;
+    capture_metadata.recording_height = capture_metadata.video_height;
+
     // TODO: What if this updated resolution is above max resolution?
-    capture_metadata.width = video_codec_context->width;
-    capture_metadata.height = video_codec_context->height;
+    capture_metadata.video_width = video_codec_context->width;
+    capture_metadata.video_height = video_codec_context->height;
 
     const Arg *plugin_arg = args_parser_get_arg(&arg_parser, "-p");
     assert(plugin_arg);
@@ -3387,8 +3397,8 @@ int main(int argc, char **argv) {
         assert(color_depth == GSR_COLOR_DEPTH_8_BITS || color_depth == GSR_COLOR_DEPTH_10_BITS);
 
         const gsr_plugin_init_params plugin_init_params = {
-            (unsigned int)capture_metadata.width,
-            (unsigned int)capture_metadata.height,
+            (unsigned int)capture_metadata.video_width,
+            (unsigned int)capture_metadata.video_height,
             (unsigned int)arg_parser.fps,
             color_depth == GSR_COLOR_DEPTH_8_BITS ? GSR_PLUGIN_COLOR_DEPTH_8_BITS : GSR_PLUGIN_COLOR_DEPTH_10_BITS,
             egl.context_type == GSR_GL_CONTEXT_TYPE_GLX ? GSR_PLUGIN_GRAPHICS_API_GLX : GSR_PLUGIN_GRAPHICS_API_EGL_ES,
@@ -3828,9 +3838,9 @@ int main(int argc, char **argv) {
             if(plugins.num_plugins > 0) {
                 gsr_plugins_draw(&plugins);
                 gsr_color_conversion_draw(&color_conversion, plugins.texture,
-                    {0, 0}, {capture_metadata.width, capture_metadata.height},
-                    {0, 0}, {capture_metadata.width, capture_metadata.height},
-                    {capture_metadata.width, capture_metadata.height}, GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false);
+                    {0, 0}, {capture_metadata.video_width, capture_metadata.video_height},
+                    {0, 0}, {capture_metadata.video_width, capture_metadata.video_height},
+                    {capture_metadata.video_width, capture_metadata.video_height}, GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false);
             }
 
             if(capture_has_synchronous_task) {

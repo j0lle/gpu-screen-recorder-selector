@@ -245,8 +245,8 @@ static bool gsr_video_encoder_vaapi_start(gsr_video_encoder *encoder, AVCodecCon
             video_codec_context->width = FFALIGN(video_codec_context->width, 2);
             video_codec_context->height = FFALIGN(video_codec_context->height, 2);
         } else {
-            video_codec_context->width = FFALIGN(video_codec_context->width, 64);
-            video_codec_context->height = FFALIGN(video_codec_context->height, 16);
+            video_codec_context->width = FFALIGN(video_codec_context->width, 256);
+            video_codec_context->height = FFALIGN(video_codec_context->height, 256);
         }
     } else if(self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_AMD && video_codec_context->codec_id == AV_CODEC_ID_AV1) {
         // TODO: Dont do this for VCN 5 and forward which should fix this hardware bug
