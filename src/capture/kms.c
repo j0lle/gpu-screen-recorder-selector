@@ -646,7 +646,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     }
 
     const gsr_monitor_rotation plane_rotation = kms_rotation_to_gsr_monitor_rotation(drm_fd->rotation);
-    const gsr_monitor_rotation rotation = sub_rotations(self->monitor_rotation, plane_rotation);
+    const gsr_monitor_rotation rotation = capture_is_combined_plane ? GSR_MONITOR_ROT_0 : sub_rotations(self->monitor_rotation, plane_rotation);
 
     gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
         target_pos, output_size,
