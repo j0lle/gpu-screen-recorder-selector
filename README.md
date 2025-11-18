@@ -103,7 +103,7 @@ You can see a list of capture options to record if you run `gpu-screen-recorder 
 in this case you could record a window or a monitor with the name `DP-1`.\
 To list available audio devices that you can use you can run `gpu-screen-recorder --list-audio-devices` and the name to use is on the left size of the `|`.\
 To list available audio application names that you can use you can run `gpu-screen-recorder --list-application-audio`.\
-You can run `gpu-screen-recorder --info` to list more information about the system, such as the device that used for capture and video encoding and supported codecs. These commands can be parsed by scripts/programs.
+You can run `gpu-screen-recorder --info` to list more information about the system, such as the device that is used for capture and video encoding and supported codecs. These commands can be parsed by scripts/programs.
 ## Replay mode
 Run `gpu-screen-recorder` with the `-c mp4` and `-r` option, for example: `gpu-screen-recorder -w screen -f 60 -r 30 -c mp4 -o ~/Videos`. Note that in this case, `-o` should point to a directory.\
 If `-df yes` is set, replays are save in folders based on the date.
