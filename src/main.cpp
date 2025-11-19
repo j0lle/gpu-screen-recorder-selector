@@ -2762,12 +2762,12 @@ static void print_codec_error(gsr_video_codec video_codec) {
         "  If your GPU doesn't support hardware accelerated video encoding then you can use '-encoder cpu' option to encode with your cpu instead.\n", video_codec_name, video_codec_name, video_codec_name);
 }
 
-static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, bool is_flv, bool *low_power, gsr_supported_video_codecs *supported_video_codecs) {
+static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, bool use_fallback_codec, bool *low_power, gsr_supported_video_codecs *supported_video_codecs) {
     // TODO: software encoder for hevc, av1, vp8 and vp9
     *low_power = false;
     const AVCodec *video_codec_f = get_av_codec_if_supported(args_parser->video_codec, egl, args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU, supported_video_codecs);
 
-    if(!video_codec_f && !is_flv && args_parser->video_encoder != GSR_VIDEO_ENCODER_HW_CPU) {
+    if(!video_codec_f && use_fallback_codec && args_parser->video_encoder != GSR_VIDEO_ENCODER_HW_CPU) {
         switch(args_parser->video_codec) {
             case GSR_VIDEO_CODEC_H264: {
                 fprintf(stderr, "gsr warning: selected video codec h264 is not supported, trying hevc instead\n");
@@ -2883,36 +2883,24 @@ static const AVCodec* select_video_codec_with_fallback(gsr_capture_metadata capt
         }
     }
 
+    bool use_fallback_codec = true;
+
     // TODO: Allow hevc, vp9 and av1 in (enhanced) flv (supported since ffmpeg 6.1)
-    const bool is_flv = strcmp(file_extension, "flv") == 0;
-    if(is_flv) {
+    if(LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(60, 10, 100) && strcmp(file_extension, "flv") == 0) {
         if(args_parser->video_codec != GSR_VIDEO_CODEC_H264) {
             args_parser->video_codec = GSR_VIDEO_CODEC_H264;
-            fprintf(stderr, "gsr warning: hevc/av1 is not compatible with flv, falling back to h264 instead.\n");
+            fprintf(stderr, "gsr warning: hevc/av1 is not compatible with flv in your outdated version of ffmpeg, falling back to h264 instead.\n");
+            use_fallback_codec = false;
         }
-
-        // if(audio_codec != GSR_AUDIO_CODEC_AAC) {
-        //     audio_codec_to_use = "aac";
-        //     audio_codec = GSR_AUDIO_CODEC_AAC;
-        //     fprintf(stderr, "gsr warning: flv only supports aac, falling back to aac instead.\n");
-        // }
-    }
-
-    const bool is_hls = strcmp(file_extension, "m3u8") == 0;
-    if(is_hls) {
+    } else if(strcmp(file_extension, "m3u8") == 0) {
         if(video_codec_is_av1(args_parser->video_codec)) {
             args_parser->video_codec = GSR_VIDEO_CODEC_HEVC;
             fprintf(stderr, "gsr warning: av1 is not compatible with hls (m3u8), falling back to hevc instead.\n");
+            use_fallback_codec = false;
         }
-
-        // if(audio_codec != GSR_AUDIO_CODEC_AAC) {
-        //     audio_codec_to_use = "aac";
-        //     audio_codec = GSR_AUDIO_CODEC_AAC;
-        //     fprintf(stderr, "gsr warning: hls (m3u8) only supports aac, falling back to aac instead.\n");
-        // }
     }
 
-    const AVCodec *codec = pick_video_codec(egl, args_parser, is_flv, low_power, &supported_video_codecs);
+    const AVCodec *codec = pick_video_codec(egl, args_parser, use_fallback_codec, low_power, &supported_video_codecs);
 
     const vec2i codec_max_resolution = codec_get_max_resolution(args_parser->video_codec, args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU, &supported_video_codecs);
     const vec2i capture_size = {capture_metadata.video_width, capture_metadata.video_height};
