@@ -350,3 +350,7 @@ Cursor sometimes doesn't have color when capturing region scaled (on kde plasma 
 Remove drm_monitor_get_display_server_data and do that work in the drm monitor query.
 
 In gpu screen recorder --info output codec max resolutions. This allows for better error messages in ui frontends and easier and better error handling.
+
+Set minimum fps for live stream or piping or always.
+
+Support youtube sso.

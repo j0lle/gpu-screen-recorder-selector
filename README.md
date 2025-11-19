@@ -240,3 +240,5 @@ then GPU Screen Recorder will automatically use that same GPU for recording and 
 This is a bug in kde plasma wayland. When using desktop portal capture and the monitor is rotated and a window is made fullscreen kde plasma wayland will give incorrect rotation to GPU Screen Recorder.
 This also affects other screen recording software such as obs studio.\
 Capture a monitor directly instead to workaround this issue until kde plasma devs fix it, or use another wayland compositor that doesn't have this issue.
+## System notifications get disabled when recording with desktop portal option
+Some desktop environments such as KDE Plasma turn off notifications when you record the screen with the desktop portal option. You can disable this by going into KDE Plasma settings -> search for notifications and then under "Do Not Disturb mode" untick "During screen sharing".
