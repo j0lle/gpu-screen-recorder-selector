@@ -346,3 +346,5 @@ Support pausing recording when recording while replay/streaming.
 Maybe use VK_VALVE_video_encode_rgb_conversion with vulkan encoding for shader-less rgb to yuv conversion. That would allow screen capture with no gpu processing.
 
 Cursor sometimes doesn't have color when capturing region scaled (on kde plasma wayland at least).
+
+Remove drm_monitor_get_display_server_data and do that work in the drm monitor query.

@@ -122,12 +122,12 @@ static void get_monitor_by_position_callback(const gsr_monitor *monitor, void *u
             std::swap(monitor_size.x, monitor_size.y);
     }
 
-    if(!data->output_name && data->position.x >= monitor_position.x && data->position.x <= monitor_position.x + monitor->size.x
-        && data->position.y >= monitor_position.y && data->position.y <= monitor_position.y + monitor->size.y)
+    if(!data->output_name && data->position.x >= monitor_position.x && data->position.x <= monitor_position.x + monitor_size.x
+        && data->position.y >= monitor_position.y && data->position.y <= monitor_position.y + monitor_size.y)
     {
         data->output_name = strdup(monitor->name);
         data->monitor_pos = monitor_position;
-        data->monitor_size = monitor->size;
+        data->monitor_size = monitor_size;
     }
 }
 
