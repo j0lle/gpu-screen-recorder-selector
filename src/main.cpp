@@ -1645,41 +1645,6 @@ static bool get_supported_video_codecs(gsr_egl *egl, gsr_video_codec video_codec
     return false;
 }
 
-static void force_cpu_encoding(args_parser *args_parser) {
-    args_parser->video_codec = GSR_VIDEO_CODEC_H264;
-    args_parser->video_encoder = GSR_VIDEO_ENCODER_HW_CPU;
-    if(args_parser->bitrate_mode == GSR_BITRATE_MODE_VBR) {
-        fprintf(stderr, "gsr warning: bitrate mode has been forcefully set to qp because software encoding option doesn't support vbr option\n");
-        args_parser->bitrate_mode = GSR_BITRATE_MODE_QP;
-    }
-}
-
-static bool get_supported_video_codecs_with_cpu_fallback(gsr_egl *egl, args_parser *args_parser, bool cleanup, gsr_supported_video_codecs *video_codecs) {
-    if(get_supported_video_codecs(egl, args_parser->video_codec, args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU, cleanup, video_codecs)) {
-        if(args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU || !args_parser->fallback_cpu_encoding)
-            return true;
-        else if(args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_GPU && video_codecs->h264.supported && (args_parser->video_codec == (gsr_video_codec)GSR_VIDEO_CODEC_AUTO || args_parser->video_codec == GSR_VIDEO_CODEC_H264))
-            return true;
-    }
-
-    if(args_parser->video_encoder == GSR_VIDEO_ENCODER_HW_CPU || !args_parser->fallback_cpu_encoding)
-        return false;
-
-    fprintf(stderr, "gsr warning: gpu encoding is not available on your system, trying cpu encoding instead because -fallback-cpu-encoding is enabled. Install the proper vaapi drivers on your system (if supported) if you experience performance issues\n");
-
-    if(get_supported_video_codecs(egl, GSR_VIDEO_CODEC_H264, true, cleanup, video_codecs)) {
-        if(args_parser->video_codec != (gsr_video_codec)GSR_VIDEO_CODEC_AUTO && args_parser->video_codec != GSR_VIDEO_CODEC_H264) {
-            fprintf(stderr, "gsr warning: cpu encoding is used but video codec isn't set to h264. Forcing video codec to h264\n");
-            args_parser->video_codec = GSR_VIDEO_CODEC_H264;
-        }
-
-        force_cpu_encoding(args_parser);
-        return true;
-    }
-
-    return false;
-}
-
 static void xwayland_check_callback(const gsr_monitor *monitor, void *userdata) {
     bool *xwayland_found = (bool*)userdata;
     if(monitor->name_len >= 8 && strncmp(monitor->name, "XWAYLAND", 8) == 0)
@@ -2769,6 +2734,15 @@ static void print_codec_error(gsr_video_codec video_codec) {
         "  If your GPU doesn't support hardware accelerated video encoding then you can use '-fallback-cpu-encoding yes' option to encode with your cpu instead.\n", video_codec_name, video_codec_name, video_codec_name);
 }
 
+static void force_cpu_encoding(args_parser *args_parser) {
+    args_parser->video_codec = GSR_VIDEO_CODEC_H264;
+    args_parser->video_encoder = GSR_VIDEO_ENCODER_HW_CPU;
+    if(args_parser->bitrate_mode == GSR_BITRATE_MODE_VBR) {
+        fprintf(stderr, "gsr warning: bitrate mode has been forcefully set to qp because software encoding option doesn't support vbr option\n");
+        args_parser->bitrate_mode = GSR_BITRATE_MODE_QP;
+    }
+}
+
 static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, bool use_fallback_codec, bool *low_power, gsr_supported_video_codecs *supported_video_codecs) {
     // TODO: software encoder for hevc, av1, vp8 and vp9
     *low_power = false;
@@ -2806,7 +2780,7 @@ static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, b
                 fprintf(stderr, "gsr warning: selected video codec h264_vulkan is not supported, trying h264 instead\n");
                 args_parser->video_codec = GSR_VIDEO_CODEC_H264;
                 // Need to do a query again because this time it's without vulkan
-                if(!get_supported_video_codecs_with_cpu_fallback(egl, args_parser, true, supported_video_codecs)) {
+                if(!get_supported_video_codecs(egl, args_parser->video_codec, false, true, supported_video_codecs)) {
                     fprintf(stderr, "gsr error: failed to query for supported video codecs\n");
                     print_codec_error(args_parser->video_codec);
                     _exit(11);
@@ -2817,7 +2791,7 @@ static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, b
                 fprintf(stderr, "gsr warning: selected video codec hevc_vulkan is not supported, trying hevc instead\n");
                 args_parser->video_codec = GSR_VIDEO_CODEC_HEVC;
                 // Need to do a query again because this time it's without vulkan
-                if(!get_supported_video_codecs_with_cpu_fallback(egl, args_parser, true, supported_video_codecs)) {
+                if(!get_supported_video_codecs(egl, args_parser->video_codec, false, true, supported_video_codecs)) {
                     fprintf(stderr, "gsr error: failed to query for supported video codecs\n");
                     print_codec_error(args_parser->video_codec);
                     _exit(11);
