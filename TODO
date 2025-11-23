@@ -195,8 +195,6 @@ Always disable prime run/dri prime and list all monitors to record from from all
 Allow flv av1 if recent ffmpeg version and streaming to youtube (and twitch?) and for custom services.
 Use explicit sync in pipewire video code: https://docs.pipewire.org/page_dma_buf.html.
 
-Support vaapi rotation. Support for it is added in mesa here: https://gitlab.freedesktop.org/mesa/mesa/-/merge_requests/32919.
-
 Replay (and recording?) fails to save properly sometimes (especially for long videos). This is noticable with mp4 files since they get corrupt and become unplayable.
     The entire video does seem to get saved (it's a large video file) and it seems to have the correct headers but it's not playable.
 
@@ -354,3 +352,7 @@ In gpu screen recorder --info output codec max resolutions. This allows for bett
 Set minimum fps for live stream or piping or always.
 
 Support youtube sso.
+
+Remove -fm content (support it but remove it from documentation and output deprecation notice when its used) and use it when using -fm vbr (which is the default option).
+    But first -fm content needs to be support on wayland as well, by checking if there is a difference between frames (checksum the frame content).
+    -fm content also needs to have a minimum fps to prevent live stream from timing out when nothing changes on the screen.
