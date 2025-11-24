@@ -736,7 +736,6 @@ void gsr_pipewire_video_deinit(gsr_pipewire_video *self) {
     self->dmabuf_num_planes = 0;
 
     self->negotiated = false;
-    self->renegotiated = false;
 
     if(self->mutex_initialized) {
         pthread_mutex_destroy(&self->mutex);
@@ -788,16 +787,15 @@ static EGLImage gsr_pipewire_video_create_egl_image_with_fallback(gsr_pipewire_v
     } else {
         image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, true);
         if(!image) {
-            if(self->renegotiated || self->format.info.raw.modifier == DRM_FORMAT_MOD_INVALID) {
+            if(self->format.info.raw.modifier == DRM_FORMAT_MOD_INVALID) {
                 fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, trying without modifiers\n");
                 self->no_modifiers_fallback = true;
                 image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
             } else {
                 fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, renegotiating with a different modifier\n");
                 self->negotiated = false;
-                self->renegotiated = true;
-                gsr_pipewire_video_remove_modifier(self, self->format.info.raw.modifier);
                 pw_thread_loop_lock(self->thread_loop);
+                gsr_pipewire_video_remove_modifier(self, self->format.info.raw.modifier);
                 pw_loop_signal_event(pw_thread_loop_get_loop(self->thread_loop), self->reneg);
                 pw_thread_loop_unlock(self->thread_loop);
             }
