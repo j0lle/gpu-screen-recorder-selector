@@ -80,6 +80,7 @@ typedef struct {
     int server_version_sync;
     bool negotiated;
     bool damaged;
+    bool has_modifier;
 
     struct {
         bool visible;

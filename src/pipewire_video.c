@@ -280,7 +280,8 @@ static void on_param_changed_cb(void *user_data, uint32_t id, const struct spa_p
          self->format.info.raw.format,
          spa_debug_type_find_name(spa_type_video_format, self->format.info.raw.format));
 
-    if(has_modifier) {
+    self->has_modifier = has_modifier;
+    if(self->has_modifier) {
         fprintf(stderr, "gsr info: pipewire:    Modifier: 0x%" PRIx64 "\n", self->format.info.raw.modifier);
     }
 
@@ -782,7 +783,7 @@ static EGLImage gsr_pipewire_video_create_egl_image_with_fallback(gsr_pipewire_v
     }
 
     EGLImage image = NULL;
-    if(self->no_modifiers_fallback) {
+    if(self->no_modifiers_fallback || !self->has_modifier) {
         image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
     } else {
         image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, true);
