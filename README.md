@@ -119,8 +119,8 @@ Streaming works the same way as recording, but the `-o` argument should be path 
 GPU Screen Recorder uses Ffmpeg so GPU Screen Recorder supports all protocols that Ffmpeg supports.\
 If you want to reduce latency one thing you can do is to use the `-keyint` option, for example `-keyint 0.5`. Lower value means lower latency at the cost of increased bitrate/decreased quality.
 ## Recording while using replay/streaming
-You can record a regular video while using replay/streaming by launching GPU Screen Recorder with the `-ro` option to specify a directory where to save the recording.\
-To start/stop (and save) recording use the SIGRTMIN signal, for example `pkill -SIGRTMIN -f gpu-screen-recorder`. The name of the video will be displayed in stdout when saving the video.\
+You can record a regular video while using replay/streaming by launching GPU Screen Recorder with the `-ro` option to specify a directory where to save the recording (for example: `gpu-screen-recorder -w screen -c mp4 -r 60 -o "$HOME/Videos/replays" -ro "$HOME/Videos/recordings"`).\
+To start/stop (and save) recording use the SIGRTMIN signal, for example `pkill -SIGRTMIN -f gpu-screen-recorder`. The path to the video will be displayed in stdout when saving the video.\
 This way of recording while using replay/streaming is more efficient than running GPU Screen Recorder multiple times since this way it only records the screen and encodes the video once.
 ## Controlling GPU Screen Recorder remotely
 To save a video in replay mode, you need to send signal SIGUSR1 to gpu screen recorder. You can do this by running `pkill -SIGUSR1 -f gpu-screen-recorder`.\
@@ -242,3 +242,7 @@ This also affects other screen recording software such as obs studio.\
 Capture a monitor directly instead to workaround this issue until kde plasma devs fix it, or use another wayland compositor that doesn't have this issue.
 ## System notifications get disabled when recording with desktop portal option
 Some desktop environments such as KDE Plasma turn off notifications when you record the screen with the desktop portal option. You can disable this by going into KDE Plasma settings -> search for notifications and then under "Do Not Disturb mode" untick "During screen sharing".
+## The recorded video lags or I get dropped frames in the video
+This is likely not an issue in the recorded video itself, but the video player you use. GPU Screen Recorder doesn't record by dropping frames. Some video players dont play videos with hardware acceleration by default,
+especially if you record with HEVC/AV1 video codec. In such cases it's recommended to play the video with mpv instead with hardware acceleration enabled (for example: `mpv --vo=gpu --hwdec=auto video.mp4`).
+Some corporate distros such as Fedora (or some Fedora based distros) also disable hardware accelerated video codecs on AMD/Intel GPUs, so you might need to install mpv (or another video player) with flathub instead, which bypasses this restriction.
