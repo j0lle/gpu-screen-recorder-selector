@@ -246,3 +246,6 @@ Some desktop environments such as KDE Plasma turn off notifications when you rec
 This is likely not an issue in the recorded video itself, but the video player you use. GPU Screen Recorder doesn't record by dropping frames. Some video players dont play videos with hardware acceleration by default,
 especially if you record with HEVC/AV1 video codec. In such cases it's recommended to play the video with mpv instead with hardware acceleration enabled (for example: `mpv --vo=gpu --hwdec=auto video.mp4`).
 Some corporate distros such as Fedora (or some Fedora based distros) also disable hardware accelerated video codecs on AMD/Intel GPUs, so you might need to install mpv (or another video player) with flathub instead, which bypasses this restriction.
+## My cursor is flickering in the recorded video
+This is likely an AMD gpu driver issue. It only happens to certain generations of AMD GPUs. On Wayland you can record with the desktop portal option (`-w portal`) to workaround this issue.
+This issue hasn't been observed on X11 yet, but if you do observe it you can either record a window (`-w $(xdotool selectwindow)`) or change your xorg config to use software cursor instead (Add `Option "SWcursor" "true"` under modesetting "Device" section in your xorg config file).

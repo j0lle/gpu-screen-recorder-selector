@@ -251,7 +251,7 @@ static void usage_full() {
     printf("        Run GPU Screen Recorder with the --list-application-audio option to list valid application names. It's possible to use an application name that is not listed in --list-application-audio,\n");
     printf("        for example when trying to record audio from an application that hasn't started yet.\n");
     printf("\n");
-    printf("  -q    Video quality. Should be either 'medium', 'high', 'very_high' or 'ultra' when using '-bm qp' or '-bm vbr' options, and '-bm qp' is the default option used.\n");
+    printf("  -q    Video/image quality. Should be either 'medium', 'high', 'very_high' or 'ultra' when using '-bm qp' or '-bm vbr' options, and '-bm qp' is the default option used.\n");
     printf("        'high' is the recommended option when live streaming or when you have a slower harddrive.\n");
     printf("        When using '-bm cbr' option then this is option is instead used to specify the video bitrate in kbps.\n");
     printf("        Optional when using '-bm qp' or '-bm vbr' options, set to 'very_high' be default.\n");
