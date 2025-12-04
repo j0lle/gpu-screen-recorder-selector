@@ -356,3 +356,8 @@ Support youtube sso.
 Remove -fm content (support it but remove it from documentation and output deprecation notice when its used) and use it when using -fm vbr (which is the default option).
     But first -fm content needs to be support on wayland as well, by checking if there is a difference between frames (checksum the frame content).
     -fm content also needs to have a minimum fps to prevent live stream from timing out when nothing changes on the screen.
+
+There is a leak in nvfbc. When a monitor is turned off and then on there will be an x11 display leak inside nvfbc. This seems to be a bug in nvfbc.
+    Right now a mitigation has been added to not try to recreate the nvfbc session if the capture target (monitor) isn't connected (predict if nvfbc session create will fail).
+    One possible reason this happens is because bExternallyManagedContext is set to true.
+    This also means that nvfbc leaks connection when destroying nvfbc, even if the monitor is connected (this is not an issue right now because exit is done, but if gsr was turned into a library it would be).

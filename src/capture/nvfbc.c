@@ -13,6 +13,7 @@
 #include <assert.h>
 
 #include <X11/Xlib.h>
+#include <X11/extensions/Xrandr.h>
 
 typedef struct {
     gsr_capture_nvfbc_params params;
@@ -302,6 +303,35 @@ static int gsr_capture_nvfbc_start(gsr_capture *cap, gsr_capture_metadata *captu
     return -1;
 }
 
+static bool gsr_capture_nvfbc_is_capture_monitor_connected(gsr_capture_nvfbc *self) {
+    Display *dpy = gsr_window_get_display(self->params.egl->window);
+    int num_monitors = 0;
+    XRRMonitorInfo *monitors = XRRGetMonitors(dpy, DefaultRootWindow(dpy), True, &num_monitors);
+    if(!monitors)
+        return false;
+
+    bool capture_monitor_connected = false;
+    if(strcmp(self->params.display_to_capture, "screen") == 0) {
+        capture_monitor_connected = num_monitors > 0;
+    } else {
+        for(int i = 0; i < num_monitors; ++i) {
+            char *monitor_name = XGetAtomName(dpy, monitors[i].name);
+            if(!monitor_name)
+                continue;
+
+            if(strcmp(monitor_name, self->params.display_to_capture) == 0) {
+                capture_monitor_connected = true;
+                XFree(monitor_name);
+                break;
+            }
+            XFree(monitor_name);
+        }
+    }
+
+    XRRFreeMonitors(monitors);
+    return capture_monitor_connected;
+}
+
 static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     gsr_capture_nvfbc *self = cap->priv;
 
@@ -310,6 +340,13 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *cap
         const double now = clock_get_monotonic_seconds();
         if(now - self->nvfbc_dead_start >= nvfbc_recreate_retry_time_seconds) {
             self->nvfbc_dead_start = now;
+            /*
+                Do not attempt to recreate the nvfbc session if the monitor isn't turned on/connected.
+                This is to predict if the nvfbc session create below will fail since if it fails it leaks an x11 display (a bug in the nvidia driver).
+            */
+            if(!gsr_capture_nvfbc_is_capture_monitor_connected(self))
+                return 0;
+
             gsr_capture_nvfbc_destroy_session_and_handle(self);
 
             if(gsr_capture_nvfbc_setup_handle(self) != 0) {
@@ -322,6 +359,7 @@ static int gsr_capture_nvfbc_capture(gsr_capture *cap, gsr_capture_metadata *cap
                 return -1;
             }
 
+            fprintf(stderr, "gsr info: gsr_capture_nvfbc_capture: recreated nvfbc session after modeset recovery\n");
             self->nvfbc_needs_recreate = false;
         } else {
             return 0;
