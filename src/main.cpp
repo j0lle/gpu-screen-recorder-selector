@@ -1416,8 +1416,12 @@ static const AudioDevice* get_audio_device_by_name(const std::vector<AudioDevice
 
 static MergedAudioInputs parse_audio_input_arg(const char *str) {
     MergedAudioInputs result;
+    result.track_name = str;
 
     split_string(str, '|', [&](const char *sub, size_t size) {
+        if(size == 0)
+            return true;
+
         AudioInput audio_input;
         audio_input.name.assign(sub, size);
 
