@@ -206,10 +206,13 @@ static pa_handle* pa_sound_device_new(const char *server,
     p->output_length = buffer_size;
     p->output_index = 0;
 
+    pa_proplist *proplist = pa_proplist_new();
+    pa_proplist_sets(proplist, PA_PROP_MEDIA_ROLE, "production");
+
     if (!(p->mainloop = pa_mainloop_new()))
         goto fail;
 
-    if (!(p->context = pa_context_new(pa_mainloop_get_api(p->mainloop), name)))
+    if (!(p->context = pa_context_new_with_proplist(pa_mainloop_get_api(p->mainloop), name, proplist)))
         goto fail;
 
     if (pa_context_connect(p->context, server, PA_CONTEXT_NOFLAGS, NULL) < 0) {
@@ -239,12 +242,14 @@ static pa_handle* pa_sound_device_new(const char *server,
     if(pa)
         pa_operation_unref(pa);
 
+    pa_proplist_free(proplist);
     return p;
 
 fail:
     if (rerror)
         *rerror = error;
     pa_sound_device_free(p);
+    pa_proplist_free(proplist);
     return NULL;
 }
 
