@@ -294,9 +294,6 @@ Disable GL_DEPTH_TEST, GL_CULL_FACE.
 
 kde plasma portal capture for screenshot doesn't work well because the portal ui is still visible when taking a screenshot because of its animation.
 
-It's possible for microphone audio to get desynced when recording together with desktop audio, when not recording app audio as well.
-    Test recording desktop audio and microphone audio together (-a "default_output|default_input") for around 30 minutes.
-
 We can use dri2connect/dri3open to get the /dev/dri/card device. Note that this doesn't work on nvidia x11.
 
 Add support for QVBR (QP with target bitrate). Maybe use VBR instead, since nvidia doesn't support QVBR and neither does vulkan.
@@ -313,10 +310,6 @@ Move region capture to an option in the color conversion instead of having the r
 Set top level window argument for portal capture. Same for gpu-screen-recorder-gtk global shortcuts.
 
 Remove unix domain socket code from kms-client/server and use socketpair directly. To make this possible always execute the kms server permission setup in flatpak, before starting recording (in gpu-screen-recorder-gtk).
-
-Application audio capture isn't good enough. It creates a sink that for some automatically gets selected as the default output device and it's visible as an output device.
-    Fix some of these issues by setting gsr-app-sink media class to "Stream/Input/Audio" and node.virtual=true.
-    However that causes pulseaudio to be unable to record from gsr-app-sink, and it ends up being stuck in pa_sound_device_handle_reconnect in the loop with pa_mainloop_iterate.
 
 Add -k best/best_hdr/best_10bit option, to automatically choose the best codec (prefer av1, then hevc and then h264. For webm files choose vp9 and then vp8).
 

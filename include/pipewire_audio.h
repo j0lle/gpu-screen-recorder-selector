@@ -94,17 +94,11 @@ typedef struct {
     size_t num_requested_links;
     size_t requested_links_capacity_items;
 
-    struct pw_proxy **virtual_sink_proxies;
-    size_t num_virtual_sink_proxies;
-    size_t virtual_sink_proxies_capacity_items;
-
     bool running;
 } gsr_pipewire_audio;
 
 bool gsr_pipewire_audio_init(gsr_pipewire_audio *self);
 void gsr_pipewire_audio_deinit(gsr_pipewire_audio *self);
-
-bool gsr_pipewire_audio_create_virtual_sink(gsr_pipewire_audio *self, const char *name);
 
 /*
     This function links audio source outputs from applications that match the name |app_names| to the input
@@ -139,6 +133,17 @@ bool gsr_pipewire_audio_add_link_from_apps_to_sink(gsr_pipewire_audio *self, con
     |app_names| and |sink_name_input| are case-insensitive matches.
 */
 bool gsr_pipewire_audio_add_link_from_apps_to_sink_inverted(gsr_pipewire_audio *self, const char **app_names, int num_app_names, const char *sink_name_input);
+
+/*
+    This function links audio source outputs from devices that match the name |source_names| to the input
+    that matches the name |stream_name_input|.
+    If a device or a new device starts outputting audio after this function is called and the device name matches
+    then it will automatically link the audio sources.
+    |source_names| and |stream_name_input| are case-insensitive matches.
+    |source_names| can include "default_output" or "default_input" to use the default output/input
+    and it will automatically switch when the default output/input is changed in system audio settings.
+*/
+bool gsr_pipewire_audio_add_link_from_sources_to_stream(gsr_pipewire_audio *self, const char **source_names, int num_source_names, const char *stream_name_input);
 
 /*
     This function links audio source outputs from devices that match the name |source_names| to the input

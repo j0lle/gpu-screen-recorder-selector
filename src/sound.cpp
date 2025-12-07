@@ -189,7 +189,7 @@ static pa_handle* pa_sound_device_new(const char *server,
     snprintf(p->stream_name, sizeof(p->stream_name), "%s", stream_name);
 
     p->reconnect = true;
-    p->reconnect_last_tried_seconds = clock_get_monotonic_seconds() - 1000.0;
+    p->reconnect_last_tried_seconds = clock_get_monotonic_seconds() - (RECONNECT_TRY_TIMEOUT_SECONDS * 1000.0 * 2.0);
     p->default_output_device_name[0] = '\0';
     p->default_input_device_name[0] = '\0';
     p->device_type = DeviceType::STANDARD;
@@ -208,6 +208,10 @@ static pa_handle* pa_sound_device_new(const char *server,
 
     pa_proplist *proplist = pa_proplist_new();
     pa_proplist_sets(proplist, PA_PROP_MEDIA_ROLE, "production");
+    if(strcmp(device_name, "") == 0) {
+        pa_proplist_sets(proplist, "node.autoconnect", "false");
+        pa_proplist_sets(proplist, "node.dont-reconnect", "true");
+    }
 
     if (!(p->mainloop = pa_mainloop_new()))
         goto fail;
@@ -288,20 +292,6 @@ static bool pa_sound_device_handle_reconnect(pa_handle *p, char *device_name, si
         return false;
     }
 
-    for(;;) {
-        pa_stream_state_t state = pa_stream_get_state(p->stream);
-
-        if(state == PA_STREAM_READY)
-            break;
-
-        if(!PA_STREAM_IS_GOOD(state)) {
-            //pa_context_errno(p->context);
-            return false;
-        }
-
-        pa_mainloop_iterate(p->mainloop, 1, NULL);
-    }
-
     std::lock_guard<std::mutex> lock(p->reconnect_mutex);
     p->reconnect = false;
     return true;
@@ -321,6 +311,11 @@ static int pa_sound_device_read(pa_handle *p, double timeout_seconds) {
 
     if(!pa_sound_device_handle_reconnect(p, device_name, sizeof(device_name), start_time))
         goto fail;
+
+    if(pa_stream_get_state(p->stream) != PA_STREAM_READY) {
+        pa_mainloop_iterate(p->mainloop, 0, NULL);
+        goto fail;
+    }
 
     CHECK_DEAD_GOTO(p, rerror, fail);
 
@@ -415,7 +410,7 @@ static int audio_format_to_get_bytes_per_sample(AudioFormat audio_format) {
     return 2;
 }
 
-int sound_device_get_by_name(SoundDevice *device, const char *device_name, const char *description, unsigned int num_channels, unsigned int period_frame_size, AudioFormat audio_format) {
+int sound_device_get_by_name(SoundDevice *device, const char *node_name, const char *device_name, const char *description, unsigned int num_channels, unsigned int period_frame_size, AudioFormat audio_format) {
     pa_sample_spec ss;
     ss.format = audio_format_to_pulse_audio_format(audio_format);
     ss.rate = 48000;
@@ -429,7 +424,7 @@ int sound_device_get_by_name(SoundDevice *device, const char *device_name, const
     buffer_attr.maxlength = buffer_attr.fragsize;
 
     int error = 0;
-    pa_handle *handle = pa_sound_device_new(nullptr, description, device_name, description, &ss, &buffer_attr, &error);
+    pa_handle *handle = pa_sound_device_new(nullptr, node_name, device_name, description, &ss, &buffer_attr, &error);
     if(!handle) {
         fprintf(stderr, "gsr error: pa_sound_device_new() failed: %s. Audio input device %s might not be valid\n", pa_strerror(error), device_name);
         return -1;

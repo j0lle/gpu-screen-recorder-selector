@@ -2911,7 +2911,7 @@ static std::vector<AudioDeviceData> create_device_audio_inputs(const std::vector
             audio_device.sound_device.frames = 0;
         } else {
             const std::string description = "gsr-" + audio_input.name;
-            if(sound_device_get_by_name(&audio_device.sound_device, audio_input.name.c_str(), description.c_str(), num_channels, audio_codec_context->frame_size, audio_codec_context_get_audio_format(audio_codec_context)) != 0) {
+            if(sound_device_get_by_name(&audio_device.sound_device, description.c_str(), audio_input.name.c_str(), description.c_str(), num_channels, audio_codec_context->frame_size, audio_codec_context_get_audio_format(audio_codec_context)) != 0) {
                 fprintf(stderr, "gsr error: failed to get \"%s\" audio device\n", audio_input.name.c_str());
                 _exit(1);
             }
@@ -2936,17 +2936,12 @@ static AudioDeviceData create_application_audio_audio_input(const MergedAudioInp
         fprintf(stderr, "gsr error: failed to generate random string\n");
         _exit(1);
     }
+
     std::string combined_sink_name = "gsr-combined-";
     combined_sink_name.append(random_str, sizeof(random_str));
-
-    if(!gsr_pipewire_audio_create_virtual_sink(pipewire_audio, combined_sink_name.c_str())) {
-        fprintf(stderr, "gsr error: failed to create virtual sink for application audio\n");
-        _exit(1);
-    }
-
     combined_sink_name += ".monitor";
 
-    if(sound_device_get_by_name(&audio_device.sound_device, combined_sink_name.c_str(), "gpu-screen-recorder", num_channels, audio_codec_context->frame_size, audio_codec_context_get_audio_format(audio_codec_context)) != 0) {
+    if(sound_device_get_by_name(&audio_device.sound_device, combined_sink_name.c_str(), "", "gpu-screen-recorder", num_channels, audio_codec_context->frame_size, audio_codec_context_get_audio_format(audio_codec_context)) != 0) {
         fprintf(stderr, "gsr error: failed to setup audio recording to combined sink\n");
         _exit(1);
     }
@@ -2967,19 +2962,19 @@ static AudioDeviceData create_application_audio_audio_input(const MergedAudioInp
     }
 
     if(!audio_devices_sources.empty()) {
-        if(!gsr_pipewire_audio_add_link_from_sources_to_sink(pipewire_audio, audio_devices_sources.data(), audio_devices_sources.size(), combined_sink_name.c_str())) {
+        if(!gsr_pipewire_audio_add_link_from_sources_to_stream(pipewire_audio, audio_devices_sources.data(), audio_devices_sources.size(), combined_sink_name.c_str())) {
             fprintf(stderr, "gsr error: failed to add application audio link\n");
             _exit(1);
         }
     }
 
     if(app_audio_inverted) {
-        if(!gsr_pipewire_audio_add_link_from_apps_to_sink_inverted(pipewire_audio, app_names.data(), app_names.size(), combined_sink_name.c_str())) {
+        if(!gsr_pipewire_audio_add_link_from_apps_to_stream_inverted(pipewire_audio, app_names.data(), app_names.size(), combined_sink_name.c_str())) {
             fprintf(stderr, "gsr error: failed to add application audio link\n");
             _exit(1);
         }
     } else {
-        if(!gsr_pipewire_audio_add_link_from_apps_to_sink(pipewire_audio, app_names.data(), app_names.size(), combined_sink_name.c_str())) {
+        if(!gsr_pipewire_audio_add_link_from_apps_to_stream(pipewire_audio, app_names.data(), app_names.size(), combined_sink_name.c_str())) {
             fprintf(stderr, "gsr error: failed to add application audio link\n");
             _exit(1);
         }

@@ -58,6 +58,29 @@ static bool requested_link_matches_name_case_insensitive(const gsr_pipewire_audi
     return false;
 }
 
+static bool requested_link_matches_name_case_insensitive_any_type(const gsr_pipewire_audio *self, const gsr_pipewire_audio_requested_link *requested_link, const char *name) {
+    for(int i = 0; i < requested_link->num_outputs; ++i) {
+        switch(requested_link->outputs[i].type) {
+            case GSR_PIPEWIRE_AUDIO_REQUESTED_TYPE_STANDARD: {
+                if(strcasecmp(requested_link->outputs[i].name, name) == 0)
+                    return true;
+                break;
+            }
+            case GSR_PIPEWIRE_AUDIO_REQUESTED_TYPE_DEFAULT_OUTPUT: {
+                if(strcasecmp(self->default_output_device_name, name) == 0)
+                    return true;
+                break;
+            }
+            case GSR_PIPEWIRE_AUDIO_REQUESTED_TYPE_DEFAULT_INPUT: {
+                if(strcasecmp(self->default_input_device_name, name) == 0)
+                    return true;
+                break;
+            }
+        }
+    }
+    return false;
+}
+
 static bool requested_link_has_type(const gsr_pipewire_audio_requested_link *requested_link, gsr_pipewire_audio_requested_type type) {
     for(int i = 0; i < requested_link->num_outputs; ++i) {
         if(requested_link->outputs[i].type == type)
@@ -168,7 +191,7 @@ static void gsr_pipewire_audio_create_link(gsr_pipewire_audio *self, const gsr_p
         if(output_node->type != requested_link->output_type)
             continue;
 
-        const bool requested_link_matches_app = requested_link_matches_name_case_insensitive(requested_link, output_node->name);
+        const bool requested_link_matches_app = requested_link_matches_name_case_insensitive_any_type(self, requested_link, output_node->name);
         if(requested_link->inverted) {
             if(requested_link_matches_app)
                 continue;
@@ -642,20 +665,6 @@ void gsr_pipewire_audio_deinit(gsr_pipewire_audio *self) {
         pw_thread_loop_stop(self->thread_loop);
     }
 
-    for(size_t i = 0; i < self->num_virtual_sink_proxies; ++i) {
-        if(self->virtual_sink_proxies[i]) {
-            pw_proxy_destroy(self->virtual_sink_proxies[i]);
-            self->virtual_sink_proxies[i] = NULL;
-        }
-    }
-    self->num_virtual_sink_proxies = 0;
-    self->virtual_sink_proxies_capacity_items = 0;
-
-    if(self->virtual_sink_proxies) {
-        free(self->virtual_sink_proxies);
-        self->virtual_sink_proxies = NULL;
-    }
-
     if(self->metadata_proxy) {
         spa_hook_remove(&self->metadata_listener);
         spa_hook_remove(&self->metadata_proxy_listener);
@@ -733,54 +742,6 @@ void gsr_pipewire_audio_deinit(gsr_pipewire_audio *self) {
 #endif
 }
 
-static struct pw_properties* gsr_pipewire_create_null_audio_sink(const char *name) {
-    char props_str[512];
-    snprintf(props_str, sizeof(props_str),
-        "{ factory.name=support.null-audio-sink node.name=\"%s\" media.class=Audio/Sink object.linger=false audio.position=[FL FR]"
-        " monitor.channel-volumes=true monitor.passthrough=true adjust_time=0 node.description=gsr-app-sink slaves=\"\" priority.driver=1 priority.session=1 }", name);
-    struct pw_properties *props = pw_properties_new_string(props_str);
-    if(!props) {
-        fprintf(stderr, "gsr error: gsr_pipewire_create_null_audio_sink: failed to create virtual sink properties\n");
-        return NULL;
-    }
-    return props;
-}
-
-bool gsr_pipewire_audio_create_virtual_sink(gsr_pipewire_audio *self, const char *name) {
-    if(!array_ensure_capacity((void**)&self->virtual_sink_proxies, self->num_virtual_sink_proxies, &self->virtual_sink_proxies_capacity_items, sizeof(struct pw_proxy*)))
-        return false;
-
-    pw_thread_loop_lock(self->thread_loop);
-
-    struct pw_properties *virtual_sink_props = gsr_pipewire_create_null_audio_sink(name);
-    if(!virtual_sink_props) {
-        pw_thread_loop_unlock(self->thread_loop);
-        return false;
-    }
-
-    struct pw_proxy *virtual_sink_proxy = pw_core_create_object(self->core, "adapter", PW_TYPE_INTERFACE_Node, PW_VERSION_NODE, &virtual_sink_props->dict, 0);
-    // TODO:
-    // If these are done then the above needs sizeof(*self) as the last argument
-    //pw_proxy_add_object_listener(virtual_sink_proxy, &pd->object_listener, &node_events, self);
-	//pw_proxy_add_listener(virtual_sink_proxy, &pd->proxy_listener, &proxy_events, self);
-    // TODO: proxy
-    pw_properties_free(virtual_sink_props);
-    if(!virtual_sink_proxy) {
-        fprintf(stderr, "gsr error: gsr_pipewire_audio_create_virtual_sink: failed to create virtual sink\n");
-        pw_thread_loop_unlock(self->thread_loop);
-        return false;
-    }
-
-    self->server_version_sync = pw_core_sync(self->core, PW_ID_CORE, self->server_version_sync);
-    pw_thread_loop_wait(self->thread_loop);
-    pw_thread_loop_unlock(self->thread_loop);
-
-    self->virtual_sink_proxies[self->num_virtual_sink_proxies] = virtual_sink_proxy;
-    ++self->num_virtual_sink_proxies;
-
-    return true;
-}
-
 static bool string_remove_suffix(char *str, const char *suffix) {
     int str_len = strlen(str);
     int suffix_len = strlen(suffix);
@@ -834,6 +795,7 @@ static bool gsr_pipewire_audio_add_links_to_output(gsr_pipewire_audio *self, con
     self->requested_links[self->num_requested_links].inverted = inverted;
     ++self->num_requested_links;
     gsr_pipewire_audio_create_link(self, &self->requested_links[self->num_requested_links - 1]);
+    // TODO: Remove these?
     gsr_pipewire_audio_create_link_for_default_devices(self, &self->requested_links[self->num_requested_links - 1], GSR_PIPEWIRE_AUDIO_REQUESTED_TYPE_DEFAULT_OUTPUT);
     gsr_pipewire_audio_create_link_for_default_devices(self, &self->requested_links[self->num_requested_links - 1], GSR_PIPEWIRE_AUDIO_REQUESTED_TYPE_DEFAULT_INPUT);
     pw_thread_loop_unlock(self->thread_loop);
@@ -863,6 +825,10 @@ bool gsr_pipewire_audio_add_link_from_apps_to_sink(gsr_pipewire_audio *self, con
 
 bool gsr_pipewire_audio_add_link_from_apps_to_sink_inverted(gsr_pipewire_audio *self, const char **app_names, int num_app_names, const char *sink_name_input) {
     return gsr_pipewire_audio_add_links_to_output(self, app_names, num_app_names, sink_name_input, GSR_PIPEWIRE_AUDIO_NODE_TYPE_STREAM_OUTPUT, GSR_PIPEWIRE_AUDIO_LINK_INPUT_TYPE_SINK, true);
+}
+
+bool gsr_pipewire_audio_add_link_from_sources_to_stream(gsr_pipewire_audio *self, const char **source_names, int num_source_names, const char *stream_name_input) {
+    return gsr_pipewire_audio_add_links_to_output(self, source_names, num_source_names, stream_name_input, GSR_PIPEWIRE_AUDIO_NODE_TYPE_SINK_OR_SOURCE, GSR_PIPEWIRE_AUDIO_LINK_INPUT_TYPE_STREAM, false);
 }
 
 bool gsr_pipewire_audio_add_link_from_sources_to_sink(gsr_pipewire_audio *self, const char **source_names, int num_source_names, const char *sink_name_input) {
