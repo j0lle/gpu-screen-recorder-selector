@@ -3661,6 +3661,7 @@ int main(int argc, char **argv) {
                         audio_device.frame->pts += audio_track.codec_context->frame_size;
                         num_received_frames++;
                     } else {
+                        // TODO: Maybe sleep for time_to_sleep_until_next_frame/4? for better latency
                         const double time_after_read_seconds = clock_get_monotonic_seconds();
                         const double time_to_read_seconds = time_after_read_seconds - time_before_read_seconds;
                         const double time_to_sleep_until_next_frame = timeout_sec - time_to_read_seconds;
