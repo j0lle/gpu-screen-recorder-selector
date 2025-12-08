@@ -312,10 +312,9 @@ static int pa_sound_device_read(pa_handle *p, double timeout_seconds) {
     if(!pa_sound_device_handle_reconnect(p, device_name, sizeof(device_name), start_time))
         goto fail;
 
-    if(pa_stream_get_state(p->stream) != PA_STREAM_READY) {
-        pa_mainloop_iterate(p->mainloop, 0, NULL);
+    pa_mainloop_iterate(p->mainloop, 0, NULL);
+    if(pa_stream_get_state(p->stream) != PA_STREAM_READY)
         goto fail;
-    }
 
     CHECK_DEAD_GOTO(p, rerror, fail);
 

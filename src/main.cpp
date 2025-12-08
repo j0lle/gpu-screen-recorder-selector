@@ -3552,7 +3552,7 @@ int main(int argc, char **argv) {
                 while(running) {
                     void *sound_buffer;
                     int sound_buffer_size = -1;
-                    //const double time_before_read_seconds = clock_get_monotonic_seconds();
+                    const double time_before_read_seconds = clock_get_monotonic_seconds();
                     if(audio_device.sound_device.handle) {
                         // TODO: use this instead of calculating time to read. But this can fluctuate and we dont want to go back in time,
                         // also it's 0.0 for some users???
@@ -3562,8 +3562,6 @@ int main(int argc, char **argv) {
 
                     const bool got_audio_data = sound_buffer_size >= 0;
                     //fprintf(stderr, "got audio data: %s\n", got_audio_data ? "yes" : "no");
-                    //const double time_after_read_seconds = clock_get_monotonic_seconds();
-                    //const double time_to_read_seconds = time_after_read_seconds - time_before_read_seconds;
                     //fprintf(stderr, "time to read: %f, %s, %f\n", time_to_read_seconds, got_audio_data ? "yes" : "no", timeout_sec);
                     const double this_audio_frame_time = clock_get_monotonic_seconds() - paused_time_offset;
 
@@ -3632,10 +3630,9 @@ int main(int argc, char **argv) {
                         }
                     }
 
-                    if(!audio_device.sound_device.handle)
+                    if(!audio_device.sound_device.handle) {
                         av_usleep(timeout_ms * 1000);
-
-                    if(got_audio_data) {
+                    } else if(got_audio_data) {
                         // TODO: Instead of converting audio, get float audio from alsa. Or does alsa do conversion internally to get this format?
                         if(needs_audio_conversion)
                             swr_convert(swr, &audio_device.frame->data[0], audio_track.codec_context->frame_size, (const uint8_t**)&sound_buffer, audio_track.codec_context->frame_size);
@@ -3663,6 +3660,12 @@ int main(int argc, char **argv) {
 
                         audio_device.frame->pts += audio_track.codec_context->frame_size;
                         num_received_frames++;
+                    } else {
+                        const double time_after_read_seconds = clock_get_monotonic_seconds();
+                        const double time_to_read_seconds = time_after_read_seconds - time_before_read_seconds;
+                        const double time_to_sleep_until_next_frame = timeout_sec - time_to_read_seconds;
+                        if(time_to_sleep_until_next_frame > 0.0)
+                            av_usleep(time_to_sleep_until_next_frame * 1000ULL * 1000ULL);
                     }
                 }
 
