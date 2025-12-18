@@ -156,7 +156,7 @@ Note that this option is currently only available on X11, or with desktop portal
 On a system with an i5 4690k CPU and a GTX 1080 GPU:\
 When recording Legend of Zelda Breath of the Wild at 4k, fps drops from 30 to 7 when using OBS Studio + nvenc, however when using this screen recorder the fps remains at 30.\
 When recording GTA V at 4k on highest settings, fps drops from 60 to 23 when using obs-nvfbc + nvenc, however when using this screen recorder the fps only drops to 58.\
-On a system with an AMD Ryzen 9 5900X CPU and an RX 7800XT GPU I dont see any fps drop at all, even when recording at 4k 60fps with AV1 codec with 10-bit colors.\
+On a system with an AMD Ryzen 9 5900X CPU and an RX 7800XT GPU I don't see any fps drop at all, even when recording at 4k 60fps with AV1 codec with 10-bit colors.\
 GPU Screen Recorder also produces much smoother videos than OBS when GPU utilization is close to 100%, see comparison here: [https://www.youtube.com/watch?v=zfj4sNVLLLg](https://www.youtube.com/watch?v=zfj4sNVLLLg) and [https://www.youtube.com/watch?v=aK67RSZw2ZQ](https://www.youtube.com/watch?v=aK67RSZw2ZQ).\
 GPU Screen Recorder has much better performance than OBS Studio even with version 30.2 that does "zero-copy" recording and encoding, see: [https://www.youtube.com/watch?v=jdroRjibsDw](https://www.youtube.com/watch?v=jdroRjibsDw).\
 It is recommended to save the video to a SSD because of the large file size, which a slow HDD might not be fast enough to handle. Using variable framerate mode (-fm vfr) which is the default is also recommended as this reduces encoding load. Ultra quality is also overkill most of the time, very high (the default) or lower quality is usually enough.\
@@ -243,7 +243,7 @@ Capture a monitor directly instead to workaround this issue until kde plasma dev
 ## System notifications get disabled when recording with desktop portal option
 Some desktop environments such as KDE Plasma turn off notifications when you record the screen with the desktop portal option. You can disable this by going into KDE Plasma settings -> search for notifications and then under "Do Not Disturb mode" untick "During screen sharing".
 ## The recorded video lags or I get dropped frames in the video
-This is likely not an issue in the recorded video itself, but the video player you use. GPU Screen Recorder doesn't record by dropping frames. Some video players dont play videos with hardware acceleration by default,
+This is likely not an issue in the recorded video itself, but the video player you use. GPU Screen Recorder doesn't record by dropping frames. Some video players don't play videos with hardware acceleration by default,
 especially if you record with HEVC/AV1 video codec. In such cases it's recommended to play the video with mpv instead with hardware acceleration enabled (for example: `mpv --vo=gpu --hwdec=auto video.mp4`).
 Some corporate distros such as Fedora (or some Fedora based distros) also disable hardware accelerated video codecs on AMD/Intel GPUs, so you might need to install mpv (or another video player) with flathub instead, which bypasses this restriction.
 ## My cursor is flickering in the recorded video

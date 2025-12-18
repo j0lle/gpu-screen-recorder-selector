@@ -246,7 +246,7 @@ bool gsr_overclock_start(gsr_overclock *self) {
         const int transfer_rate_max_diff = query.performance_level[query.num_performance_levels - 1].mem_transfer_rate_max - query.performance_level[query.num_performance_levels - 2].mem_transfer_rate_max;
         target_transfer_rate_offset = min_int(target_transfer_rate_offset, transfer_rate_max_diff);
         if(target_transfer_rate_offset >= 0 && xnvctrl_set_attribute_offset(&self->xnvctrl, self->num_performance_levels, target_transfer_rate_offset, NVCTRL_ATTRIB_GPU_MEM_TRANSFER_RATE)) {
-            fprintf(stderr, "gsr info: gsr_overclock_start: sucessfully set memory transfer rate offset to %d\n", target_transfer_rate_offset);
+            fprintf(stderr, "gsr info: gsr_overclock_start: successfully set memory transfer rate offset to %d\n", target_transfer_rate_offset);
         } else {
             fprintf(stderr, "gsr info: gsr_overclock_start: failed to overclock memory transfer rate offset to %d\n", target_transfer_rate_offset);
         }
@@ -261,7 +261,7 @@ bool gsr_overclock_start(gsr_overclock *self) {
         const int nv_clock_max_diff = query.performance_level[query.num_performance_levels - 1].nv_clock_max - query.performance_level[query.num_performance_levels - 2].nv_clock_max;
         target_nv_clock_offset = min_int(target_nv_clock_offset, nv_clock_max_diff);
         if(target_nv_clock_offset >= 0 && xnvctrl_set_attribute_offset(&self->xnvctrl, self->num_performance_levels, target_nv_clock_offset, NVCTRL_GPU_NVCLOCK)) {
-            fprintf(stderr, "gsr info: gsr_overclock_start: sucessfully set nv clock offset to %d\n", target_nv_clock_offset);
+            fprintf(stderr, "gsr info: gsr_overclock_start: successfully set nv clock offset to %d\n", target_nv_clock_offset);
         } else {
             fprintf(stderr, "gsr info: gsr_overclock_start: failed to overclock nv clock offset to %d\n", target_nv_clock_offset);
         }
