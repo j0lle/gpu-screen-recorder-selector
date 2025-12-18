@@ -4,7 +4,7 @@
 
 #include <libavcodec/avcodec.h>
 #define VK_NO_PROTOTYPES
-#include <libavutil/hwcontext_vulkan.h>
+//#include <libavutil/hwcontext_vulkan.h>
 
 //#include <vulkan/vulkan_core.h>
 
@@ -61,7 +61,7 @@ static bool gsr_video_encoder_vulkan_setup_context(gsr_video_encoder_vulkan *sel
 #endif
     return true;
 }
-
+#if 0
 static AVVulkanDeviceContext* video_codec_context_get_vulkan_data(AVCodecContext *video_codec_context) {
     AVBufferRef *hw_frames_ctx = video_codec_context->hw_frames_ctx;
     if(!hw_frames_ctx)
@@ -92,7 +92,7 @@ static uint32_t get_memory_type_idx(VkPhysicalDevice pdev, const VkMemoryRequire
     }
     return UINT32_MAX;
 }
-
+#endif
 static bool gsr_video_encoder_vulkan_setup_textures(gsr_video_encoder_vulkan *self, AVCodecContext *video_codec_context, AVFrame *frame) {
     const int res = av_hwframe_get_buffer(video_codec_context->hw_frames_ctx, frame, 0);
     if(res < 0) {
