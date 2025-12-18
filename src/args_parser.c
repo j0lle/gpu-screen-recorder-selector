@@ -346,7 +346,7 @@ static void usage_full() {
     printf("        If this is set to 'yes' and GPU encoding is not available on the system then CPU encoding will be used instead. Optional, set to 'no' by default.\n");
     printf("        If the fallback to CPU encoding happens then h264 codec will forcefully be used.\n");
     printf("        This should ideally not be used. Instead properly install vaapi on your system to encode the video with your GPU.\n");
-    printf("        Some very old GPUs dont support video encoding in which case this option may be used.\n");
+    printf("        Some very old GPUs don't support video encoding in which case this option may be used.\n");
     printf("\n");
     printf("  --info\n");
     printf("        List info about the system. Lists the following information (prints them to stdout and exits):\n");
