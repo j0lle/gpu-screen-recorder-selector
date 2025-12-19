@@ -426,7 +426,7 @@ static AVCodecContext *create_video_codec_context(AVPixelFormat pix_fmt, const A
     if (codec_context->codec_id == AV_CODEC_ID_MPEG1VIDEO)
         codec_context->mb_decision = 2;
 
-    if(!use_software_video_encoder && arg_parser.bitrate_mode != GSR_BITRATE_MODE_CBR) {
+    if(!use_software_video_encoder && egl.gpu_info.vendor != GSR_GPU_VENDOR_NVIDIA && arg_parser.bitrate_mode != GSR_BITRATE_MODE_CBR) {
         // 8 bit / 10 bit = 80%, and increase it even more
         const float quality_multiply = hdr ? (8.0f/10.0f * 0.7f) : 1.0f;
         if(codec_context->codec_id == AV_CODEC_ID_AV1 || codec_context->codec_id == AV_CODEC_ID_H264 || codec_context->codec_id == AV_CODEC_ID_HEVC) {
