@@ -104,6 +104,9 @@ Frame rate (default: 60). For variable frame rate mode, this is maximum FPS.
 .TP
 .BI \-cursor " yes|no"
 Record cursor (default: yes).
+.TP
+.BI \-restore\-portal\-session " yes|no"
+Restore previous portal session (used with -w portal option, default: no).
 .SS Audio Options
 .TP
 .BI \-a " audio_source"
@@ -193,9 +196,6 @@ Load plugin (.so file). Can be specified multiple times.
 .TP
 .BI \-sc " script_path"
 Script to run after saving video. Receives filepath and type ("regular", "replay", "screenshot").
-.TP
-.BI \-restore\-portal\-session " yes|no"
-Restore previous portal session (Wayland portal, default: no).
 .TP
 .BI \-portal\-session\-token\-filepath " path"
 Portal session token file (default: ~/.config/gpu-screen-recorder/restore_token).

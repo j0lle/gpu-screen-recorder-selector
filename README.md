@@ -251,4 +251,5 @@ This is likely an AMD gpu driver issue. It only happens to certain generations o
 This issue hasn't been observed on X11 yet, but if you do observe it you can either record a window (`-w $(xdotool selectwindow)`) or change your xorg config to use software cursor instead (Add `Option "SWcursor" "true"` under modesetting "Device" section in your xorg config file).
 ## Password prompt shows up when I try to record my screen
 If GPU Screen Recorder is installed with -Dcapabilities=true (which is the default option) then `gsr-kms-server` is installed with admin capabilities.
-This removes a password prompt when recording a monitor with the -w monitor option (for example -w screen). However if the system has the root used disabled then the password prompt will show up anyways.
+This removes a password prompt when recording a monitor with the `-w monitor` option (for example `-w screen`). However if the root user is disabled on the system then the password prompt will show up anyways.
+If the root user is disabled on your system then you can instead record with `-w focused` or `-w window_id` on X11 or `-w portal` on Wayland.
