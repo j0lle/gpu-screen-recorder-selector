@@ -249,3 +249,6 @@ Some corporate distros such as Fedora (or some Fedora based distros) also disabl
 ## My cursor is flickering in the recorded video
 This is likely an AMD gpu driver issue. It only happens to certain generations of AMD GPUs. On Wayland you can record with the desktop portal option (`-w portal`) to workaround this issue.
 This issue hasn't been observed on X11 yet, but if you do observe it you can either record a window (`-w $(xdotool selectwindow)`) or change your xorg config to use software cursor instead (Add `Option "SWcursor" "true"` under modesetting "Device" section in your xorg config file).
+## Password prompt shows up when I try to record my screen
+If GPU Screen Recorder is installed with -Dcapabilities=true (which is the default option) then `gsr-kms-server` is installed with admin capabilities.
+This removes a password prompt when recording a monitor with the -w monitor option (for example -w screen). However if the system has the root used disabled then the password prompt will show up anyways.

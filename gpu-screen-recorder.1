@@ -55,7 +55,7 @@ Specify what to record. Valid values are:
 .RS
 .IP \(bu 3
 .B window
-- Record a specific window (use window ID, X11 only)
+- Record a specific window (use window ID) (X11 only)
 .IP \(bu 3
 .B screen
 - Record the first monitor found
@@ -64,7 +64,7 @@ Specify what to record. Valid values are:
 - NVIDIA X11 only, for VRR/G-SYNC support (not recommended due to driver issues)
 .IP \(bu 3
 .B focused
-- Record the currently focused window (X11 only)
+- Record the currently focused window (X11 only) (use with -s option)
 .IP \(bu 3
 .B portal
 - Use xdg-desktop-portal with PipeWire (Wayland only)
@@ -380,8 +380,12 @@ AMD: Possible black bars colors with HEVC/AV1 (use H264 or FFmpeg >=8)
 Project homepage
 .UE
 .br
+.UR https://git.dec05eba.com/gpu-screen-recorder/about
+Project readme, with more information
+.UE
+.br
 .UR https://git.dec05eba.com/gpu-screen-recorder-gtk
-GTK GUI version (will be removed in the future)
+GTK GUI version (deprecated)
 .UE
 .br
 .UR https://git.dec05eba.com/gpu-screen-recorder-ui
