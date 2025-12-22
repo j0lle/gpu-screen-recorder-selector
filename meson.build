@@ -115,6 +115,7 @@ executable('gsr-kms-server', 'kms/server/kms_server.c', dependencies : dependenc
 executable('gpu-screen-recorder', src, dependencies : dep, install : true)
 
 install_headers('plugin/plugin.h', install_dir : 'include/gsr')
+install_man('gpu-screen-recorder.1')
 
 if get_option('systemd') == true
     install_data(files('extra/gpu-screen-recorder.service'), install_dir : 'lib/systemd/user')
