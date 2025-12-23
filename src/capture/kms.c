@@ -3,7 +3,6 @@
 #include "../../include/color_conversion.h"
 #include "../../include/cursor.h"
 #include "../../include/window/window.h"
-#include "../../kms/client/kms_client.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -30,9 +29,6 @@ typedef struct {
 
 typedef struct {
     gsr_capture_kms_params params;
-    
-    gsr_kms_client kms_client;
-    gsr_kms_response kms_response;
 
     vec2i capture_pos;
     vec2i capture_size;
@@ -51,7 +47,6 @@ typedef struct {
     bool hdr_metadata_set;
 
     bool is_x11;
-    gsr_cursor x11_cursor;
 
     //int drm_fd;
     //uint64_t prev_sequence;
@@ -61,21 +56,12 @@ typedef struct {
     vec2i prev_plane_size;
 
     double last_time_monitor_check;
-} gsr_capture_kms;
 
-static void gsr_capture_kms_cleanup_kms_fds(gsr_capture_kms *self) {
-    for(int i = 0; i < self->kms_response.num_items; ++i) {
-        for(int j = 0; j < self->kms_response.items[i].num_dma_bufs; ++j) {
-            gsr_kms_response_dma_buf *dma_buf = &self->kms_response.items[i].dma_buf[j];
-            if(dma_buf->fd > 0) {
-                close(dma_buf->fd);
-                dma_buf->fd = -1;
-            }
-        }
-        self->kms_response.items[i].num_dma_bufs = 0;
-    }
-    self->kms_response.num_items = 0;
-}
+    bool capture_is_combined_plane;
+    gsr_kms_response_item *drm_fd;
+    vec2i output_size;
+    vec2i target_pos;
+} gsr_capture_kms;
 
 static void gsr_capture_kms_stop(gsr_capture_kms *self) {
     if(self->input_texture_id) {
@@ -97,10 +83,6 @@ static void gsr_capture_kms_stop(gsr_capture_kms *self) {
     //     close(self->drm_fd);
     //     self->drm_fd = -1;
     // }
-
-    gsr_capture_kms_cleanup_kms_fds(self);
-    gsr_kms_client_deinit(&self->kms_client);
-    gsr_cursor_deinit(&self->x11_cursor);
 }
 
 static int max_int(int a, int b) {
@@ -172,16 +154,8 @@ static int gsr_capture_kms_start(gsr_capture *cap, gsr_capture_metadata *capture
     gsr_monitor monitor;
     self->monitor_id.num_connector_ids = 0;
 
-    int kms_init_res = gsr_kms_client_init(&self->kms_client, self->params.egl->card_path);
-    if(kms_init_res != 0)
-        return kms_init_res;
-
     self->is_x11 = gsr_window_get_display_server(self->params.egl->window) == GSR_DISPLAY_SERVER_X11;
     const gsr_connection_type connection_type = self->is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
-    if(self->is_x11) {
-        Display *display = gsr_window_get_display(self->params.egl->window);
-        gsr_cursor_init(&self->x11_cursor, self->params.egl, display);
-    }
 
     MonitorCallbackUserdata monitor_callback_userdata = {
         &self->monitor_id,
@@ -209,27 +183,15 @@ static int gsr_capture_kms_start(gsr_capture *cap, gsr_capture_metadata *capture
 
     if(self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0) {
         self->params.output_resolution = scale_keep_aspect_ratio(self->capture_size, self->params.output_resolution);
-        capture_metadata->video_width = self->params.output_resolution.x;
-        capture_metadata->video_height = self->params.output_resolution.y;
+        capture_metadata->video_size = self->params.output_resolution;
     } else if(self->params.region_size.x > 0 && self->params.region_size.y > 0) {
-        capture_metadata->video_width = self->params.region_size.x;
-        capture_metadata->video_height = self->params.region_size.y;
+        capture_metadata->video_size = self->params.region_size;
     } else {
-        capture_metadata->video_width = self->capture_size.x;
-        capture_metadata->video_height = self->capture_size.y;
+        capture_metadata->video_size = self->capture_size;
     }
 
     self->last_time_monitor_check = clock_get_monotonic_seconds();
     return 0;
-}
-
-static void gsr_capture_kms_on_event(gsr_capture *cap, gsr_egl *egl) {
-    gsr_capture_kms *self = cap->priv;
-    if(!self->is_x11)
-        return;
-
-    XEvent *xev = gsr_window_get_event_data(egl->window);
-    gsr_cursor_on_event(&self->x11_cursor, xev);
 }
 
 // TODO: This is disabled for now because we want to be able to record at a framerate higher than the monitor framerate
@@ -397,14 +359,14 @@ static gsr_kms_response_item* find_monitor_drm(gsr_capture_kms *self, bool *capt
     gsr_kms_response_item *drm_fd = NULL;
 
     for(int i = 0; i < self->monitor_id.num_connector_ids; ++i) {
-        drm_fd = find_drm_by_connector_id(&self->kms_response, self->monitor_id.connector_ids[i]);
+        drm_fd = find_drm_by_connector_id(self->params.kms_response, self->monitor_id.connector_ids[i]);
         if(drm_fd)
             break;
     }
 
     // Will never happen on wayland unless the target monitor has been disconnected
     if(!drm_fd && self->is_x11) {
-        drm_fd = find_largest_drm(&self->kms_response);
+        drm_fd = find_largest_drm(self->params.kms_response);
         *capture_is_combined_plane = true;
     }
 
@@ -412,7 +374,7 @@ static gsr_kms_response_item* find_monitor_drm(gsr_capture_kms *self, bool *capt
 }
 
 static gsr_kms_response_item* find_cursor_drm_if_on_monitor(gsr_capture_kms *self, uint32_t monitor_connector_id, bool capture_is_combined_plane) {
-    gsr_kms_response_item *cursor_drm_fd = find_cursor_drm(&self->kms_response, monitor_connector_id);
+    gsr_kms_response_item *cursor_drm_fd = find_cursor_drm(self->params.kms_response, monitor_connector_id);
     if(!capture_is_combined_plane && cursor_drm_fd && cursor_drm_fd->connector_id != monitor_connector_id)
         cursor_drm_fd = NULL;
     return cursor_drm_fd;
@@ -431,7 +393,7 @@ static gsr_monitor_rotation sub_rotations(gsr_monitor_rotation rot1, gsr_monitor
     return remainder_int(rot1 - rot2, 4);
 }
 
-static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color_conversion, const gsr_kms_response_item *cursor_drm_fd, vec2i target_pos, vec2i output_size, vec2i framebuffer_size) {
+static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color_conversion, gsr_capture_metadata *capture_metadata, const gsr_kms_response_item *cursor_drm_fd, vec2i target_pos, vec2i output_size, vec2i framebuffer_size) {
     const vec2d scale = {
         self->capture_size.x == 0 ? 0 : (double)output_size.x / (double)self->capture_size.x,
         self->capture_size.y == 0 ? 0 : (double)output_size.y / (double)self->capture_size.y
@@ -508,13 +470,13 @@ static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color
     gsr_color_conversion_draw(color_conversion, self->cursor_texture_id,
         cursor_pos, (vec2i){cursor_size.x * scale.x, cursor_size.y * scale.y},
         (vec2i){0, 0}, cursor_size, cursor_size,
-        gsr_monitor_rotation_to_rotation(rotation), GSR_SOURCE_COLOR_RGB, cursor_texture_id_is_external);
+        gsr_monitor_rotation_to_rotation(rotation), capture_metadata->flip, GSR_SOURCE_COLOR_RGB, cursor_texture_id_is_external);
 
     self->params.egl->glDisable(GL_SCISSOR_TEST);
 }
 
-static void render_x11_cursor(gsr_capture_kms *self, gsr_color_conversion *color_conversion, vec2i capture_pos, vec2i target_pos, vec2i output_size) {
-    if(!self->x11_cursor.visible)
+static void render_x11_cursor(gsr_capture_kms *self, gsr_color_conversion *color_conversion, gsr_capture_metadata *capture_metadata, vec2i capture_pos, vec2i target_pos, vec2i output_size) {
+    if(!self->params.x11_cursor->visible)
         return;
 
     const vec2d scale = {
@@ -522,21 +484,18 @@ static void render_x11_cursor(gsr_capture_kms *self, gsr_color_conversion *color
         self->capture_size.y == 0 ? 0 : (double)output_size.y / (double)self->capture_size.y
     };
 
-    Display *display = gsr_window_get_display(self->params.egl->window);
-    gsr_cursor_tick(&self->x11_cursor, DefaultRootWindow(display));
-
     const vec2i cursor_pos = {
-        target_pos.x + (self->x11_cursor.position.x - self->x11_cursor.hotspot.x - capture_pos.x) * scale.x,
-        target_pos.y + (self->x11_cursor.position.y - self->x11_cursor.hotspot.y - capture_pos.y) * scale.y
+        target_pos.x + (self->params.x11_cursor->position.x - self->params.x11_cursor->hotspot.x - capture_pos.x) * scale.x,
+        target_pos.y + (self->params.x11_cursor->position.y - self->params.x11_cursor->hotspot.y - capture_pos.y) * scale.y
     };
 
     self->params.egl->glEnable(GL_SCISSOR_TEST);
     self->params.egl->glScissor(target_pos.x, target_pos.y, output_size.x, output_size.y);
 
-    gsr_color_conversion_draw(color_conversion, self->x11_cursor.texture_id,
-        cursor_pos, (vec2i){self->x11_cursor.size.x * scale.x, self->x11_cursor.size.y * scale.y},
-        (vec2i){0, 0}, self->x11_cursor.size, self->x11_cursor.size,
-        GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false);
+    gsr_color_conversion_draw(color_conversion, self->params.x11_cursor->texture_id,
+        cursor_pos, (vec2i){self->params.x11_cursor->size.x * scale.x, self->params.x11_cursor->size.y * scale.y},
+        (vec2i){0, 0}, self->params.x11_cursor->size, self->params.x11_cursor->size,
+        GSR_ROT_0, capture_metadata->flip, GSR_SOURCE_COLOR_RGB, false);
 
     self->params.egl->glDisable(GL_SCISSOR_TEST);
 }
@@ -545,7 +504,7 @@ static void gsr_capture_kms_update_capture_size_change(gsr_capture_kms *self, gs
     if(target_pos.x != self->prev_target_pos.x || target_pos.y != self->prev_target_pos.y || drm_fd->src_w != self->prev_plane_size.x || drm_fd->src_h != self->prev_plane_size.y) {
         self->prev_target_pos = target_pos;
         self->prev_plane_size = self->capture_size;
-        gsr_color_conversion_clear(color_conversion);
+        color_conversion->schedule_clear = true;
     }
 }
 
@@ -590,48 +549,47 @@ static void gsr_capture_kms_update_connector_ids(gsr_capture_kms *self) {
         self->capture_size = rotate_capture_size_if_rotated(self, monitor.size);
 }
 
-static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
+static void gsr_capture_kms_pre_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     gsr_capture_kms *self = cap->priv;
 
-    gsr_capture_kms_cleanup_kms_fds(self);
-
-    if(gsr_kms_client_get_kms(&self->kms_client, &self->kms_response) != 0) {
-        fprintf(stderr, "gsr error: gsr_capture_kms_capture: failed to get kms, error: %d (%s)\n", self->kms_response.result, self->kms_response.err_msg);
-        return -1;
-    }
-
-    if(self->kms_response.num_items == 0) {
+    if(self->params.kms_response->num_items == 0) {
         static bool error_shown = false;
         if(!error_shown) {
             error_shown = true;
-            fprintf(stderr, "gsr error: no drm found, capture will fail\n");
+            fprintf(stderr, "gsr error: gsr_capture_kms_pre_capture: no drm found, capture will fail\n");
         }
-        return -1;
+        return;
     }
 
     gsr_capture_kms_update_connector_ids(self);
 
-    bool capture_is_combined_plane = false;
-    const gsr_kms_response_item *drm_fd = find_monitor_drm(self, &capture_is_combined_plane);
-    if(!drm_fd) {
-        gsr_capture_kms_cleanup_kms_fds(self);
-        return -1;
-    }
+    self->capture_is_combined_plane = false;
+    self->drm_fd = find_monitor_drm(self, &self->capture_is_combined_plane);
+    if(!self->drm_fd)
+        return;
 
-    if(drm_fd->has_hdr_metadata && self->params.hdr && hdr_metadata_is_supported_format(&drm_fd->hdr_metadata))
-        gsr_kms_set_hdr_metadata(self, drm_fd);
+    if(self->drm_fd->has_hdr_metadata && self->params.hdr && hdr_metadata_is_supported_format(&self->drm_fd->hdr_metadata))
+        gsr_kms_set_hdr_metadata(self, self->drm_fd);
 
-    self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
+    self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ self->drm_fd->src_w, self->drm_fd->src_h });
     if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
         self->capture_size = self->params.region_size;
 
-    const vec2i output_size = scale_keep_aspect_ratio(self->capture_size, (vec2i){capture_metadata->recording_width, capture_metadata->recording_height});
-    const vec2i target_pos = { max_int(0, capture_metadata->video_width / 2 - output_size.x / 2), max_int(0, capture_metadata->video_height / 2 - output_size.y / 2) };
-    gsr_capture_kms_update_capture_size_change(self, color_conversion, target_pos, drm_fd);
+    self->output_size = scale_keep_aspect_ratio(self->capture_size, capture_metadata->recording_size);
+    self->target_pos = gsr_capture_get_target_position(self->output_size, capture_metadata);
+    gsr_capture_kms_update_capture_size_change(self, color_conversion, self->target_pos, self->drm_fd);
+}
+
+static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
+    (void)capture_metadata;
+    gsr_capture_kms *self = cap->priv;
+
+    if(self->params.kms_response->num_items == 0)
+        return -1;
 
     vec2i capture_pos = self->capture_pos;
-    if(!capture_is_combined_plane)
-        capture_pos = (vec2i){drm_fd->x, drm_fd->y};
+    if(!self->capture_is_combined_plane)
+        capture_pos = (vec2i){self->drm_fd->x, self->drm_fd->y};
 
     capture_pos.x += self->params.region_position.x;
     capture_pos.y += self->params.region_position.y;
@@ -639,22 +597,22 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     //self->params.egl->glFlush();
     //self->params.egl->glFinish();
 
-    EGLImage image = gsr_capture_kms_create_egl_image_with_fallback(self, drm_fd);
+    EGLImage image = gsr_capture_kms_create_egl_image_with_fallback(self, self->drm_fd);
     if(image) {
         gsr_capture_kms_bind_image_to_input_texture_with_fallback(self, image);
         self->params.egl->eglDestroyImage(self->params.egl->egl_display, image);
     }
 
-    const gsr_monitor_rotation plane_rotation = kms_rotation_to_gsr_monitor_rotation(drm_fd->rotation);
-    const gsr_monitor_rotation rotation = capture_is_combined_plane ? GSR_MONITOR_ROT_0 : sub_rotations(self->monitor_rotation, plane_rotation);
+    const gsr_monitor_rotation plane_rotation = kms_rotation_to_gsr_monitor_rotation(self->drm_fd->rotation);
+    const gsr_monitor_rotation rotation = self->capture_is_combined_plane ? GSR_MONITOR_ROT_0 : sub_rotations(self->monitor_rotation, plane_rotation);
 
     gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
-        target_pos, output_size,
-        capture_pos, self->capture_size, (vec2i){ drm_fd->width, drm_fd->height },
-        gsr_monitor_rotation_to_rotation(rotation), GSR_SOURCE_COLOR_RGB, self->external_texture_fallback);
+        self->target_pos, self->output_size,
+        capture_pos, self->capture_size, (vec2i){ self->drm_fd->width, self->drm_fd->height },
+        gsr_monitor_rotation_to_rotation(rotation), capture_metadata->flip, GSR_SOURCE_COLOR_RGB, self->external_texture_fallback);
 
     if(self->params.record_cursor) {
-        gsr_kms_response_item *cursor_drm_fd = find_cursor_drm_if_on_monitor(self, drm_fd->connector_id, capture_is_combined_plane);
+        gsr_kms_response_item *cursor_drm_fd = find_cursor_drm_if_on_monitor(self, self->drm_fd->connector_id, self->capture_is_combined_plane);
         // The cursor is handled by x11 on x11 instead of using the cursor drm plane because on prime systems with a dedicated nvidia gpu
         // the cursor plane is not available when the cursor is on the monitor controlled by the nvidia device.
         // TODO: This doesn't work properly with software cursor on x11 since it will draw the x11 cursor on top of the cursor already in the framebuffer.
@@ -663,17 +621,15 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
             vec2i cursor_monitor_offset = self->capture_pos;
             cursor_monitor_offset.x += self->params.region_position.x;
             cursor_monitor_offset.y += self->params.region_position.y;
-            render_x11_cursor(self, color_conversion, cursor_monitor_offset, target_pos, output_size);
+            render_x11_cursor(self, color_conversion, capture_metadata, cursor_monitor_offset, self->target_pos, self->output_size);
         } else if(cursor_drm_fd) {
-            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ drm_fd->src_w, drm_fd->src_h });
-            render_drm_cursor(self, color_conversion, cursor_drm_fd, target_pos, output_size, framebuffer_size);
+            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ self->drm_fd->src_w, self->drm_fd->src_h });
+            render_drm_cursor(self, color_conversion, capture_metadata, cursor_drm_fd, self->target_pos, self->output_size, framebuffer_size);
         }
     }
 
     //self->params.egl->glFlush();
     //self->params.egl->glFinish();
-
-    gsr_capture_kms_cleanup_kms_fds(self);
 
     return 0;
 }
@@ -766,9 +722,9 @@ gsr_capture* gsr_capture_kms_create(const gsr_capture_kms_params *params) {
     
     *cap = (gsr_capture) {
         .start = gsr_capture_kms_start,
-        .on_event = gsr_capture_kms_on_event,
         //.tick = gsr_capture_kms_tick,
         .should_stop = gsr_capture_kms_should_stop,
+        .pre_capture = gsr_capture_kms_pre_capture,
         .capture = gsr_capture_kms_capture,
         .uses_external_image = gsr_capture_kms_uses_external_image,
         .set_hdr_metadata = gsr_capture_kms_set_hdr_metadata,

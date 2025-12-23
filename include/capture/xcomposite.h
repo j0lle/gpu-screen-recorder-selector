@@ -3,9 +3,11 @@
 
 #include "capture.h"
 #include "../vec2.h"
+#include "../cursor.h"
 
 typedef struct {
     gsr_egl *egl;
+    gsr_cursor *cursor;
     unsigned long window;
     bool follow_focused; /* If this is set then |window| is ignored */
     bool record_cursor;

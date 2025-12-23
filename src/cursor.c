@@ -96,7 +96,7 @@ int gsr_cursor_init(gsr_cursor *self, gsr_egl *egl, Display *display) {
 }
 
 void gsr_cursor_deinit(gsr_cursor *self) {
-    if(!self->egl)
+    if(!self->display)
         return;
 
     if(self->texture_id) {
@@ -112,6 +112,9 @@ void gsr_cursor_deinit(gsr_cursor *self) {
 }
 
 bool gsr_cursor_on_event(gsr_cursor *self, XEvent *xev) {
+    if(!self->display)
+        return false;
+
     bool updated = false;
 
     if(xev->type == self->x_fixes_event_base + XFixesCursorNotify) {
@@ -131,6 +134,9 @@ bool gsr_cursor_on_event(gsr_cursor *self, XEvent *xev) {
 }
 
 void gsr_cursor_tick(gsr_cursor *self, Window relative_to) {
+    if(!self->display)
+        return;
+
     Window dummy_window;
     int dummy_i;
     unsigned int dummy_u;

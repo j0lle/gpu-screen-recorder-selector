@@ -12,24 +12,34 @@ typedef struct AVFrame AVFrame;
 typedef struct AVMasteringDisplayMetadata AVMasteringDisplayMetadata;
 typedef struct AVContentLightMetadata AVContentLightMetadata;
 typedef struct gsr_capture gsr_capture;
+typedef struct gsr_capture_metadata gsr_capture_metadata;
 
-typedef struct {
-    // Width and height of the video
-    int video_width;
-    int video_height;
-    // Width and height of the frame at the start of capture, the target size
-    int recording_width;
-    int recording_height;
+typedef enum {
+    GSR_CAPTURE_ALIGN_START,
+    GSR_CAPTURE_ALIGN_CENTER,
+    GSR_CAPTURE_ALIGN_END
+} gsr_capture_alignment;
+
+struct gsr_capture_metadata {
+    // Size of the video
+    vec2i video_size;
+    // The captured output gets scaled to this size. By default this will be the same size as the captured target
+    vec2i recording_size;
+    vec2i position;
     int fps;
-} gsr_capture_metadata;
+    gsr_capture_alignment halign;
+    gsr_capture_alignment valign;
+    gsr_flip flip;
+};
 
 struct gsr_capture {
-    /* These methods should not be called manually. Call gsr_capture_* instead. |capture_metadata->video_width| and |capture_metadata->video_height| should be set by this function */
+    /* These methods should not be called manually. Call gsr_capture_* instead. |capture_metadata->video_size| should be set by this function */
     int (*start)(gsr_capture *cap, gsr_capture_metadata *capture_metadata);
     void (*on_event)(gsr_capture *cap, gsr_egl *egl); /* can be NULL */
     void (*tick)(gsr_capture *cap); /* can be NULL. If there is an event then |on_event| is called before this */
     bool (*should_stop)(gsr_capture *cap, bool *err); /* can be NULL. If NULL, return false */
     bool (*capture_has_synchronous_task)(gsr_capture *cap); /* can be NULL. If this returns true then the time spent in |capture| is ignored for video/audio (capture is paused while the synchronous task happens) */
+    void (*pre_capture)(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion); /* can be NULL */
     int (*capture)(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion); /* Return 0 if the frame was captured */
     bool (*uses_external_image)(gsr_capture *cap); /* can be NULL. If NULL, return false */
     bool (*set_hdr_metadata)(gsr_capture *cap, AVMasteringDisplayMetadata *mastering_display_metadata, AVContentLightMetadata *light_metadata); /* can be NULL. If NULL, return false */

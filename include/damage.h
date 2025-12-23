@@ -9,40 +9,62 @@
 typedef struct _XDisplay Display;
 typedef union _XEvent XEvent;
 
-typedef enum {
-    GSR_DAMAGE_TRACK_NONE,
-    GSR_DAMAGE_TRACK_WINDOW,
-    GSR_DAMAGE_TRACK_MONITOR
-} gsr_damage_track_type;
+#define GSR_DAMAGE_MAX_MONITORS 32
+#define GSR_DAMAGE_MAX_TRACKED_TARGETS 12
+
+typedef struct {
+    int64_t window_id;
+    vec2i window_pos;
+    vec2i window_size;
+    uint64_t damage;
+    int refcount;
+} gsr_damage_window;
+
+typedef struct {
+    char *monitor_name;
+    gsr_monitor *monitor;
+    int refcount;
+} gsr_damage_monitor;
 
 typedef struct {
     gsr_egl *egl;
     Display *display;
     bool track_cursor;
-    gsr_damage_track_type track_type;
 
     int damage_event;
     int damage_error;
-    uint64_t damage;
     bool damaged;
+
+    uint64_t monitor_damage;
 
     int randr_event;
     int randr_error;
 
-    uint64_t window;
-    //vec2i window_pos;
-    vec2i window_size;
+    gsr_cursor *cursor;
+    gsr_monitor monitors[GSR_DAMAGE_MAX_MONITORS];
+    int num_monitors;
 
-    gsr_cursor cursor; /* Relative to |window| */
-    gsr_monitor monitor;
-    char monitor_name[32];
+    gsr_damage_window windows_tracked[GSR_DAMAGE_MAX_TRACKED_TARGETS];
+    int num_windows_tracked;
+
+    gsr_damage_monitor monitors_tracked[GSR_DAMAGE_MAX_TRACKED_TARGETS];
+    int num_monitors_tracked;
+
+    int all_monitors_tracked_refcount;
+    vec2i cursor_pos;
 } gsr_damage;
 
-bool gsr_damage_init(gsr_damage *self, gsr_egl *egl, bool track_cursor);
+bool gsr_damage_init(gsr_damage *self, gsr_egl *egl, gsr_cursor *cursor, bool track_cursor);
 void gsr_damage_deinit(gsr_damage *self);
 
-bool gsr_damage_set_target_window(gsr_damage *self, uint64_t window);
-bool gsr_damage_set_target_monitor(gsr_damage *self, const char *monitor_name);
+/* This is reference counted */
+bool gsr_damage_start_tracking_window(gsr_damage *self, int64_t window);
+void gsr_damage_stop_tracking_window(gsr_damage *self, int64_t window);
+
+/* This is reference counted. If |monitor_name| is NULL then all monitors are tracked */
+bool gsr_damage_start_tracking_monitor(gsr_damage *self, const char *monitor_name);
+void gsr_damage_stop_tracking_monitor(gsr_damage *self, const char *monitor_name);
+
 void gsr_damage_on_event(gsr_damage *self, XEvent *xev);
 void gsr_damage_tick(gsr_damage *self);
 /* Also returns true if damage tracking is not available */

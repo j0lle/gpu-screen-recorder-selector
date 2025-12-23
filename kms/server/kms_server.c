@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <stdlib.h>
 #include <locale.h>
 
 #include <unistd.h>

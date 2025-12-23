@@ -3,9 +3,8 @@
 gpu-screen-recorder \- The fastest screen recording tool for Linux
 .SH SYNOPSIS
 .B gpu-screen-recorder
-.RI [ options ]
 .B \-w
-.I window_id|monitor|focused|portal|region
+.I window_id|monitor|focused|portal|region|v4l2_device_path
 .RI [ options ]
 .B \-o
 .I output_file
@@ -50,8 +49,9 @@ Minimal performance impact compared to traditional screen recorders
 .SH OPTIONS
 .SS Capture Options
 .TP
-.BI \-w " window_id|monitor|focused|portal|region"
-Specify what to record. Valid values are:
+.BI \-w " window_id|monitor|focused|portal|region|v4l2_device_path"
+Specify what to record.
+Formats:
 .RS
 .IP \(bu 3
 .B window
@@ -77,10 +77,99 @@ option)
 Monitor name (e.g.,
 .BR DP\-1 )
 - Record specific monitor
+.IP \(bu 3
+V4L2 device path (e.g.,
+.BR /dev/video0 )
+- Record camera device (V4L2).
+
+Other applications can't use the camera when GPU Screen Recorder is using the camera and GPU Screen Recorder may not be able to use the camera if another application is already using the camera
+.IP \(bu 3
+Combine sources with | (e.g.,
+.BR "monitor:screen|v4l2:/dev/video0" )
 .RE
+.PP
 Run
 .B \-\-list\-capture\-options
-to see available options.
+to list available capture sources.
+.PP
+Run
+.B \-\-list\-v4l2\-devices
+to list available camera devices (V4L2).
+.PP
+Additional options can be passed to each capture source by splitting capture source with
+.B ;
+for example
+.BR "screen;x=50;y=50".
+.br
+These are the available options for capture sources:
+.RS
+.IP \(bu 3
+.B x
+- The X position in pixels. If the number ends with % and is a number between 0 and 100 then it's a position relative to the video size
+.IP \(bu 3
+.B y
+- The Y position in pixels. If the number ends with % and is a number between 0 and 100 then it's a position relative to the video size
+.IP \(bu 3
+.B width
+- The width in pixels. If the number ends with % and is a number between 0 and 100 then it's a size relative to the video size
+.IP \(bu 3
+.B height
+- The height in pixels. If the number ends with % and is a number between 0 and 100 then it's a size relative to the video size
+.IP \(bu 3
+.B halign
+- The horizontal alignment, should be either
+.BR "start",
+.B center
+or
+.BR "end".
+
+Set to
+.B center
+by default, except for camera (V4L2) when capturing the camera above something else in which case this is set to
+.B start
+by default
+.IP \(bu 3
+.B valign
+- The vertical alignment, should be either
+.BR "start",
+.B center
+or
+.BR "end".
+
+Set to
+.B center
+by default, except for camera (V4L2) when capturing the camera above something else in which case this is set to
+.B end
+by default
+.IP \(bu 3
+.B hflip
+- If the source should be flipped horizontally, should be either
+.B "true"
+or
+.BR "false".
+Set to
+.B false
+by default
+.IP \(bu 3
+.B vflip
+- If the source should be flipped vertically, should be either
+.B "true"
+or
+.BR "false".
+Set to
+.B false
+by default
+.IP \(bu 3
+.B pixfmt
+- The pixel format for cameras (V4L2), should be either
+.BR "auto",
+.B yuyv
+or
+.BR "mjpeg".
+Set to
+.B auto
+by default
+.RE
 .TP
 .BI \-region " WxH+X+Y"
 Specify region to capture when using
@@ -132,6 +221,14 @@ Formats:
 Combine sources with | (e.g.,
 .BR "default_output|app:firefox" )
 .RE
+.PP
+Run
+.B \-\-list\-audio\-devices
+to list available audio devices.
+.br
+Run
+.B \-\-list\-application\-audio
+to list available applications for audio capture.
 .TP
 .BI \-ac " aac|opus|flac"
 Audio codec (default: opus for mp4/mkv, aac otherwise). FLAC temporarily disabled.
@@ -224,13 +321,16 @@ Show version (5.10.2).
 Show system info (codecs, capture options).
 .TP
 .B \-\-list\-capture\-options
-List available windows and monitors.
+List available capture sources (window, monitors, portal, v4l2 device path).
+.TP
+.B \-\-list\-v4l2\-devices
+List available cameras devices (V4L2).
 .TP
 .B \-\-list\-audio\-devices
-List PulseAudio devices.
+List available audio devices.
 .TP
 .B \-\-list\-application\-audio
-List applications for audio capture.
+List available applications for audio capture.
 .SH SIGNALS
 GPU Screen Recorder can be controlled via signals:
 .TP
@@ -305,7 +405,7 @@ Record region using slop:
 .PP
 .nf
 .RS
-gpu-screen-recorder -w region -region $(slop) -o video.mp4
+gpu-screen-recorder -w $(slop) -o video.mp4
 .RE
 .fi
 .PP
@@ -313,11 +413,11 @@ Record region using slurp:
 .PP
 .nf
 .RS
-gpu-screen-recorder -w region -region $(slurp -f "%wx%h+%x+%y") -o video.mp4
+gpu-screen-recorder -w $(slurp -f "%wx%h+%x+%y") -o video.mp4
 .RE
 .fi
 .PP
-Instant replay and launch a script when saving replay
+Instant replay and launch a script when saving replay:
 .PP
 .nf
 .RS
@@ -338,6 +438,22 @@ Take screenshot:
 .nf
 .RS
 gpu-screen-recorder -w screen -o screenshot.jpg
+.PP
+.RE
+.fi
+Record screen and camera:
+.PP
+.nf
+.RS
+gpu-screen-recorder -w "screen|/dev/video0" -o video.mp4
+.PP
+.RE
+.fi
+Record screen and camera. The camera is located at the bottom right flipped horizontally:
+.PP
+.nf
+.RS
+gpu-screen-recorder -w "monitor:screen|v4l2:/dev/video0;halign=end;valign=end;hflip=true" -o video.mp4
 .RE
 .fi
 .SH FILES

@@ -140,6 +140,7 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_TEXTURE1                             0x84C1
 #define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT      0x00000020
 #define GL_ALL_BARRIER_BITS                     0xFFFFFFFF
+#define GL_PIXEL_UNPACK_BUFFER                  0x88EC
 
 #define GL_VENDOR                               0x1F00
 #define GL_RENDERER                             0x1F01

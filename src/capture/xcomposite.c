@@ -23,6 +23,7 @@ typedef struct {
     bool init_new_window;
 
     Window window;
+    vec2i window_pos;
     vec2i window_size;
     vec2i texture_size;
     double window_resize_timer;
@@ -31,14 +32,11 @@ typedef struct {
 
     Atom net_active_window_atom;
 
-    gsr_cursor cursor;
-
     bool clear_background;
 } gsr_capture_xcomposite;
 
 static void gsr_capture_xcomposite_stop(gsr_capture_xcomposite *self) {
     window_texture_deinit(&self->window_texture);
-    gsr_cursor_deinit(&self->cursor);
 }
 
 static int max_int(int a, int b) {
@@ -81,6 +79,9 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, gsr_capture_metadata *
         return -1;
     }
 
+    self->window_pos.x = attr.x;
+    self->window_pos.y = attr.y;
+
     self->window_size.x = max_int(attr.width, 0);
     self->window_size.y = max_int(attr.height, 0);
 
@@ -95,20 +96,13 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, gsr_capture_metadata *
         return -1;
     }
 
-    if(gsr_cursor_init(&self->cursor, self->params.egl, self->display) != 0) {
-        gsr_capture_xcomposite_stop(self);
-        return -1;
-    }
-
     self->texture_size.x = self->window_texture.window_width;
     self->texture_size.y = self->window_texture.window_height;
 
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
-        capture_metadata->video_width = self->texture_size.x;
-        capture_metadata->video_height = self->texture_size.y;
+        capture_metadata->video_size = self->texture_size;
     } else {
-        capture_metadata->video_width = self->params.output_resolution.x;
-        capture_metadata->video_height = self->params.output_resolution.y;
+        capture_metadata->video_size = self->params.output_resolution;
     }
 
     self->window_resize_timer = clock_get_monotonic_seconds();
@@ -136,6 +130,9 @@ static void gsr_capture_xcomposite_tick(gsr_capture *cap) {
             attr.height = 0;
             if(!XGetWindowAttributes(self->display, self->window, &attr))
                 fprintf(stderr, "gsr error: gsr_capture_xcomposite_tick failed: invalid window id: %lu\n", self->window);
+
+            self->window_pos.x = attr.x;
+            self->window_pos.y = attr.y;
 
             self->window_size.x = max_int(attr.width, 0);
             self->window_size.y = max_int(attr.height, 0);
@@ -190,6 +187,9 @@ static void gsr_capture_xcomposite_on_event(gsr_capture *cap, gsr_egl *egl) {
             break;
         }
         case ConfigureNotify: {
+            self->window_pos.x = xev->xconfigure.x;
+            self->window_pos.y = xev->xconfigure.y;
+
             /* Window resized */
             if(xev->xconfigure.window == self->window && (xev->xconfigure.width != self->window_size.x || xev->xconfigure.height != self->window_size.y)) {
                 self->window_size.x = max_int(xev->xconfigure.width, 0);
@@ -207,8 +207,6 @@ static void gsr_capture_xcomposite_on_event(gsr_capture *cap, gsr_egl *egl) {
             break;
         }
     }
-
-    gsr_cursor_on_event(&self->cursor, xev);
 }
 
 static bool gsr_capture_xcomposite_should_stop(gsr_capture *cap, bool *err) {
@@ -224,16 +222,21 @@ static bool gsr_capture_xcomposite_should_stop(gsr_capture *cap, bool *err) {
     return false;
 }
 
-static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
+static void gsr_capture_xcomposite_pre_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
+    (void)capture_metadata;
     gsr_capture_xcomposite *self = cap->priv;
 
     if(self->clear_background) {
         self->clear_background = false;
-        gsr_color_conversion_clear(color_conversion);
+        color_conversion->schedule_clear = true;
     }
+}
 
-    const vec2i output_size = scale_keep_aspect_ratio(self->texture_size, (vec2i){capture_metadata->recording_width, capture_metadata->recording_height});
-    const vec2i target_pos = { max_int(0, capture_metadata->video_width / 2 - output_size.x / 2), max_int(0, capture_metadata->video_height / 2 - output_size.y / 2) };
+static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
+    gsr_capture_xcomposite *self = cap->priv;
+
+    const vec2i output_size = scale_keep_aspect_ratio(self->texture_size, capture_metadata->recording_size);
+    const vec2i target_pos = gsr_capture_get_target_position(output_size, capture_metadata);
 
     //self->params.egl->glFlush();
     //self->params.egl->glFinish();
@@ -241,28 +244,28 @@ static int gsr_capture_xcomposite_capture(gsr_capture *cap, gsr_capture_metadata
     gsr_color_conversion_draw(color_conversion, window_texture_get_opengl_texture_id(&self->window_texture),
         target_pos, output_size,
         (vec2i){0, 0}, self->texture_size, self->texture_size,
-        GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false);
+        GSR_ROT_0, capture_metadata->flip, GSR_SOURCE_COLOR_RGB, false);
 
-    if(self->params.record_cursor && self->cursor.visible) {
+    if(self->params.record_cursor && self->params.cursor->visible) {
         const vec2d scale = {
             self->texture_size.x == 0 ? 0 : (double)output_size.x / (double)self->texture_size.x,
             self->texture_size.y == 0 ? 0 : (double)output_size.y / (double)self->texture_size.y
         };
 
-        gsr_cursor_tick(&self->cursor, self->window);
-
         const vec2i cursor_pos = {
-            target_pos.x + (self->cursor.position.x - self->cursor.hotspot.x) * scale.x,
-            target_pos.y + (self->cursor.position.y - self->cursor.hotspot.y) * scale.y
+            target_pos.x + (self->params.cursor->position.x - self->params.cursor->hotspot.x - self->window_pos.x) * scale.x,
+            target_pos.y + (self->params.cursor->position.y - self->params.cursor->hotspot.y - self->window_pos.y) * scale.y
         };
 
-        if(cursor_pos.x < target_pos.x || cursor_pos.x + self->cursor.size.x > target_pos.x + output_size.x || cursor_pos.y < target_pos.y || cursor_pos.y + self->cursor.size.y > target_pos.y + output_size.y)
-            self->clear_background = true;
+        self->params.egl->glEnable(GL_SCISSOR_TEST);
+        self->params.egl->glScissor(target_pos.x, target_pos.y, output_size.x, output_size.y);
 
-        gsr_color_conversion_draw(color_conversion, self->cursor.texture_id,
-            cursor_pos, (vec2i){self->cursor.size.x * scale.x, self->cursor.size.y * scale.y},
-            (vec2i){0, 0}, self->cursor.size, self->cursor.size,
-            GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false);
+        gsr_color_conversion_draw(color_conversion, self->params.cursor->texture_id,
+            cursor_pos, (vec2i){self->params.cursor->size.x * scale.x, self->params.cursor->size.y * scale.y},
+            (vec2i){0, 0}, self->params.cursor->size, self->params.cursor->size,
+            GSR_ROT_0, capture_metadata->flip, GSR_SOURCE_COLOR_RGB, false);
+
+        self->params.egl->glDisable(GL_SCISSOR_TEST);
     }
 
     //self->params.egl->glFlush();
@@ -309,6 +312,7 @@ gsr_capture* gsr_capture_xcomposite_create(const gsr_capture_xcomposite_params *
         .on_event = gsr_capture_xcomposite_on_event,
         .tick = gsr_capture_xcomposite_tick,
         .should_stop = gsr_capture_xcomposite_should_stop,
+        .pre_capture = gsr_capture_xcomposite_pre_capture,
         .capture = gsr_capture_xcomposite_capture,
         .uses_external_image = NULL,
         .get_window_id = gsr_capture_xcomposite_get_window_id,

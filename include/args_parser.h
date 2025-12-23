@@ -11,6 +11,15 @@ typedef struct gsr_egl gsr_egl;
 #define NUM_ARGS 32
 
 typedef enum {
+    GSR_CAPTURE_SOURCE_TYPE_WINDOW,
+    GSR_CAPTURE_SOURCE_TYPE_FOCUSED_WINDOW,
+    GSR_CAPTURE_SOURCE_TYPE_MONITOR,
+    GSR_CAPTURE_SOURCE_TYPE_REGION,
+    GSR_CAPTURE_SOURCE_TYPE_PORTAL,
+    GSR_CAPTURE_SOURCE_TYPE_V4L2
+} CaptureSourceType;
+
+typedef enum {
     ARG_TYPE_STRING,
     ARG_TYPE_BOOLEAN,
     ARG_TYPE_ENUM,
@@ -52,6 +61,7 @@ typedef struct {
     void (*info)(void *userdata);
     void (*list_audio_devices)(void *userdata);
     void (*list_application_audio)(void *userdata);
+    void (*list_v4l2_devices)(void *userdata);
     void (*list_capture_options)(const char *card_path, void *userdata);
 } args_handlers;
 
@@ -68,7 +78,8 @@ typedef struct {
     gsr_bitrate_mode bitrate_mode;
     gsr_video_quality video_quality;
     gsr_replay_storage replay_storage;
-    char window[64];
+
+    const char *capture_source;
     const char *container_format;
     const char *filename;
     const char *replay_recording_directory;

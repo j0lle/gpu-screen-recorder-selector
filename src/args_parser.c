@@ -9,6 +9,7 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <assert.h>
+#include <errno.h>
 #include <libgen.h>
 #include <sys/stat.h>
 
@@ -187,20 +188,22 @@ static double args_get_double_by_key(Arg *args, int num_args, const char *key, d
     }
 }
 
-static void usage_header() {
+static void usage_header(void) {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
-    printf("usage: %s -w <window_id|monitor|focused|portal|region> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] "
+    printf("usage: %s -w <window_id|monitor|focused|portal|region|v4l2_device_path> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] "
            "[-q <quality>] [-r <replay_buffer_size_sec>] [-replay-storage ram|disk] [-restart-replay-on-save yes|no] "
            "[-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] "
            "[-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-p <plugin_path>] "
            "[-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] "
-           "[-fallback-cpu-encoding yes|no] [-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] [--list-application-audio] "
-           "[-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+           "[-fallback-cpu-encoding yes|no] [-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] "
+           "[--list-application-audio] [--list-v4l2-devices] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
-static void usage_full() {
+// TODO: Add --list-v4l2-devices option
+
+static void usage_full(void) {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     usage_header();
     printf("\n");
@@ -212,7 +215,7 @@ static void usage_full() {
     fflush(stdout);
 }
 
-static void usage() {
+static void usage(void) {
     usage_header();
 }
 
@@ -246,8 +249,7 @@ static bool args_parser_set_values(args_parser *self) {
     self->bitrate_mode = (gsr_bitrate_mode)args_get_enum_by_key(self->args, NUM_ARGS, "-bm", GSR_BITRATE_MODE_AUTO);
     self->replay_storage = (gsr_replay_storage)args_get_enum_by_key(self->args, NUM_ARGS, "-replay-storage", GSR_REPLAY_STORAGE_RAM);
 
-    const char *window = args_get_value_by_key(self->args, NUM_ARGS, "-w");
-    snprintf(self->window, sizeof(self->window), "%s", window);
+    self->capture_source = args_get_value_by_key(self->args, NUM_ARGS, "-w");
     self->verbose = args_get_boolean_by_key(self->args, NUM_ARGS, "-v", true);
     self->gl_debug = args_get_boolean_by_key(self->args, NUM_ARGS, "-gl-debug", false);
     self->record_cursor = args_get_boolean_by_key(self->args, NUM_ARGS, "-cursor", true);
@@ -335,14 +337,9 @@ static bool args_parser_set_values(args_parser *self) {
         }
     }
 
-    const char *output_resolution_str = args_get_value_by_key(self->args, NUM_ARGS, "-s");
-    if(!output_resolution_str && strcmp(self->window, "focused") == 0) {
-        fprintf(stderr, "gsr error: option -s is required when using '-w focused' option\n");
-        usage();
-        return false;
-    }
-
     self->output_resolution = (vec2i){0, 0};
+
+    const char *output_resolution_str = args_get_value_by_key(self->args, NUM_ARGS, "-s");
     if(output_resolution_str) {
         if(sscanf(output_resolution_str, "%dx%d", &self->output_resolution.x, &self->output_resolution.y) != 2) {
             fprintf(stderr, "gsr error: invalid value for option -s '%s', expected a value in format WxH\n", output_resolution_str);
@@ -361,12 +358,6 @@ static bool args_parser_set_values(args_parser *self) {
     self->region_position = (vec2i){0, 0};
     const char *region_str = args_get_value_by_key(self->args, NUM_ARGS, "-region");
     if(region_str) {
-        if(strcmp(self->window, "region") != 0) {
-            fprintf(stderr, "gsr error: option -region can only be used when option '-w region' is used\n");
-            usage();
-            return false;
-        }
-
         if(sscanf(region_str, "%dx%d+%d+%d", &self->region_size.x, &self->region_size.y, &self->region_position.x, &self->region_position.y) != 4) {
             fprintf(stderr, "gsr error: invalid value for option -region '%s', expected a value in format WxH+X+Y\n", region_str);
             usage();
@@ -375,12 +366,6 @@ static bool args_parser_set_values(args_parser *self) {
 
         if(self->region_size.x < 0 || self->region_size.y < 0) {
             fprintf(stderr, "gsr error: invalid value for option -region '%s', expected width and height to be greater or equal to 0\n", region_str);
-            usage();
-            return false;
-        }
-    } else {
-        if(strcmp(self->window, "region") == 0) {
-            fprintf(stderr, "gsr error: option -region is required when '-w region' is used\n");
             usage();
             return false;
         }
@@ -452,10 +437,6 @@ static bool args_parser_set_values(args_parser *self) {
 
     self->replay_recording_directory = args_get_value_by_key(self->args, NUM_ARGS, "-ro");
 
-    const bool is_portal_capture = strcmp(self->window, "portal") == 0;
-    if(!self->restore_portal_session && is_portal_capture)
-        fprintf(stderr, "gsr info: option '-w portal' was used without '-restore-portal-session yes'. The previous screencast session will be ignored\n");
-
     if(self->is_livestream && self->recording_saved_script) {
         fprintf(stderr, "gsr warning: live stream detected, -sc script is ignored\n");
         self->recording_saved_script = NULL;
@@ -490,6 +471,11 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
 
     if(argc == 2 && strcmp(argv[1], "--list-application-audio") == 0) {
         arg_handlers->list_application_audio(userdata);
+        return true;
+    }
+
+    if(argc == 2 && strcmp(argv[1], "--list-v4l2-devices") == 0) {
+        arg_handlers->list_v4l2_devices(userdata);
         return true;
     }
 
@@ -704,12 +690,6 @@ bool args_parser_validate_with_gl_info(args_parser *self, gsr_egl *egl) {
         fprintf(stderr, "gsr error: hdr video codec option %s is not available on X11\n", video_codec_to_string(self->video_codec));
         usage();
         return false;
-    }
-
-    const bool is_portal_capture = strcmp(self->window, "portal") == 0;
-    if(video_codec_is_hdr(self->video_codec) && is_portal_capture) {
-        fprintf(stderr, "gsr warning: portal capture option doesn't support hdr yet (PipeWire doesn't support hdr), the video will be tonemapped from hdr to sdr\n");
-        self->video_codec = hdr_video_codec_to_sdr_video_codec(self->video_codec);
     }
 
     return true;

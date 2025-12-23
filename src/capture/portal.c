@@ -35,6 +35,7 @@ typedef struct {
 
     bool should_stop;
     bool stop_is_error;
+    bool do_capture;
 } gsr_capture_portal;
 
 static void gsr_capture_portal_cleanup_plane_fds(gsr_capture_portal *self) {
@@ -293,12 +294,10 @@ static int gsr_capture_portal_start(gsr_capture *cap, gsr_capture_metadata *capt
     }
 
     if(self->params.output_resolution.x == 0 && self->params.output_resolution.y == 0) {
-        capture_metadata->video_width = self->capture_size.x;
-        capture_metadata->video_height = self->capture_size.y;
+        capture_metadata->video_size = self->capture_size;
     } else {
         self->params.output_resolution = scale_keep_aspect_ratio(self->capture_size, self->params.output_resolution);
-        capture_metadata->video_width = self->params.output_resolution.x;
-        capture_metadata->video_height = self->params.output_resolution.y;
+        capture_metadata->video_size = self->params.output_resolution;
     }
 
     return 0;
@@ -322,22 +321,22 @@ static bool fourcc_has_alpha(uint32_t fourcc) {
     return false;
 }
 
-static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
-    (void)color_conversion;
+static void gsr_capture_portal_pre_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     gsr_capture_portal *self = cap->priv;
+    self->do_capture = false;
 
     if(self->should_stop)
-        return -1;
+        return;
 
     if(gsr_pipewire_video_should_restart(&self->pipewire)) {
-        fprintf(stderr, "gsr info: gsr_capture_portal_capture: pipewire capture was paused, trying to start capture again\n");
+        fprintf(stderr, "gsr info: gsr_capture_portal_pre_capture: pipewire capture was paused, trying to start capture again\n");
         gsr_capture_portal_stop(self);
         const int result = gsr_capture_portal_setup(self, capture_metadata->fps);
         if(result != 0) {
             self->stop_is_error = result != PORTAL_CAPTURE_CANCELED_BY_USER_EXIT_CODE;
             self->should_stop = true;
         }
-        return -1;
+        return;
     }
 
     /* TODO: Handle formats other than RGB(A) */
@@ -346,15 +345,29 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
             if(self->pipewire_data.region.width != self->capture_size.x || self->pipewire_data.region.height != self->capture_size.y) {
                 self->capture_size.x = self->pipewire_data.region.width;
                 self->capture_size.y = self->pipewire_data.region.height;
-                gsr_color_conversion_clear(color_conversion);
+                color_conversion->schedule_clear = true;
             }
         } else {
-            return -1;
+            return;
         }
     }
 
-    const vec2i output_size = scale_keep_aspect_ratio(self->capture_size, (vec2i){capture_metadata->recording_width, capture_metadata->recording_height});
-    const vec2i target_pos = { max_int(0, capture_metadata->video_width / 2 - output_size.x / 2), max_int(0, capture_metadata->video_height / 2 - output_size.y / 2) };
+    const bool fourcc_alpha = fourcc_has_alpha(self->pipewire_data.fourcc);
+    if(fourcc_alpha)
+        color_conversion->schedule_clear = true;
+
+    self->do_capture = true;
+}
+
+static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
+    (void)color_conversion;
+    gsr_capture_portal *self = cap->priv;
+
+    if(self->should_stop || !self->do_capture)
+        return -1;
+
+    const vec2i output_size = scale_keep_aspect_ratio(self->capture_size, capture_metadata->recording_size);
+    const vec2i target_pos = gsr_capture_get_target_position(output_size, capture_metadata);
 
     const vec2i actual_texture_size = {self->pipewire_data.texture_width, self->pipewire_data.texture_height};
 
@@ -363,14 +376,10 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
 
     // TODO: Handle region crop
 
-    const bool fourcc_alpha = fourcc_has_alpha(self->pipewire_data.fourcc);
-    if(fourcc_alpha)
-        gsr_color_conversion_clear(color_conversion);
-
     gsr_color_conversion_draw(color_conversion, self->pipewire_data.using_external_image ? self->texture_map.external_texture_id : self->texture_map.texture_id,
        target_pos, output_size,
        (vec2i){self->pipewire_data.region.x, self->pipewire_data.region.y}, (vec2i){self->pipewire_data.region.width, self->pipewire_data.region.height}, actual_texture_size,
-       gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), GSR_SOURCE_COLOR_RGB, self->pipewire_data.using_external_image);
+       gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), capture_metadata->flip, GSR_SOURCE_COLOR_RGB, self->pipewire_data.using_external_image);
 
     if(self->params.record_cursor && self->texture_map.cursor_texture_id > 0 && self->pipewire_data.cursor_region.width > 0) {
         const vec2d scale = {
@@ -385,13 +394,15 @@ static int gsr_capture_portal_capture(gsr_capture *cap, gsr_capture_metadata *ca
 
         self->params.egl->glEnable(GL_SCISSOR_TEST);
         self->params.egl->glScissor(target_pos.x, target_pos.y, output_size.x, output_size.y);
+
         gsr_color_conversion_draw(color_conversion, self->texture_map.cursor_texture_id,
             (vec2i){cursor_pos.x, cursor_pos.y},
             (vec2i){self->pipewire_data.cursor_region.width * scale.x, self->pipewire_data.cursor_region.height * scale.y},
             (vec2i){0, 0},
             (vec2i){self->pipewire_data.cursor_region.width, self->pipewire_data.cursor_region.height},
             (vec2i){self->pipewire_data.cursor_region.width, self->pipewire_data.cursor_region.height},
-            gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), GSR_SOURCE_COLOR_RGB, false);
+            gsr_monitor_rotation_to_rotation(self->pipewire_data.rotation), capture_metadata->flip, GSR_SOURCE_COLOR_RGB, false);
+
         self->params.egl->glDisable(GL_SCISSOR_TEST);
     }
 
@@ -458,6 +469,7 @@ gsr_capture* gsr_capture_portal_create(const gsr_capture_portal_params *params) 
         .tick = NULL,
         .should_stop = gsr_capture_portal_should_stop,
         .capture_has_synchronous_task = gsr_capture_portal_capture_has_synchronous_task,
+        .pre_capture = gsr_capture_portal_pre_capture,
         .capture = gsr_capture_portal_capture,
         .uses_external_image = gsr_capture_portal_uses_external_image,
         .is_damaged = gsr_capture_portal_is_damaged,

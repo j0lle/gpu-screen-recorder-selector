@@ -470,6 +470,7 @@ int gsr_kms_client_get_kms(gsr_kms_client *self, gsr_kms_response *response) {
     response->version = 0;
     response->result = KMS_RESULT_FAILED_TO_SEND;
     response->err_msg[0] = '\0';
+    response->num_items = 0;
 
     gsr_kms_request request;
     request.version = GSR_KMS_PROTOCOL_VERSION;

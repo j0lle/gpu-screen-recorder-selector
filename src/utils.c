@@ -1,5 +1,6 @@
 #include "../include/utils.h"
 #include "../include/window/window.h"
+#include "../include/capture/capture.h"
 
 #include <time.h>
 #include <string.h>
@@ -595,12 +596,44 @@ vec2i scale_keep_aspect_ratio(vec2i from, vec2i to) {
     return from;
 }
 
+vec2i gsr_capture_get_target_position(vec2i output_size, gsr_capture_metadata *capture_metadata) {
+    vec2i target_pos = {0, 0};
+
+    switch(capture_metadata->halign) {
+        case GSR_CAPTURE_ALIGN_START:
+            break;
+        case GSR_CAPTURE_ALIGN_CENTER:
+            target_pos.x = capture_metadata->video_size.x/2 - output_size.x/2;
+            break;
+        case GSR_CAPTURE_ALIGN_END:
+            target_pos.x = capture_metadata->video_size.x - output_size.x;
+            break;
+    }
+
+    switch(capture_metadata->valign) {
+        case GSR_CAPTURE_ALIGN_START:
+            break;
+        case GSR_CAPTURE_ALIGN_CENTER:
+            target_pos.y = capture_metadata->video_size.y/2 - output_size.y/2;
+            break;
+        case GSR_CAPTURE_ALIGN_END:
+            target_pos.y = capture_metadata->video_size.y - output_size.y;
+            break;
+    }
+
+    target_pos.x += capture_metadata->position.x;
+    target_pos.y += capture_metadata->position.y;
+    return target_pos;
+}
+
+
 unsigned int gl_create_texture(gsr_egl *egl, int width, int height, int internal_format, unsigned int format, int filter) {
     unsigned int texture_id = 0;
     egl->glGenTextures(1, &texture_id);
     egl->glBindTexture(GL_TEXTURE_2D, texture_id);
-    //egl->glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
-    egl->glTexStorage2D(GL_TEXTURE_2D, 1, internal_format, width, height);
+    // TODO:
+    egl->glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
+    //egl->glTexStorage2D(GL_TEXTURE_2D, 1, internal_format, width, height);
 
     egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
     egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);

@@ -63,6 +63,7 @@ These are the dependencies needed to build GPU Screen Recorder:
 * libdrm
 * libcap
 * vulkan-headers
+* linux-api-headers
 
 ## Optional dependencies
 When building GPU Screen Recorder with portal support (`-Dportal=true` meson option, which is enabled by default) these dependencies are also needed:
@@ -71,6 +72,7 @@ When building GPU Screen Recorder with portal support (`-Dportal=true` meson opt
 
 ## Runtime dependencies
 * libglvnd (which provides libgl, libglx and libegl) is needed. Your system needs to support at least OpenGL ES 3.0 (released in 2012)
+* libturbojpeg (aka libjpeg-turbo) is needed when capturing camera with mjpeg pixel format option
 
 There are also additional dependencies needed at runtime depending on your GPU vendor:
 
@@ -253,3 +255,6 @@ This issue hasn't been observed on X11 yet, but if you do observe it you can eit
 If GPU Screen Recorder is installed with -Dcapabilities=true (which is the default option) then `gsr-kms-server` is installed with admin capabilities.
 This removes a password prompt when recording a monitor with the `-w monitor` option (for example `-w screen`). However if the root user is disabled on the system then the password prompt will show up anyways.
 If the root user is disabled on your system then you can instead record with `-w focused` or `-w window_id` on X11 or `-w portal` on Wayland.
+## GPU usage is high on my laptop
+GPU usage on battery powered devices is misleading. For example Intel iGPUs has multiple performance levels and the GPU usage reported on the system is the GPU usage at the current performance level.
+The performance level changes depending on the GPU load, so it may say that GPU usage is 80%, but the actual GPU usage may be 5%.

@@ -4,12 +4,8 @@ See https://trac.ffmpeg.org/wiki/EncodingForStreamingSites for optimizing stream
 Look at VK_EXT_external_memory_dma_buf.
 Use mov+faststart.
 Allow recording all monitors/selected monitor without nvfbc by recording the compositor proxy window and only recording the part that matches the monitor(s).
-Support amf and qsv.
 Disable flipping on nvidia? this might fix some stuttering issues on some setups. See NvCtrlGetAttribute/NvCtrlSetAttributeAndGetStatus NV_CTRL_SYNC_TO_VBLANK https://github.com/NVIDIA/nvidia-settings/blob/d5f022976368cbceb2f20b838ddb0bf992f0cfb9/src/gtk%2B-2.x/ctkopengl.c.
-Replays seem to have some issues with audio/video. Why?
 Cleanup unused gl/egl functions, macro, etc.
-Set audio track name to audio device name (if not merge of multiple audio devices).
-Add support for webcam, but only really for amd/intel because amd/intel can get drm fd access to webcam, nvidia cant. This allows us to create an opengl texture directly from the webcam fd for optimal performance.
 Reverse engineer nvapi so we can disable "force p2 state" on linux too (nvapi profile api with the settings id 0x50166c5e).
 Support yuv444p on amd/intel.
 fix yuv444 for hevc.
@@ -94,7 +90,7 @@ Support vfr matching games exact fps all the time. On x11 use damage tracking, o
 Support selecting which gpu to use. This can be done in egl with eglQueryDevicesEXT and then eglGetPlatformDisplayEXT. This will automatically work on AMD and Intel as vaapi uses the same device. On nvidia we need to use eglQueryDeviceAttribEXT with EGL_CUDA_DEVICE_NV.
     Maybe on glx (nvidia x11 nvfbc) we need to use __NV_PRIME_RENDER_OFFLOAD, __NV_PRIME_RENDER_OFFLOAD_PROVIDER, __GLX_VENDOR_LIBRARY_NAME, __VK_LAYER_NV_optimus, VK_ICD_FILENAMES instead. Just look at prime-run /usr/bin/prime-run.
 
-When adding support for steam deck, add option to send video to another computer.
+Add option to send video to another computer.
 New gpu screen recorder gui should have the option to cut the video directly, maybe running an ffmpeg command or implementing that ourselves. Only support gpu screen recorder video files.
 
 Check if is software renderer by using eglQueryDisplayAttribEXT(egl_display, EGL_DEVICE_EXT..) eglQueryDeviceStringEXT(egl_device, EGL_EXTENSIONS) and check for "EGL_MESA_device_software".
@@ -130,8 +126,6 @@ Allow prime-run on x11 if monitor capture and the prime gpu is not nvidia.
 Enable 2-pass encoding.
 
 Restart replay/update video resolution if monitor resolution changes.
-
-Fix pure vaapi copy on intel.
 
 Use nvidia low latency options for better encoding times.
 
@@ -354,3 +348,27 @@ There is a leak in nvfbc. When a monitor is turned off and then on there will be
     Right now a mitigation has been added to not try to recreate the nvfbc session if the capture target (monitor) isn't connected (predict if nvfbc session create will fail).
     One possible reason this happens is because bExternallyManagedContext is set to true.
     This also means that nvfbc leaks connection when destroying nvfbc, even if the monitor is connected (this is not an issue right now because exit is done, but if gsr was turned into a library it would be).
+
+Add option to set audio source volume, maybe by doing for example: -a "default_input|app:firefox;volume=50"
+
+Optimize v4l2 mjpeg by decompressing to yuv (tjDecompressToYUV) instead of rgb. This would allow removing the yuv to rgb conversion on cpu step (and rgb to yuv on the gpu as well) as well as reducing the cpu->gpu image data bandwidth as yuv is compressed.
+
+Do jpeg decoding on the gpu for v4l2 mjpeg capture (see https://github.com/negge/jpeg_gpu). Or use jpeg decoding from vaapi/nvdec.
+
+Support other v4l2 pixel formats, such as h264 and rgb/bgr. High-end cameras use h264 for high resolution high framerate option (4k 60fps or higher).
+
+AV1 medium quality on nvidia seems to be very high quality. The quality needs to be rescaled. Need to test on nvidia av1 gpu, but I dont have any such gpu.
+
+Support multiple -w, to record different sources to different video tracks. For example gameplay to video track 1 and webcam to video track 2.
+
+Update man page with info about v4l2 and new region capture format. Mention that -region is deprecated.
+
+Make multiple -w portal work with -restore-portal-session.
+
+Test if webcam capture works on intel and nvidia. Especially nvidia on x11 because it uses glx there for nvfbc while v4l2 needs egl.
+
+Play with DRM_FORMAT_MOD_LINEAR or other linear formats to avoid cuda copy. If it's already in linear format then instead check the format of the target texture and use the same format.
+
+Give early error when using invalid v4l2 path like with monitor. Use gsr_capture_v4l2_list_devices for query. Or maybe remove the early error for monitor to simplify the code.
+
+Support camera capture with pipewire to support multiple applications recording camera at the same time. Might not be as efficient as V4L2.

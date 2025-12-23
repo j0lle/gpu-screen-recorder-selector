@@ -3,9 +3,11 @@
 
 #include "capture.h"
 #include "../vec2.h"
+#include "../cursor.h"
 
 typedef struct {
     gsr_egl *egl;
+    gsr_cursor *cursor;
     const char *display_to_capture; /* A copy is made of this */
     bool record_cursor;
     vec2i output_resolution;

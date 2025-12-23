@@ -259,12 +259,19 @@ fail:
 
 static bool pa_sound_device_should_reconnect(pa_handle *p, double now, char *device_name, size_t device_name_size) {
     std::lock_guard<std::mutex> lock(p->reconnect_mutex);
+
+    if(!p->reconnect && (!p->stream || !PA_STREAM_IS_GOOD(pa_stream_get_state(p->stream)))) {
+        p->reconnect = true;
+        p->reconnect_last_tried_seconds = now;
+    }
+
     if(p->reconnect && now - p->reconnect_last_tried_seconds >= RECONNECT_TRY_TIMEOUT_SECONDS) {
         p->reconnect_last_tried_seconds = now;
         // TODO: Size check
         snprintf(device_name, device_name_size, "%s", p->device_name);
         return true;
     }
+
     return false;
 }
 
@@ -292,6 +299,8 @@ static bool pa_sound_device_handle_reconnect(pa_handle *p, char *device_name, si
         return false;
     }
 
+    pa_mainloop_iterate(p->mainloop, 0, NULL);
+
     std::lock_guard<std::mutex> lock(p->reconnect_mutex);
     p->reconnect = false;
     return true;
@@ -309,10 +318,11 @@ static int pa_sound_device_read(pa_handle *p, double timeout_seconds) {
     pa_usec_t latency = 0;
     int negative = 0;
 
-    if(!pa_sound_device_handle_reconnect(p, device_name, sizeof(device_name), start_time))
+    pa_mainloop_iterate(p->mainloop, 0, NULL);
+
+    if(!pa_sound_device_handle_reconnect(p, device_name, sizeof(device_name), start_time) || !p->stream)
         goto fail;
 
-    pa_mainloop_iterate(p->mainloop, 0, NULL);
     if(pa_stream_get_state(p->stream) != PA_STREAM_READY)
         goto fail;
 

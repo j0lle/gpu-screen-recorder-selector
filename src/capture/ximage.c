@@ -16,7 +16,6 @@
 typedef struct {
     gsr_capture_ximage_params params;
     Display *display;
-    gsr_cursor cursor;
     gsr_monitor monitor;
     vec2i capture_pos;
     vec2i capture_size;
@@ -25,7 +24,6 @@ typedef struct {
 } gsr_capture_ximage;
 
 static void gsr_capture_ximage_stop(gsr_capture_ximage *self) {
-    gsr_cursor_deinit(&self->cursor);
     if(self->texture_id) {
         self->params.egl->glDeleteTextures(1, &self->texture_id);
         self->texture_id = 0;
@@ -39,11 +37,6 @@ static int max_int(int a, int b) {
 static int gsr_capture_ximage_start(gsr_capture *cap, gsr_capture_metadata *capture_metadata) {
     gsr_capture_ximage *self = cap->priv;
     self->root_window = DefaultRootWindow(self->display);
-
-    if(gsr_cursor_init(&self->cursor, self->params.egl, self->display) != 0) {
-        gsr_capture_ximage_stop(self);
-        return -1;
-    }
 
     if(!get_monitor_by_name(self->params.egl, GSR_CONNECTION_X11, self->params.display_to_capture, &self->monitor)) {
         fprintf(stderr, "gsr error: gsr_capture_ximage_start: failed to find monitor by name \"%s\"\n", self->params.display_to_capture);
@@ -59,14 +52,11 @@ static int gsr_capture_ximage_start(gsr_capture *cap, gsr_capture_metadata *capt
 
     if(self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0) {
         self->params.output_resolution = scale_keep_aspect_ratio(self->capture_size, self->params.output_resolution);
-        capture_metadata->video_width = self->params.output_resolution.x;
-        capture_metadata->video_height = self->params.output_resolution.y;
+        capture_metadata->video_size = self->params.output_resolution;
     } else if(self->params.region_size.x > 0 && self->params.region_size.y > 0) {
-        capture_metadata->video_width = self->params.region_size.x;
-        capture_metadata->video_height = self->params.region_size.y;
+        capture_metadata->video_size = self->params.region_size;
     } else {
-        capture_metadata->video_width = self->capture_size.x;
-        capture_metadata->video_height = self->capture_size.y;
+        capture_metadata->video_size = self->capture_size;
     }
 
     self->texture_id = gl_create_texture(self->params.egl, self->capture_size.x, self->capture_size.y, GL_RGB8, GL_RGB, GL_LINEAR);
@@ -77,12 +67,6 @@ static int gsr_capture_ximage_start(gsr_capture *cap, gsr_capture_metadata *capt
     }
 
     return 0;
-}
-
-static void gsr_capture_ximage_on_event(gsr_capture *cap, gsr_egl *egl) {
-    gsr_capture_ximage *self = cap->priv;
-    XEvent *xev = gsr_window_get_event_data(egl->window);
-    gsr_cursor_on_event(&self->cursor, xev);
 }
 
 static bool gsr_capture_ximage_upload_to_texture(gsr_capture_ximage *self, int x, int y, int width, int height) {
@@ -137,6 +121,7 @@ static bool gsr_capture_ximage_upload_to_texture(gsr_capture_ximage *self, int x
     }
 
     self->params.egl->glBindTexture(GL_TEXTURE_2D, self->texture_id);
+    // TODO: Change to GL_RGBA for better performance? image_data needs alpha then as well
     self->params.egl->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image->width, image->height, GL_RGB, GL_UNSIGNED_BYTE, image_data);
     self->params.egl->glBindTexture(GL_TEXTURE_2D, 0);
     success = true;
@@ -150,35 +135,33 @@ static bool gsr_capture_ximage_upload_to_texture(gsr_capture_ximage *self, int x
 static int gsr_capture_ximage_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
     gsr_capture_ximage *self = cap->priv;
 
-    const vec2i output_size = scale_keep_aspect_ratio(self->capture_size, (vec2i){capture_metadata->recording_width, capture_metadata->recording_height});
-    const vec2i target_pos = { max_int(0, capture_metadata->video_width / 2 - output_size.x / 2), max_int(0, capture_metadata->video_height / 2 - output_size.y / 2) };
+    const vec2i output_size = scale_keep_aspect_ratio(self->capture_size, capture_metadata->recording_size);
+    const vec2i target_pos = gsr_capture_get_target_position(output_size, capture_metadata);
     gsr_capture_ximage_upload_to_texture(self, self->capture_pos.x + self->params.region_position.x, self->capture_pos.y + self->params.region_position.y, self->capture_size.x, self->capture_size.y);
 
     gsr_color_conversion_draw(color_conversion, self->texture_id,
         target_pos, output_size,
         (vec2i){0, 0}, self->capture_size, self->capture_size,
-        GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false);
+        GSR_ROT_0, capture_metadata->flip, GSR_SOURCE_COLOR_RGB, false);
 
-    if(self->params.record_cursor && self->cursor.visible) {
+    if(self->params.record_cursor && self->params.cursor->visible) {
         const vec2d scale = {
             self->capture_size.x == 0 ? 0 : (double)output_size.x / (double)self->capture_size.x,
             self->capture_size.y == 0 ? 0 : (double)output_size.y / (double)self->capture_size.y
         };
 
-        gsr_cursor_tick(&self->cursor, self->root_window);
-
         const vec2i cursor_pos = {
-            target_pos.x + (self->cursor.position.x - self->cursor.hotspot.x) * scale.x - self->capture_pos.x - self->params.region_position.x,
-            target_pos.y + (self->cursor.position.y - self->cursor.hotspot.y) * scale.y - self->capture_pos.y - self->params.region_position.y
+            target_pos.x + (self->params.cursor->position.x - self->params.cursor->hotspot.x) * scale.x - self->capture_pos.x - self->params.region_position.x,
+            target_pos.y + (self->params.cursor->position.y - self->params.cursor->hotspot.y) * scale.y - self->capture_pos.y - self->params.region_position.y
         };
 
         self->params.egl->glEnable(GL_SCISSOR_TEST);
         self->params.egl->glScissor(target_pos.x, target_pos.y, output_size.x, output_size.y);
 
-        gsr_color_conversion_draw(color_conversion, self->cursor.texture_id,
-            cursor_pos, (vec2i){self->cursor.size.x * scale.x, self->cursor.size.y * scale.y},
-            (vec2i){0, 0}, self->cursor.size, self->cursor.size,
-            GSR_ROT_0, GSR_SOURCE_COLOR_RGB, false);
+        gsr_color_conversion_draw(color_conversion, self->params.cursor->texture_id,
+            cursor_pos, (vec2i){self->params.cursor->size.x * scale.x, self->params.cursor->size.y * scale.y},
+            (vec2i){0, 0}, self->params.cursor->size, self->params.cursor->size,
+            GSR_ROT_0, capture_metadata->flip, GSR_SOURCE_COLOR_RGB, false);
 
         self->params.egl->glDisable(GL_SCISSOR_TEST);
     }
@@ -230,7 +213,6 @@ gsr_capture* gsr_capture_ximage_create(const gsr_capture_ximage_params *params) 
     
     *cap = (gsr_capture) {
         .start = gsr_capture_ximage_start,
-        .on_event = gsr_capture_ximage_on_event,
         .tick = NULL,
         .should_stop = NULL,
         .capture = gsr_capture_ximage_capture,

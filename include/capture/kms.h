@@ -2,9 +2,13 @@
 #define GSR_CAPTURE_KMS_H
 
 #include "capture.h"
+#include "../cursor.h"
+#include "../../kms/kms_shared.h"
 
 typedef struct {
     gsr_egl *egl;
+    gsr_cursor *x11_cursor;
+    gsr_kms_response *kms_response;
     const char *display_to_capture; /* A copy is made of this */
     bool hdr;
     bool record_cursor;

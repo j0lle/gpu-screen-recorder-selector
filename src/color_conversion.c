@@ -472,7 +472,7 @@ static void gsr_color_conversion_swizzle_reset(gsr_color_conversion *self, gsr_s
     }
 }
 
-static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsigned int texture_id, bool external_texture, gsr_rotation rotation, float rotation_matrix[2][2], vec2i source_position, vec2i source_size, vec2i destination_pos, vec2i texture_size, vec2f scale, gsr_source_color source_color) {
+static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsigned int texture_id, bool external_texture, gsr_rotation rotation, gsr_flip flip, float rotation_matrix[2][2], vec2i source_position, vec2i source_size, vec2i destination_pos, vec2i texture_size, vec2f scale, gsr_source_color source_color) {
     if(source_size.x == 0 || source_size.y == 0)
         return;
 
@@ -508,7 +508,7 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
         (float)source_size.y / (texture_size.y == 0 ? 1.0f : (float)texture_size.y),
     };
 
-    const float vertices[] = {
+    float vertices[] = {
         -1.0f + 0.0f,               -1.0f + 0.0f + size_norm.y, texture_pos_norm.x,                       texture_pos_norm.y + texture_size_norm.y,
         -1.0f + 0.0f,               -1.0f + 0.0f,               texture_pos_norm.x,                       texture_pos_norm.y,
         -1.0f + 0.0f + size_norm.x, -1.0f + 0.0f,               texture_pos_norm.x + texture_size_norm.x, texture_pos_norm.y,
@@ -517,6 +517,20 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
         -1.0f + 0.0f + size_norm.x, -1.0f + 0.0f,               texture_pos_norm.x + texture_size_norm.x, texture_pos_norm.y,
         -1.0f + 0.0f + size_norm.x, -1.0f + 0.0f + size_norm.y, texture_pos_norm.x + texture_size_norm.x, texture_pos_norm.y + texture_size_norm.y
     };
+
+    if(flip & GSR_FLIP_HORIZONTAL) {
+        for(int i = 0; i < 6; ++i) {
+            const float prev_x = vertices[i*4 + 2];
+            vertices[i*4 + 2] = texture_pos_norm.x + texture_size_norm.x - prev_x;
+        }
+    }
+
+    if(flip & GSR_FLIP_VERTICAL) {
+        for(int i = 0; i < 6; ++i) {
+            const float prev_y = vertices[i*4 + 3];
+            vertices[i*4 + 3] = texture_pos_norm.y + texture_size_norm.y - prev_y;
+        }
+    }
 
     self->params.egl->glBindVertexArray(self->vertex_array_object_id);
     self->params.egl->glViewport(0, 0, dest_texture_size.x, dest_texture_size.y);
@@ -569,7 +583,7 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
     self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i source_pos, vec2i source_size, vec2i texture_size, gsr_rotation rotation, gsr_source_color source_color, bool external_texture) {
+void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_id, vec2i destination_pos, vec2i destination_size, vec2i source_pos, vec2i source_size, vec2i texture_size, gsr_rotation rotation, gsr_flip flip, gsr_source_color source_color, bool external_texture) {
     assert(!external_texture || self->params.load_external_image_shader);
     if(external_texture && !self->params.load_external_image_shader) {
         fprintf(stderr, "gsr error: gsr_color_conversion_draw: external texture not loaded\n");
@@ -590,7 +604,7 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
 
     source_position.x += source_pos.x;
     source_position.y += source_pos.y;
-    gsr_color_conversion_draw_graphics(self, texture_id, external_texture, rotation, rotation_matrix, source_position, source_size, destination_pos, texture_size, scale, source_color);
+    gsr_color_conversion_draw_graphics(self, texture_id, external_texture, rotation, flip, rotation_matrix, source_position, source_size, destination_pos, texture_size, scale, source_color);
 
     self->params.egl->glFlush();
     // TODO: Use the minimal barrier required
