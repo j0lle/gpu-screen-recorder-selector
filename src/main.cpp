@@ -3535,14 +3535,15 @@ static void validate_args_with_capture_sources(args_parser &arg_parser, const st
         _exit(1);
     }
 
+    const bool is_capturing_region = is_capturing_type(capture_sources, GSR_CAPTURE_SOURCE_TYPE_REGION);
     if(region_arg->num_values == 0) {
-        if(!has_capture_source_with_region_set(capture_sources)) {
+        if(is_capturing_region && !has_capture_source_with_region_set(capture_sources)) {
             fprintf(stderr, "gsr error: option -region is required when '-w region' is used\n");
             args_parser_print_usage();
             _exit(1);
         }
     } else {
-        if(is_capturing_type(capture_sources, GSR_CAPTURE_SOURCE_TYPE_REGION)) {
+        if(is_capturing_region) {
             fprintf(stderr, "gsr warning: option -region is deprecated, use -w with region directly instead, for example: -w %s\n", region_arg->values[0]);
         } else {
             fprintf(stderr, "gsr error: option -region can only be used when option '-w region' is used\n");
