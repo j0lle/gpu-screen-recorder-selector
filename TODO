@@ -379,3 +379,9 @@ Support v4l2 mplane on devices where it's supported (where it's more efficient).
 
 Implement v4l2 yuyv nvidia capture by capturing rg88 yuyv to rgb as is done now for screenshot, but also do that for video by creating an intermediate rgb texture for the camera. Then render that rgb texture to the video texture.
     This is needed to properly scale the yuyv texture without messing it up (the texture indexing).
+
+Set v4l2 camera fps to video output fps (if lower than the camera fps) and the same for resolution.
+
+Support camera controls, such as white balance. Otherwise tell user to use cameractrl software.
+
+Camera capture doesn't work perfectly. The image gets glitched, need to properly wait for image to be done.

@@ -40,7 +40,6 @@ typedef struct __GLXFBConfigRec *GLXFBConfig;
 typedef struct __GLXcontextRec *GLXContext;
 typedef XID GLXDrawable;
 typedef void(*__GLXextFuncPtr)(void);
-typedef struct __GLsync *GLsync;
 
 #define EGL_SUCCESS                             0x3000
 #define EGL_BUFFER_SIZE                         0x3020
@@ -151,11 +150,6 @@ typedef struct __GLsync *GLsync;
 #define GL_VERTEX_SHADER                        0x8B31
 #define GL_COMPILE_STATUS                       0x8B81
 #define GL_LINK_STATUS                          0x8B82
-
-#define GL_SYNC_GPU_COMMANDS_COMPLETE           0x9117
-#define GL_SYNC_FLUSH_COMMANDS_BIT              0x00000001
-#define GL_CONDITION_SATISFIED                  0x911C
-#define GL_ALREADY_SIGNALED                     0x911A
 
 typedef unsigned int (*FUNC_eglExportDMABUFImageQueryMESA)(EGLDisplay dpy, EGLImageKHR image, int *fourcc, int *num_planes, uint64_t *modifiers);
 typedef unsigned int (*FUNC_eglExportDMABUFImageMESA)(EGLDisplay dpy, EGLImageKHR image, int *fds, int32_t *strides, int32_t *offsets);
@@ -315,10 +309,6 @@ struct gsr_egl {
     void* (*glMapBufferRange)(unsigned int target, intptr_t offset, ssize_t length, unsigned int access);
     unsigned char (*glUnmapBuffer)(unsigned int target);
     void (*glGetIntegerv)(unsigned int pname, int *params);
-
-     GLsync (*glFenceSync)(unsigned int condition, unsigned int flags);
-     void (*glDeleteSync)(GLsync sync);
-     unsigned int (*glClientWaitSync)(GLsync sync, unsigned int flags, uint64_t timeout);
 };
 
 bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bool enable_debug);

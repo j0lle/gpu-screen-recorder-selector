@@ -628,18 +628,6 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
         }
     }
 
-    // static GLsync sync = NULL;
-
-    // if(sync) {
-    //     const unsigned int r = self->params.egl->glClientWaitSync(sync, GL_SYNC_FLUSH_COMMANDS_BIT, 1000 * 1000 * 1000);
-    //     if(r != GL_CONDITION_SATISFIED && r != GL_ALREADY_SIGNALED) {
-    //         fprintf(stderr, "failed sync: %u\n", r);
-    //     }
-    //     self->params.egl->glDeleteSync(sync);
-    // }
-
-    // sync = self->params.egl->glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-
     //self->params.egl->glFlush();
     //self->params.egl->glFinish();
 

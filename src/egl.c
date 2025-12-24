@@ -333,10 +333,6 @@ static bool gsr_egl_load_gl(gsr_egl *self, void *library) {
         { (void**)&self->glUnmapBuffer, "glUnmapBuffer" },
         { (void**)&self->glGetIntegerv, "glGetIntegerv" },
 
-        { (void**)&self->glFenceSync, "glFenceSync" },
-        { (void**)&self->glDeleteSync, "glDeleteSync" },
-        { (void**)&self->glClientWaitSync, "glClientWaitSync" },
-
         { NULL, NULL }
     };
 

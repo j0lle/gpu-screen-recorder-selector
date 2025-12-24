@@ -10,8 +10,12 @@
 #define GRAPHICS_SHADER_INDEX_UV_EXTERNAL          3
 #define GRAPHICS_SHADER_INDEX_RGB                  4
 #define GRAPHICS_SHADER_INDEX_RGB_EXTERNAL         5
-#define GRAPHICS_SHADER_INDEX_YUYV_TO_RGB          6
-#define GRAPHICS_SHADER_INDEX_YUYV_TO_RGB_EXTERNAL 7
+#define GRAPHICS_SHADER_INDEX_YUYV_TO_Y            6
+#define GRAPHICS_SHADER_INDEX_YUYV_TO_UV           7
+#define GRAPHICS_SHADER_INDEX_YUYV_TO_Y_EXTERNAL   8
+#define GRAPHICS_SHADER_INDEX_YUYV_TO_UV_EXTERNAL  9
+#define GRAPHICS_SHADER_INDEX_YUYV_TO_RGB          10
+#define GRAPHICS_SHADER_INDEX_YUYV_TO_RGB_EXTERNAL 11
 
 /* https://en.wikipedia.org/wiki/YCbCr, see study/color_space_transform_matrix.png */
 
@@ -250,6 +254,135 @@ static unsigned int load_graphics_shader_rgb(gsr_shader *shader, gsr_egl *egl, g
     return 0;
 }
 
+static int load_graphics_shader_yuyv_to_y(gsr_shader *shader, gsr_egl *egl, gsr_color_graphics_uniforms *uniforms, bool external_texture) {
+    char vertex_shader[2048];
+    snprintf(vertex_shader, sizeof(vertex_shader),
+        "#version 300 es                                   \n"
+        "in vec2 pos;                                      \n"
+        "in vec2 texcoords;                                \n"
+        "out vec2 texcoords_out;                           \n"
+        "uniform vec2 offset;                              \n"
+        "uniform float rotation;                           \n"
+        "uniform mat2 rotation_matrix;                     \n"
+        "void main()                                       \n"
+        "{                                                 \n"
+        "  texcoords_out = vec2(texcoords.x - 0.5, texcoords.y - 0.5) * rotation_matrix + vec2(0.5, 0.5);  \n"
+        "  gl_Position = vec4(offset.x, offset.y, 0.0, 0.0) + vec4(pos.x, pos.y, 0.0, 1.0);    \n"
+        "}                                                 \n");
+
+    const char *main_code =
+            "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
+            "  FragColor.x = pixel.r;                                                        \n"
+            "  FragColor.w = 1.0;                                                            \n";
+
+    char fragment_shader[2048];
+    if(external_texture) {
+        snprintf(fragment_shader, sizeof(fragment_shader),
+            "#version 300 es                                                                 \n"
+            "#extension GL_OES_EGL_image_external : enable                                   \n"
+            "#extension GL_OES_EGL_image_external_essl3 : require                            \n"
+            "precision highp float;                                                          \n"
+            "in vec2 texcoords_out;                                                          \n"
+            "uniform samplerExternalOES tex1;                                                \n"
+            "out vec4 FragColor;                                                             \n"
+            "void main()                                                                     \n"
+            "{                                                                               \n"
+            "%s"
+            "}                                                                               \n", main_code);
+    } else {
+        snprintf(fragment_shader, sizeof(fragment_shader),
+            "#version 300 es                                                                 \n"
+            "precision highp float;                                                          \n"
+            "in vec2 texcoords_out;                                                          \n"
+            "uniform sampler2D tex1;                                                         \n"
+            "out vec4 FragColor;                                                             \n"
+            "void main()                                                                     \n"
+            "{                                                                               \n"
+            "%s"
+            "}                                                                               \n", main_code);
+    }
+
+    if(gsr_shader_init(shader, egl, vertex_shader, fragment_shader) != 0)
+        return -1;
+
+    gsr_shader_bind_attribute_location(shader, "pos", 0);
+    gsr_shader_bind_attribute_location(shader, "texcoords", 1);
+    uniforms->offset = egl->glGetUniformLocation(shader->program_id, "offset");
+    uniforms->rotation_matrix = egl->glGetUniformLocation(shader->program_id, "rotation_matrix");
+    return 0;
+}
+
+static unsigned int load_graphics_shader_yuyv_to_uv(gsr_shader *shader, gsr_egl *egl, gsr_color_graphics_uniforms *uniforms, bool external_texture) {
+    char vertex_shader[2048];
+    snprintf(vertex_shader, sizeof(vertex_shader),
+        "#version 300 es                                 \n"
+        "in vec2 pos;                                    \n"
+        "in vec2 texcoords;                              \n"
+        "out vec2 texcoords_out;                         \n"
+        "uniform vec2 offset;                            \n"
+        "uniform float rotation;                         \n"
+        "uniform mat2 rotation_matrix;                   \n"
+        "void main()                                     \n"
+        "{                                               \n"
+        "  texcoords_out = vec2(texcoords.x - 0.5, texcoords.y - 0.5) * rotation_matrix + vec2(0.5, 0.5);                      \n"
+        "  gl_Position = (vec4(offset.x, offset.y, 0.0, 0.0) + vec4(pos.x, pos.y, 0.0, 1.0)) * vec4(0.5, 0.5, 1.0, 1.0) - vec4(0.5, 0.5, 0.0, 0.0);   \n"
+        "}                                               \n");
+
+    const char *main_code =
+            "    vec2 resolution = vec2(textureSize(tex1, 0));\n"
+            "    ivec2 uv = ivec2(texcoords_out * resolution);\n"
+            "    float u = 0.0;\n"
+            "    float v = 0.0;\n"
+            "    vec4 this_color = texelFetch(tex1, uv, 0);\n"
+            "    if((uv.x & 1) == 0) {\n"
+            "        vec2 next_color = texelFetch(tex1, uv + ivec2(1, 0), 0).rg;\n"
+            "        u = this_color.g;\n"
+            "        v = next_color.g;\n"
+            "    } else {\n"
+            "        vec2 prev_color = texelFetch(tex1, uv - ivec2(1, 0), 0).rg;\n"
+            "        u = prev_color.g;\n"
+            "        v = this_color.g;\n"
+            "    }\n"
+            "    FragColor.rg = vec2(u, v);\n"
+            "    FragColor.w = 1.0;\n";
+
+    char fragment_shader[2048];
+    if(external_texture) {
+        snprintf(fragment_shader, sizeof(fragment_shader),
+            "#version 300 es                                                                       \n"
+            "#extension GL_OES_EGL_image_external : enable                                         \n"
+            "#extension GL_OES_EGL_image_external_essl3 : require                                  \n"
+            "precision highp float;                                                                \n"
+            "in vec2 texcoords_out;                                                                \n"
+            "uniform samplerExternalOES tex1;                                                      \n"
+            "out vec4 FragColor;                                                                   \n"
+            "void main()                                                                           \n"
+            "{                                                                                     \n"
+            "%s"
+            "}                                                                                     \n", main_code);
+    } else {
+        snprintf(fragment_shader, sizeof(fragment_shader),
+            "#version 300 es                                                                       \n"
+            "precision highp float;                                                                \n"
+            "in vec2 texcoords_out;                                                                \n"
+            "uniform sampler2D tex1;                                                               \n"
+            "out vec4 FragColor;                                                                   \n"
+            "void main()                                                                           \n"
+            "{                                                                                     \n"
+            "%s"
+            "}                                                                                     \n", main_code);
+    }
+
+    if(gsr_shader_init(shader, egl, vertex_shader, fragment_shader) != 0)
+        return -1;
+
+    gsr_shader_bind_attribute_location(shader, "pos", 0);
+    gsr_shader_bind_attribute_location(shader, "texcoords", 1);
+    uniforms->offset = egl->glGetUniformLocation(shader->program_id, "offset");
+    uniforms->rotation_matrix = egl->glGetUniformLocation(shader->program_id, "rotation_matrix");
+    return 0;
+}
+
 static unsigned int load_graphics_shader_yuyv_to_rgb(gsr_shader *shader, gsr_egl *egl, gsr_color_graphics_uniforms *uniforms, bool external_texture) {
     char vertex_shader[2048];
     snprintf(vertex_shader, sizeof(vertex_shader),
@@ -268,21 +401,18 @@ static unsigned int load_graphics_shader_yuyv_to_rgb(gsr_shader *shader, gsr_egl
 
     const char *main_code =
         "    vec2 resolution = vec2(textureSize(tex1, 0));\n"
-        "    vec2 uv = texcoords_out * resolution;\n"
+        "    ivec2 uv = ivec2(texcoords_out * resolution);\n"
         "    float y = 0.0;\n"
         "    float u = 0.0;\n"
         "    float v = 0.0;\n"
-        "    if(mod(uv.x, 2.0) < 1.0) {\n"
-        "        vec3 this_color = texture(tex1, texcoords_out).rgb;\n"
-        "        vec3 next_color = texture(tex1, texcoords_out + vec2(1.0, 0.0)/resolution).rgb;\n"
-        "\n"
+        "    vec4 this_color = texelFetch(tex1, uv, 0);\n"
+        "    if((uv.x & 1) == 0) {\n"
+        "        vec2 next_color = texelFetch(tex1, uv + ivec2(1, 0), 0).rg;\n"
         "        y = this_color.r;\n"
         "        u = this_color.g;\n"
         "        v = next_color.g;\n"
         "    } else {\n"
-        "        vec3 this_color = texture(tex1, texcoords_out).rgb;\n"
-        "        vec3 prev_color = texture(tex1, texcoords_out - vec2(1.0, 0.0)/resolution).rgb;\n"
-        "\n"
+        "        vec2 prev_color = texelFetch(tex1, uv - ivec2(1, 0), 0).rg;\n"
         "        y = this_color.r;\n"
         "        u = prev_color.g;\n"
         "        v = this_color.g;\n"
@@ -392,6 +522,16 @@ static bool gsr_color_conversion_load_graphics_shaders(gsr_color_conversion *sel
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load UV graphics shader\n");
                 return false;
             }
+
+            if(load_graphics_shader_yuyv_to_y(&self->graphics_shaders[GRAPHICS_SHADER_INDEX_YUYV_TO_Y], self->params.egl, &self->graphics_uniforms[GRAPHICS_SHADER_INDEX_YUYV_TO_Y], false) != 0) {
+                fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load YUYV to Y graphics shader\n");
+                return false;
+            }
+
+            if(load_graphics_shader_yuyv_to_uv(&self->graphics_shaders[GRAPHICS_SHADER_INDEX_YUYV_TO_UV], self->params.egl, &self->graphics_uniforms[GRAPHICS_SHADER_INDEX_YUYV_TO_UV], false) != 0) {
+                fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load YUYV to UV graphics shader\n");
+                return false;
+            }
             break;
         }
         case GSR_DESTINATION_COLOR_RGB8: {
@@ -421,6 +561,16 @@ static bool gsr_color_conversion_load_external_graphics_shaders(gsr_color_conver
 
             if(load_graphics_shader_uv(&self->graphics_shaders[GRAPHICS_SHADER_INDEX_UV_EXTERNAL], self->params.egl, &self->graphics_uniforms[GRAPHICS_SHADER_INDEX_UV_EXTERNAL], self->params.destination_color, self->params.color_range, true) != 0) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load UV graphics shader (external)\n");
+                return false;
+            }
+
+            if(load_graphics_shader_yuyv_to_y(&self->graphics_shaders[GRAPHICS_SHADER_INDEX_YUYV_TO_Y_EXTERNAL], self->params.egl, &self->graphics_uniforms[GRAPHICS_SHADER_INDEX_YUYV_TO_Y_EXTERNAL], true) != 0) {
+                fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load YUYV to Y graphics shader (external)\n");
+                return false;
+            }
+
+            if(load_graphics_shader_yuyv_to_uv(&self->graphics_shaders[GRAPHICS_SHADER_INDEX_YUYV_TO_UV_EXTERNAL], self->params.egl, &self->graphics_uniforms[GRAPHICS_SHADER_INDEX_YUYV_TO_UV_EXTERNAL], true) != 0) {
+                fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load YUYV to UV graphics shader (external)\n");
                 return false;
             }
             break;
@@ -550,17 +700,17 @@ static void gsr_color_conversion_apply_rotation(gsr_rotation rotation, float rot
     }
 }
 
-static void gsr_color_conversion_swizzle_texture_source(gsr_color_conversion *self, gsr_source_color source_color) {
+static void gsr_color_conversion_swizzle_texture_source(gsr_color_conversion *self, unsigned int texture_target, gsr_source_color source_color) {
     if(source_color == GSR_SOURCE_COLOR_BGR) {
         const int swizzle_mask[] = { GL_BLUE, GL_GREEN, GL_RED, 1 };
-        self->params.egl->glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
+        self->params.egl->glTexParameteriv(texture_target, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
     }
 }
 
-static void gsr_color_conversion_swizzle_reset(gsr_color_conversion *self, gsr_source_color source_color) {
+static void gsr_color_conversion_swizzle_reset(gsr_color_conversion *self, unsigned int texture_target, gsr_source_color source_color) {
     if(source_color == GSR_SOURCE_COLOR_BGR) {
         const int swizzle_mask[] = { GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA };
-        self->params.egl->glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
+        self->params.egl->glTexParameteriv(texture_target, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
     }
 }
 
@@ -569,7 +719,7 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
         return;
 
     const vec2i dest_texture_size = self->params.destination_textures_size[0];
-    const int texture_target = external_texture ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D;
+    const unsigned int texture_target = external_texture ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D;
 
     if(rotation == GSR_ROT_90 || rotation == GSR_ROT_270) {
         const float tmp = texture_size.x;
@@ -578,7 +728,7 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
     }
 
     self->params.egl->glBindTexture(texture_target, texture_id);
-    gsr_color_conversion_swizzle_texture_source(self, source_color);
+    gsr_color_conversion_swizzle_texture_source(self, texture_target, source_color);
 
     const vec2f pos_norm = {
         ((float)destination_pos.x / (dest_texture_size.x == 0 ? 1.0f : (float)dest_texture_size.x)) * 2.0f,
@@ -674,21 +824,49 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
             break;
         }
         case GSR_SOURCE_COLOR_YUYV: {
-            self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, self->framebuffers[0]);
-            //cap_xcomp->params.egl->glClear(GL_COLOR_BUFFER_BIT); // TODO: Do this in a separate clear_ function. We want to do that when using multiple drm to create the final image (multiple monitors for example)
+            switch(self->params.destination_color) {
+                case GSR_DESTINATION_COLOR_NV12:
+                case GSR_DESTINATION_COLOR_P010: {
+                    self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, self->framebuffers[0]);
+                    //cap_xcomp->params.egl->glClear(GL_COLOR_BUFFER_BIT); // TODO: Do this in a separate clear_ function. We want to do that when using multiple drm to create the final image (multiple monitors for example)
 
-            const int shader_index = external_texture ? GRAPHICS_SHADER_INDEX_YUYV_TO_RGB_EXTERNAL : GRAPHICS_SHADER_INDEX_YUYV_TO_RGB;
-            gsr_shader_use(&self->graphics_shaders[shader_index]);
-            self->params.egl->glUniformMatrix2fv(self->graphics_uniforms[shader_index].rotation_matrix, 1, GL_TRUE, (const float*)rotation_matrix);
-            self->params.egl->glUniform2f(self->graphics_uniforms[shader_index].offset, pos_norm.x, pos_norm.y);
-            self->params.egl->glDrawArrays(GL_TRIANGLES, 0, 6);
+                    int shader_index = external_texture ? GRAPHICS_SHADER_INDEX_YUYV_TO_Y_EXTERNAL : GRAPHICS_SHADER_INDEX_YUYV_TO_Y;
+                    gsr_shader_use(&self->graphics_shaders[shader_index]);
+                    self->params.egl->glUniformMatrix2fv(self->graphics_uniforms[shader_index].rotation_matrix, 1, GL_TRUE, (const float*)rotation_matrix);
+                    self->params.egl->glUniform2f(self->graphics_uniforms[shader_index].offset, pos_norm.x, pos_norm.y);
+                    self->params.egl->glDrawArrays(GL_TRIANGLES, 0, 6);
+
+                    if(self->params.num_destination_textures > 1) {
+                        self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, self->framebuffers[1]);
+                        //cap_xcomp->params.egl->glClear(GL_COLOR_BUFFER_BIT);
+
+                        shader_index = external_texture ? GRAPHICS_SHADER_INDEX_YUYV_TO_UV_EXTERNAL : GRAPHICS_SHADER_INDEX_YUYV_TO_UV;
+                        gsr_shader_use(&self->graphics_shaders[shader_index]);
+                        self->params.egl->glUniformMatrix2fv(self->graphics_uniforms[shader_index].rotation_matrix, 1, GL_TRUE, (const float*)rotation_matrix);
+                        self->params.egl->glUniform2f(self->graphics_uniforms[shader_index].offset, pos_norm.x, pos_norm.y);
+                        self->params.egl->glDrawArrays(GL_TRIANGLES, 0, 6);
+                    }
+                    break;
+                }
+                case GSR_DESTINATION_COLOR_RGB8: {
+                    self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, self->framebuffers[0]);
+                    //cap_xcomp->params.egl->glClear(GL_COLOR_BUFFER_BIT); // TODO: Do this in a separate clear_ function. We want to do that when using multiple drm to create the final image (multiple monitors for example)
+
+                    const int shader_index = external_texture ? GRAPHICS_SHADER_INDEX_YUYV_TO_RGB_EXTERNAL : GRAPHICS_SHADER_INDEX_YUYV_TO_RGB;
+                    gsr_shader_use(&self->graphics_shaders[shader_index]);
+                    self->params.egl->glUniformMatrix2fv(self->graphics_uniforms[shader_index].rotation_matrix, 1, GL_TRUE, (const float*)rotation_matrix);
+                    self->params.egl->glUniform2f(self->graphics_uniforms[shader_index].offset, pos_norm.x, pos_norm.y);
+                    self->params.egl->glDrawArrays(GL_TRIANGLES, 0, 6);
+                    break;
+                }
+            }
             break;
         }
     }
 
     self->params.egl->glBindVertexArray(0);
     self->params.egl->glUseProgram(0);
-    gsr_color_conversion_swizzle_reset(self, source_color);
+    gsr_color_conversion_swizzle_reset(self, texture_target, source_color);
     self->params.egl->glBindTexture(texture_target, 0);
     self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
@@ -710,7 +888,6 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
 
     const int texture_target = external_texture ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D;
     self->params.egl->glBindTexture(texture_target, texture_id);
-    gsr_color_conversion_swizzle_texture_source(self, source_color);
 
     source_position.x += source_pos.x;
     source_position.y += source_pos.y;
@@ -721,7 +898,6 @@ void gsr_color_conversion_draw(gsr_color_conversion *self, unsigned int texture_
     self->params.egl->glMemoryBarrier(GL_ALL_BARRIER_BITS); // GL_SHADER_IMAGE_ACCESS_BARRIER_BIT
     self->params.egl->glUseProgram(0);
 
-    gsr_color_conversion_swizzle_reset(self, source_color);
     self->params.egl->glBindTexture(texture_target, 0);
 }
 

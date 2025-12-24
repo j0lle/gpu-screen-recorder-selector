@@ -53,7 +53,8 @@ typedef struct {
     int fd;
     int dmabuf_fd[NUM_BUFFERS];
     EGLImage dma_image[NUM_BUFFERS];
-    unsigned int texture_id;
+    unsigned int texture_id[NUM_BUFFERS];
+    unsigned int prev_texture_index;
     bool got_first_frame;
 
     void *dmabuf_map[NUM_BUFFERS];
@@ -72,6 +73,8 @@ typedef struct {
     tjhandle jpeg_decompressor;
 
     double capture_start_time;
+
+    bool yuyv_conversion_fallback;
 } gsr_capture_v4l2;
 
 static int xioctl(int fd, unsigned long request, void *arg) {
@@ -90,9 +93,9 @@ static void gsr_capture_v4l2_stop(gsr_capture_v4l2 *self) {
         self->pbos[i] = 0;
     }
 
-    if(self->texture_id) {
-        self->params.egl->glDeleteTextures(1, &self->texture_id);
-        self->texture_id = 0;
+    self->params.egl->glDeleteTextures(NUM_BUFFERS, self->texture_id);
+    for(int i = 0; i < NUM_BUFFERS; ++i) {
+        self->texture_id[i] = 0;
     }
 
     for(int i = 0; i < NUM_BUFFERS; ++i) {
@@ -246,30 +249,46 @@ static bool gsr_capture_v4l2_map_buffer(gsr_capture_v4l2 *self, const struct v4l
             return false;
         }
         case GSR_CAPTURE_V4L2_PIXFMT_YUYV: {
+            self->params.egl->glGenTextures(NUM_BUFFERS, self->texture_id);
+
             for(int i = 0; i < NUM_BUFFERS; ++i) {
                 self->dma_image[i] = self->params.egl->eglCreateImage(self->params.egl->egl_display, 0, EGL_LINUX_DMA_BUF_EXT, NULL, (intptr_t[]) {
                     EGL_WIDTH, fmt->fmt.pix.width,
                     EGL_HEIGHT, fmt->fmt.pix.height,
-                    EGL_LINUX_DRM_FOURCC_EXT, DRM_FORMAT_YUYV, // TODO: Use DRM_FORMAT_RG88 on nvidia and custom shader. Test on intel as well, or use fallback method on every system.
+                    EGL_LINUX_DRM_FOURCC_EXT, DRM_FORMAT_YUYV,
                     EGL_DMA_BUF_PLANE0_FD_EXT, self->dmabuf_fd[i],
                     EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
                     EGL_DMA_BUF_PLANE0_PITCH_EXT, fmt->fmt.pix.bytesperline,
                     EGL_NONE
                 });
+
                 if(!self->dma_image[i]) {
-                    fprintf(stderr, "gsr error: gsr_capture_v4l2_map_buffer: eglCreateImage failed, error: %d\n", self->params.egl->eglGetError());
+                    self->yuyv_conversion_fallback = true;
+                    self->dma_image[i] = self->params.egl->eglCreateImage(self->params.egl->egl_display, 0, EGL_LINUX_DMA_BUF_EXT, NULL, (intptr_t[]) {
+                        EGL_WIDTH, fmt->fmt.pix.width,
+                        EGL_HEIGHT, fmt->fmt.pix.height,
+                        EGL_LINUX_DRM_FOURCC_EXT, DRM_FORMAT_RG88,
+                        EGL_DMA_BUF_PLANE0_FD_EXT, self->dmabuf_fd[i],
+                        EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
+                        EGL_DMA_BUF_PLANE0_PITCH_EXT, fmt->fmt.pix.bytesperline,
+                        EGL_NONE
+                    });
+
+                    if(!self->dma_image[i]) {
+                        fprintf(stderr, "gsr error: gsr_capture_v4l2_map_buffer: eglCreateImage failed, error: %d\n", self->params.egl->eglGetError());
+                        return false;
+                    }
+                }
+
+                self->params.egl->glBindTexture(GL_TEXTURE_EXTERNAL_OES, self->texture_id[i]);
+                self->params.egl->glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, self->dma_image[i]);
+                self->params.egl->glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                self->params.egl->glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                self->params.egl->glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+                if(self->texture_id[i] == 0) {
+                    fprintf(stderr, "gsr error: gsr_capture_v4l2_map_buffer: failed to create texture\n");
                     return false;
                 }
-            }
-
-            self->params.egl->glGenTextures(1, &self->texture_id);
-            self->params.egl->glBindTexture(GL_TEXTURE_EXTERNAL_OES, self->texture_id);
-            self->params.egl->glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            self->params.egl->glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            self->params.egl->glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-            if(self->texture_id == 0) {
-                fprintf(stderr, "gsr error: gsr_capture_v4l2_map_buffer: failed to create texture\n");
-                return false;
             }
 
             self->buffer_type = V4L2_BUFFER_TYPE_DMABUF;
@@ -283,13 +302,13 @@ static bool gsr_capture_v4l2_map_buffer(gsr_capture_v4l2 *self, const struct v4l
                     fprintf(stderr, "gsr error: gsr_capture_v4l2_map_buffer: mmap failed, error: %s\n", strerror(errno));
                     return false;
                 }
-            }
 
-            // GL_RGBA is intentionally used here instead of GL_RGB, because the performance is much better when using glTexSubImage2D (22% cpu usage compared to 38% cpu usage)
-            self->texture_id = gl_create_texture(self->params.egl, fmt->fmt.pix.width, fmt->fmt.pix.height, GL_RGBA8, GL_RGBA, GL_LINEAR);
-            if(self->texture_id == 0) {
-                fprintf(stderr, "gsr error: gsr_capture_v4l2_map_buffer: failed to create texture\n");
-                return false;
+                // GL_RGBA is intentionally used here instead of GL_RGB, because the performance is much better when using glTexSubImage2D (22% cpu usage compared to 38% cpu usage)
+                self->texture_id[i] = gl_create_texture(self->params.egl, fmt->fmt.pix.width, fmt->fmt.pix.height, GL_RGBA8, GL_RGBA, GL_LINEAR);
+                if(self->texture_id[i] == 0) {
+                    fprintf(stderr, "gsr error: gsr_capture_v4l2_map_buffer: failed to create texture\n");
+                    return false;
+                }
             }
 
             if(!gsr_capture_v4l2_create_pbos(self, fmt->fmt.pix.width, fmt->fmt.pix.height))
@@ -376,15 +395,6 @@ static int gsr_capture_v4l2_setup(gsr_capture_v4l2 *self) {
         fprintf(stderr, "gsr error: gsr_capture_v4l2_create: pixel format isn't as requested (got pixel format: %u, requested: %u), error: %s\n", fmt.fmt.pix.pixelformat, v4l2_pixfmt, strerror(errno));
         return -1;
     }
-
-    /* Buggy driver paranoia */
-    const uint32_t min_stride = fmt.fmt.pix.width * 2; // * 2 because the stride is width (Y) + width/2 (U) + width/2 (V)
-    if(fmt.fmt.pix.bytesperline < min_stride)
-        fmt.fmt.pix.bytesperline = min_stride;
-    
-    const uint32_t min_size = fmt.fmt.pix.bytesperline * fmt.fmt.pix.height;
-    if(fmt.fmt.pix.sizeimage < min_size)
-        fmt.fmt.pix.sizeimage = min_size;
 
     self->capture_size.x = fmt.fmt.pix.width;
     self->capture_size.y = fmt.fmt.pix.height;
@@ -479,7 +489,7 @@ static void gsr_capture_v4l2_decode_jpeg_to_texture(gsr_capture_v4l2 *self, cons
         return;
     }
 
-    self->params.egl->glBindTexture(GL_TEXTURE_2D, self->texture_id);
+    self->params.egl->glBindTexture(GL_TEXTURE_2D, self->texture_id[buf->index]);
 
     self->pbo_index = (self->pbo_index + 1) % NUM_PBOS;
     const unsigned int next_pbo_index = (self->pbo_index + 1) % NUM_PBOS;
@@ -511,6 +521,8 @@ static int gsr_capture_v4l2_capture(gsr_capture *cap, gsr_capture_metadata *capt
     };
 
     xioctl(self->fd, VIDIOC_DQBUF, &buf);
+    unsigned int texture_index = buf.index;
+
     if(buf.bytesused > 0 && !(buf.flags & V4L2_BUF_FLAG_ERROR)) {
         if(!self->got_first_frame)
             fprintf(stderr, "gsr info: gsr_capture_v4l2_capture: camera %s is now ready\n", self->params.device_path);
@@ -518,9 +530,9 @@ static int gsr_capture_v4l2_capture(gsr_capture *cap, gsr_capture_metadata *capt
 
         switch(self->buffer_type) {
             case V4L2_BUFFER_TYPE_DMABUF: {
-                self->params.egl->glBindTexture(GL_TEXTURE_EXTERNAL_OES, self->texture_id);
-                self->params.egl->glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, self->dma_image[buf.index]);
-                self->params.egl->glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+                //self->params.egl->glBindTexture(GL_TEXTURE_EXTERNAL_OES, self->texture_id);
+                //self->params.egl->glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, self->dma_image[buf.index]);
+                //self->params.egl->glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
                 break;
             }
             case V4L2_BUFFER_TYPE_MMAP: {
@@ -530,6 +542,10 @@ static int gsr_capture_v4l2_capture(gsr_capture *cap, gsr_capture_metadata *capt
                 break;
             }
         }
+
+        self->prev_texture_index = buf.index;
+    } else {
+        texture_index = self->prev_texture_index;
     }
     xioctl(self->fd, VIDIOC_QBUF, &buf);
 
@@ -537,13 +553,20 @@ static int gsr_capture_v4l2_capture(gsr_capture *cap, gsr_capture_metadata *capt
     const vec2i target_pos = gsr_capture_get_target_position(output_size, capture_metadata);
 
     self->params.egl->glFlush();
+    if(self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_NVIDIA)
+        self->params.egl->glFinish();
 
-    //if(self->got_first_frame) {
-        gsr_color_conversion_draw(color_conversion, self->texture_id,
+    if(self->buffer_type == V4L2_BUFFER_TYPE_DMABUF) {
+        gsr_color_conversion_draw(color_conversion, self->texture_id[texture_index],
             target_pos, output_size,
             (vec2i){0, 0}, self->capture_size, self->capture_size,
-            GSR_ROT_0, capture_metadata->flip, GSR_SOURCE_COLOR_RGB, self->buffer_type == V4L2_BUFFER_TYPE_DMABUF);
-    //}
+            GSR_ROT_0, capture_metadata->flip, self->yuyv_conversion_fallback ? GSR_SOURCE_COLOR_YUYV : GSR_SOURCE_COLOR_RGB, true);
+    } else {
+        gsr_color_conversion_draw(color_conversion, self->texture_id[texture_index],
+            target_pos, output_size,
+            (vec2i){0, 0}, self->capture_size, self->capture_size,
+            GSR_ROT_0, capture_metadata->flip, GSR_SOURCE_COLOR_RGB, false);
+    }
 
     return self->got_first_frame ? 0 : -1;
 }
