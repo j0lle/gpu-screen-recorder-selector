@@ -376,3 +376,6 @@ Taking a screenshot of camera with mjpeg doesn't work correctly because it updat
 Make capture from multiple sources work on nvidia x11 when capturing monitor + window. It doesn't work right now because monitor requires glx (nvfbc) while window requires egl.
 
 Support v4l2 mplane on devices where it's supported (where it's more efficient). My camera doesn't support mplane.
+
+Implement v4l2 yuyv nvidia capture by capturing rg88 yuyv to rgb as is done now for screenshot, but also do that for video by creating an intermediate rgb texture for the camera. Then render that rgb texture to the video texture.
+    This is needed to properly scale the yuyv texture without messing it up (the texture indexing).
