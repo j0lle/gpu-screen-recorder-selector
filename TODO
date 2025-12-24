@@ -365,10 +365,14 @@ Update man page with info about v4l2 and new region capture format. Mention that
 
 Make multiple -w portal work with -restore-portal-session.
 
-Test if webcam capture works on intel and nvidia. Especially nvidia on x11 because it uses glx there for nvfbc while v4l2 needs egl.
-
 Play with DRM_FORMAT_MOD_LINEAR or other linear formats to avoid cuda copy. If it's already in linear format then instead check the format of the target texture and use the same format.
 
 Give early error when using invalid v4l2 path like with monitor. Use gsr_capture_v4l2_list_devices for query. Or maybe remove the early error for monitor to simplify the code.
 
 Support camera capture with pipewire to support multiple applications recording camera at the same time. Might not be as efficient as V4L2.
+
+Taking a screenshot of camera with mjpeg doesn't work correctly because it updates buffer asynchronously. v4l2 capture should only return 0 if the copy of the data to the texture has finished.
+
+Make capture from multiple sources work on nvidia x11 when capturing monitor + window. It doesn't work right now because monitor requires glx (nvfbc) while window requires egl.
+
+Support v4l2 mplane on devices where it's supported (where it's more efficient). My camera doesn't support mplane.

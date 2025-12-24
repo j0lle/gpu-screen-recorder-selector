@@ -6,12 +6,13 @@
 #include "vec2.h"
 #include <stdbool.h>
 
-#define GSR_COLOR_CONVERSION_MAX_GRAPHICS_SHADERS 6
+#define GSR_COLOR_CONVERSION_MAX_GRAPHICS_SHADERS 8
 #define GSR_COLOR_CONVERSION_MAX_FRAMEBUFFERS 2
 
 typedef enum {
     GSR_SOURCE_COLOR_RGB,
-    GSR_SOURCE_COLOR_BGR
+    GSR_SOURCE_COLOR_BGR,
+    GSR_SOURCE_COLOR_YUYV
 } gsr_source_color;
 
 typedef enum {

@@ -133,14 +133,12 @@ typedef void(*__GLXextFuncPtr)(void);
 #define GL_SCISSOR_TEST                         0x0C11
 #define GL_PACK_ALIGNMENT                       0x0D05
 #define GL_UNPACK_ALIGNMENT                     0x0CF5
-#define GL_READ_ONLY                            0x88B8
-#define GL_WRITE_ONLY                           0x88B9
-#define GL_READ_WRITE                           0x88BA
 #define GL_TEXTURE0                             0x84C0
 #define GL_TEXTURE1                             0x84C1
 #define GL_SHADER_IMAGE_ACCESS_BARRIER_BIT      0x00000020
 #define GL_ALL_BARRIER_BITS                     0xFFFFFFFF
 #define GL_PIXEL_UNPACK_BUFFER                  0x88EC
+#define GL_MAP_WRITE_BIT                        0x0002
 
 #define GL_VENDOR                               0x1F00
 #define GL_RENDERER                             0x1F01
@@ -259,7 +257,6 @@ struct gsr_egl {
     void (*glTexParameterfv)(unsigned int target, unsigned int pname, const float *params);
     void (*glTexImage2D)(unsigned int target, int level, int internalFormat, int width, int height, int border, unsigned int format, unsigned int type, const void *pixels);
     void (*glTexSubImage2D)(unsigned int target, int level, int xoffset, int yoffset, int width, int height, unsigned format, unsigned type, const void *pixels);
-    void (*glTexStorage2D)(unsigned int target, int levels, unsigned int internalformat, int width, int height);
     void (*glGetTexImage)(unsigned int target, int level, unsigned int format, unsigned int type, void *pixels);
     void (*glGenFramebuffers)(int n, unsigned int *framebuffers);
     void (*glBindFramebuffer)(unsigned int target, unsigned int framebuffer);
@@ -309,7 +306,7 @@ struct gsr_egl {
     void (*glScissor)(int x, int y, int width, int height);
     void (*glCreateBuffers)(int n, unsigned int *buffers);
     void (*glReadPixels)(int x, int y, int width, int height, unsigned int format, unsigned int type, void *pixels);
-    void* (*glMapBuffer)(unsigned int target, unsigned int access);
+    void* (*glMapBufferRange)(unsigned int target, intptr_t offset, ssize_t length, unsigned int access);
     unsigned char (*glUnmapBuffer)(unsigned int target);
     void (*glGetIntegerv)(unsigned int pname, int *params);
 };

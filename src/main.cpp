@@ -2301,7 +2301,7 @@ static gsr_capture* create_capture_impl(const args_parser &arg_parser, gsr_egl *
         gsr_capture_v4l2_params v4l2_params;
         memset(&v4l2_params, 0, sizeof(v4l2_params));
         v4l2_params.egl = egl;
-        v4l2_params.output_resolution = {0, 0};
+        v4l2_params.output_resolution = arg_parser.output_resolution;
         v4l2_params.device_path = capture_source.name.c_str();
         v4l2_params.pixfmt = capture_source.v4l2_pixfmt;
         v4l2_params.fps = arg_parser.fps;
@@ -2505,9 +2505,9 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_win
                 fprintf(stderr, "gsr error: failed to get kms, error: %d (%s)\n", kms_response.result, kms_response.err_msg);
         }
 
-        bool all_sources_captured = true;
+        should_stop_error = false;
         for(VideoSource &video_source : video_sources) {
-            should_stop_error = false;
+            gsr_capture_tick(video_source.capture);
             if(gsr_capture_should_stop(video_source.capture, &should_stop_error)) {
                 running = 0;
                 break;
@@ -2524,6 +2524,7 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_win
             gsr_color_conversion_clear(&color_conversion);
         }
 
+        bool all_sources_captured = true;
         for(VideoSource &video_source : video_sources) {
             // It can fail, for example when capturing portal and the target is a monitor that hasn't been updated.
             // This can also happen for example if the system suspends and the monitor to capture's framebuffer is gone, or if the target window disappeared.

@@ -250,7 +250,7 @@ static bool gsr_capture_v4l2_map_buffer(gsr_capture_v4l2 *self, const struct v4l
                 self->dma_image[i] = self->params.egl->eglCreateImage(self->params.egl->egl_display, 0, EGL_LINUX_DMA_BUF_EXT, NULL, (intptr_t[]) {
                     EGL_WIDTH, fmt->fmt.pix.width,
                     EGL_HEIGHT, fmt->fmt.pix.height,
-                    EGL_LINUX_DRM_FOURCC_EXT, DRM_FORMAT_YUYV,
+                    EGL_LINUX_DRM_FOURCC_EXT, DRM_FORMAT_YUYV, // TODO: Use DRM_FORMAT_RG88 on nvidia and custom shader. Test on intel as well, or use fallback method on every system.
                     EGL_DMA_BUF_PLANE0_FD_EXT, self->dmabuf_fd[i],
                     EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
                     EGL_DMA_BUF_PLANE0_PITCH_EXT, fmt->fmt.pix.bytesperline,
@@ -490,7 +490,7 @@ static void gsr_capture_v4l2_decode_jpeg_to_texture(gsr_capture_v4l2 *self, cons
     self->params.egl->glBindBuffer(GL_PIXEL_UNPACK_BUFFER, self->pbos[next_pbo_index]);
     self->params.egl->glBufferData(GL_PIXEL_UNPACK_BUFFER, self->capture_size.x * self->capture_size.y * 4, 0, GL_DYNAMIC_DRAW);
 
-    void *mapped_buffer = self->params.egl->glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+    void *mapped_buffer = self->params.egl->glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, self->capture_size.x * self->capture_size.y * 4, GL_MAP_WRITE_BIT);
     if(mapped_buffer) {
         if(self->tjDecompress2(self->jpeg_decompressor, self->dmabuf_map[buf->index], buf->bytesused, mapped_buffer, jpeg_width, 0, jpeg_height, TJPF_RGBA, TJFLAG_FASTDCT) != 0)
             fprintf(stderr, "gsr error: gsr_capture_v4l2_capture: failed to decompress camera jpeg data, error: %s\n", self->tjGetErrorStr2(self->jpeg_decompressor));
@@ -535,6 +535,8 @@ static int gsr_capture_v4l2_capture(gsr_capture *cap, gsr_capture_metadata *capt
 
     const vec2i output_size = scale_keep_aspect_ratio(self->capture_size, capture_metadata->recording_size);
     const vec2i target_pos = gsr_capture_get_target_position(output_size, capture_metadata);
+
+    self->params.egl->glFlush();
 
     //if(self->got_first_frame) {
         gsr_color_conversion_draw(color_conversion, self->texture_id,
