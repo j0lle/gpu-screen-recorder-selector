@@ -4270,6 +4270,9 @@ int main(int argc, char **argv) {
         should_stop_error = false;
         bool damaged = false;
 
+        if(use_damage_tracking)
+            damaged = gsr_damage_is_damaged(&damage);
+
         for(VideoSource &video_source : video_sources) {
             gsr_capture_tick(video_source.capture);
 
@@ -4291,11 +4294,9 @@ int main(int argc, char **argv) {
                 video_source.capture_source->window_id = damage_target_window;
             }
 
-            if(use_damage_tracking)
-                damaged = gsr_damage_is_damaged(&damage);
-            else if(video_source.capture->is_damaged)
-                damaged = video_source.capture->is_damaged(video_source.capture);
-            else
+            if(video_source.capture->is_damaged)
+                damaged |= video_source.capture->is_damaged(video_source.capture);
+            else if(!use_damage_tracking)
                 damaged = true;
         }
 

@@ -201,8 +201,6 @@ static void usage_header(void) {
     fflush(stdout);
 }
 
-// TODO: Add --list-v4l2-devices option
-
 static void usage_full(void) {
     const bool inside_flatpak = getenv("FLATPAK_ID") != NULL;
     usage_header();

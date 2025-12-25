@@ -111,10 +111,14 @@ These are the available options for capture sources:
 - The Y position in pixels. If the number ends with % and is a number between 0 and 100 then it's a position relative to the video size
 .IP \(bu 3
 .B width
-- The width in pixels. If the number ends with % and is a number between 0 and 100 then it's a size relative to the video size
+- The width in pixels. If the number ends with % and is a number between 0 and 100 then it's a size relative to the video size.
+
+A value of 0 means to not scale the capture source and instead use the original width.
 .IP \(bu 3
 .B height
 - The height in pixels. If the number ends with % and is a number between 0 and 100 then it's a size relative to the video size
+
+A value of 0 means to not scale the capture source and instead use the original height.
 .IP \(bu 3
 .B halign
 - The horizontal alignment, should be either
