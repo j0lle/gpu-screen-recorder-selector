@@ -631,7 +631,9 @@ unsigned int gl_create_texture(gsr_egl *egl, int width, int height, int internal
     unsigned int texture_id = 0;
     egl->glGenTextures(1, &texture_id);
     egl->glBindTexture(GL_TEXTURE_2D, texture_id);
-    egl->glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
+    //egl->glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
+    // Needed for hevc_10bit for nvenc (cuGraphicsGLRegisterImage)
+    egl->glTexStorage2D(GL_TEXTURE_2D, 1, internal_format, width, height);
 
     egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
     egl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
