@@ -385,3 +385,5 @@ Set v4l2 camera fps to video output fps (if lower than the camera fps) and the s
 Support camera controls, such as white balance. Otherwise tell user to use cameractrl software.
 
 Camera capture doesn't work perfectly. The image gets glitched, need to properly wait for image to be done.
+
+Use one pipewire connection (pipewire video) instead of multiple ones when recording with portal multiple times (multiple sources).
