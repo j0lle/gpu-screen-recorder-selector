@@ -192,7 +192,7 @@ This should work fine on AMD/Intel X11 or Wayland. On Nvidia X11 G-SYNC only wor
 For example it can cause your computer to freeze when recording certain games.
 
 # License
-This software is licensed under GPL3.0-only, see the LICENSE file for more information.
+This software is licensed under GPL-3.0-only, see the LICENSE file for more information.
 
 # Reporting bugs, contributing patches, questions or donation
 See [https://git.dec05eba.com/?p=about](https://git.dec05eba.com/?p=about).
