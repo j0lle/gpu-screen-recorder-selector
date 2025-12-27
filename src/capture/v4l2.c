@@ -671,8 +671,11 @@ void gsr_capture_v4l2_list_devices(v4l2_devices_query_callback callback, void *u
         if(xioctl(fd, VIDIOC_G_FMT, &fmt) == -1)
             goto next;
 
-        const gsr_capture_v4l2_supported_pixfmts supported_pixfmts = gsr_capture_v4l2_get_supported_pixfmts(fd);
-        if(supported_pixfmts.yuyv || (supported_pixfmts.mjpeg && has_libturbojpeg_lib))
+        gsr_capture_v4l2_supported_pixfmts supported_pixfmts = gsr_capture_v4l2_get_supported_pixfmts(fd);
+        if(!has_libturbojpeg_lib)
+            supported_pixfmts.mjpeg = false;
+
+        if(supported_pixfmts.yuyv || supported_pixfmts.mjpeg)
             callback(v4l2_device_path, supported_pixfmts, (vec2i){ fmt.fmt.pix.width, fmt.fmt.pix.height }, userdata);
 
         next:
