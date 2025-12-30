@@ -196,8 +196,8 @@ static void usage_header(void) {
            "[-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] "
            "[-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-p <plugin_path>] "
            "[-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] "
-           "[-fallback-cpu-encoding yes|no] [-o <output_file>] [-ro <output_directory>] [--list-capture-options [card_path]] [--list-audio-devices] "
-           "[--list-application-audio] [--list-v4l2-devices] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+           "[-fallback-cpu-encoding yes|no] [-o <output_file>] [-ro <output_directory>] [-ffmpeg-opts <options>] [--list-capture-options [card_path]] "
+           "[--list-audio-devices] [--list-application-audio] [--list-v4l2-devices] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -440,6 +440,8 @@ static bool args_parser_set_values(args_parser *self) {
         self->recording_saved_script = NULL;
     }
 
+    self->ffmpeg_opts = args_get_value_by_key(self->args, NUM_ARGS, "-ffmpeg-opts");
+
     return true;
 }
 
@@ -529,6 +531,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     self->args[arg_index++] = (Arg){ .key = "-fallback-cpu-encoding",         .optional = true,  .list = false, .type = ARG_TYPE_BOOLEAN };
     self->args[arg_index++] = (Arg){ .key = "-replay-storage",                .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = replay_storage_enums, .num_enum_values = sizeof(replay_storage_enums)/sizeof(ArgEnum) };
     self->args[arg_index++] = (Arg){ .key = "-p",                             .optional = true,  .list = true,  .type = ARG_TYPE_STRING };
+    self->args[arg_index++] = (Arg){ .key = "-ffmpeg-opts",                   .optional = true,  .list = false, .type = ARG_TYPE_STRING };
     assert(arg_index == NUM_ARGS);
 
     for(int i = 1; i < argc; i += 2) {

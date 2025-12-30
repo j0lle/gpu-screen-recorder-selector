@@ -1193,9 +1193,9 @@ struct VideoSource {
     CaptureSource *capture_source;
 };
 
-static RecordingStartResult start_recording_create_streams(const char *filename, const char *container_format, AVCodecContext *video_codec_context, const std::vector<AudioTrack> &audio_tracks, bool hdr, std::vector<VideoSource> &video_sources) {
+static RecordingStartResult start_recording_create_streams(const char *filename, const args_parser &args_parser, AVCodecContext *video_codec_context, const std::vector<AudioTrack> &audio_tracks, bool hdr, std::vector<VideoSource> &video_sources) {
     AVFormatContext *av_format_context;
-    avformat_alloc_output_context2(&av_format_context, nullptr, container_format, filename);
+    avformat_alloc_output_context2(&av_format_context, nullptr, args_parser.container_format, filename);
 
     AVStream *video_stream = create_stream(av_format_context, video_codec_context);
     avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
@@ -1219,6 +1219,8 @@ static RecordingStartResult start_recording_create_streams(const char *filename,
 
     AVDictionary *options = nullptr;
     av_dict_set(&options, "strict", "experimental", 0);
+    if(args_parser.ffmpeg_opts)
+        av_dict_parse_string(&options, args_parser.ffmpeg_opts, "=", ";", 0);
 
     const int header_write_ret = avformat_write_header(av_format_context, &options);
     av_dict_free(&options);
@@ -1282,7 +1284,7 @@ struct AudioPtsOffset {
     int stream_index = 0;
 };
 
-static void save_replay_async(AVCodecContext *video_codec_context, int video_stream_index, const std::vector<AudioTrack> &audio_tracks, gsr_replay_buffer *replay_buffer, std::string output_dir, const char *container_format, const std::string &file_extension, bool date_folders, bool hdr, std::vector<VideoSource> &video_sources, int current_save_replay_seconds) {
+static void save_replay_async(AVCodecContext *video_codec_context, int video_stream_index, const std::vector<AudioTrack> &audio_tracks, gsr_replay_buffer *replay_buffer, const args_parser &arg_parser, const std::string &file_extension, bool date_folders, bool hdr, std::vector<VideoSource> &video_sources, int current_save_replay_seconds) {
     if(save_replay_thread.valid())
         return;
 
@@ -1310,8 +1312,8 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
         return;
     }
 
-    std::string output_filepath = create_new_recording_filepath_from_timestamp(output_dir, "Replay", file_extension, date_folders);
-    RecordingStartResult recording_start_result = start_recording_create_streams(output_filepath.c_str(), container_format, video_codec_context, audio_tracks, hdr, video_sources);
+    std::string output_filepath = create_new_recording_filepath_from_timestamp(arg_parser.filename, "Replay", file_extension, date_folders);
+    RecordingStartResult recording_start_result = start_recording_create_streams(output_filepath.c_str(), arg_parser, video_codec_context, audio_tracks, hdr, video_sources);
     if(!recording_start_result.av_format_context)
         return;
 
@@ -3430,7 +3432,7 @@ static bool get_image_format_from_filename(const char *filename, gsr_image_forma
 }
 
 // TODO: replace this with start_recording_create_steams
-static bool av_open_file_write_header(AVFormatContext *av_format_context, const char *filename) {
+static bool av_open_file_write_header(AVFormatContext *av_format_context, const char *filename, const char *ffmpeg_opts) {
     int ret = avio_open(&av_format_context->pb, filename, AVIO_FLAG_WRITE);
     if(ret < 0) {
         fprintf(stderr, "gsr error: Could not open '%s': %s\n", filename, av_error_to_string(ret));
@@ -3439,7 +3441,8 @@ static bool av_open_file_write_header(AVFormatContext *av_format_context, const 
 
     AVDictionary *options = nullptr;
     av_dict_set(&options, "strict", "experimental", 0);
-    //av_dict_set_int(&av_format_context->metadata, "video_full_range_flag", 1, 0);
+    if(ffmpeg_opts)
+        av_dict_parse_string(&options, ffmpeg_opts, "=", ";", 0);
 
     ret = avformat_write_header(av_format_context, &options);
     if(ret < 0)
@@ -3989,7 +3992,7 @@ int main(int argc, char **argv) {
     //av_dump_format(av_format_context, 0, filename, 1);
 
     if(!is_replaying) {
-        if(!av_open_file_write_header(av_format_context, arg_parser.filename))
+        if(!av_open_file_write_header(av_format_context, arg_parser.filename, arg_parser.ffmpeg_opts))
             _exit(1);
     }
 
@@ -4448,7 +4451,7 @@ int main(int argc, char **argv) {
                 std::lock_guard<std::mutex> lock(audio_filter_mutex);
                 replay_recording_items.clear();
                 replay_recording_filepath = create_new_recording_filepath_from_timestamp(arg_parser.replay_recording_directory, "Video", file_extension, arg_parser.date_folders);
-                replay_recording_start_result = start_recording_create_streams(replay_recording_filepath.c_str(), arg_parser.container_format, video_codec_context, audio_tracks, hdr, video_sources);
+                replay_recording_start_result = start_recording_create_streams(replay_recording_filepath.c_str(), arg_parser, video_codec_context, audio_tracks, hdr, video_sources);
                 if(replay_recording_start_result.av_format_context) {
                     const size_t video_recording_destination_id = gsr_encoder_add_recording_destination(&encoder, video_codec_context, replay_recording_start_result.av_format_context, replay_recording_start_result.video_stream, video_frame->pts);
                     if(video_recording_destination_id != (size_t)-1)
@@ -4510,7 +4513,7 @@ int main(int argc, char **argv) {
 
             save_replay_seconds = 0;
             save_replay_output_filepath.clear();
-            save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, encoder.replay_buffer, arg_parser.filename, arg_parser.container_format, file_extension, arg_parser.date_folders, hdr, video_sources, current_save_replay_seconds);
+            save_replay_async(video_codec_context, VIDEO_STREAM_INDEX, audio_tracks, encoder.replay_buffer, arg_parser, file_extension, arg_parser.date_folders, hdr, video_sources, current_save_replay_seconds);
 
             if(arg_parser.restart_replay_on_save && current_save_replay_seconds == save_replay_seconds_full)
                 gsr_replay_buffer_clear(encoder.replay_buffer);

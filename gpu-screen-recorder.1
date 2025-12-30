@@ -301,6 +301,11 @@ Script to run after saving video. Receives filepath and type ("regular", "replay
 .BI \-portal\-session\-token\-filepath " path"
 Portal session token file (default: ~/.config/gpu-screen-recorder/restore_token).
 .TP
+.BI \-ffmpeg-opts " options"
+Additional arguments to pass to FFmpeg in a list of key-values pairs in the format "key=value;key=value",
+.br
+for example: -ffmpeg-opts "hls_list_size=3;hls_time=1;hls_flags=delete_segments".
+.TP
 .BI \-gl\-debug " yes|no"
 OpenGL debug output (default: no).
 .TP
