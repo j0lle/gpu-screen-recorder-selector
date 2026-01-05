@@ -528,9 +528,12 @@ static AVCodecContext *create_video_codec_context(AVPixelFormat pix_fmt, const A
     return codec_context;
 }
 
-static void open_audio(AVCodecContext *audio_codec_context) {
+static void open_audio(AVCodecContext *audio_codec_context, const char *ffmpeg_audio_opts) {
     AVDictionary *options = nullptr;
     av_dict_set(&options, "strict", "experimental", 0);
+
+    if(ffmpeg_audio_opts)
+        av_dict_parse_string(&options, ffmpeg_audio_opts, "=", ";", 0);
 
     int ret;
     ret = avcodec_open2(audio_codec_context, audio_codec_context->codec, &options);
@@ -677,6 +680,9 @@ static void open_video_software(AVCodecContext *codec_context, const args_parser
     }
 
     av_dict_set(&options, "strict", "experimental", 0);
+
+    if(arg_parser.ffmpeg_video_opts)
+        av_dict_parse_string(&options, arg_parser.ffmpeg_video_opts, "=", ";", 0);
 
     int ret = avcodec_open2(codec_context, codec_context->codec, &options);
     if (ret < 0) {
@@ -925,6 +931,9 @@ static void open_video_hardware(AVCodecContext *codec_context, bool low_power, c
     }
 
     av_dict_set(&options, "strict", "experimental", 0);
+
+    if(arg_parser.ffmpeg_video_opts)
+        av_dict_parse_string(&options, arg_parser.ffmpeg_video_opts, "=", ";", 0);
 
     int ret = avcodec_open2(codec_context, codec_context->codec, &options);
     if (ret < 0) {
@@ -1219,6 +1228,7 @@ static RecordingStartResult start_recording_create_streams(const char *filename,
 
     AVDictionary *options = nullptr;
     av_dict_set(&options, "strict", "experimental", 0);
+
     if(args_parser.ffmpeg_opts)
         av_dict_parse_string(&options, args_parser.ffmpeg_opts, "=", ";", 0);
 
@@ -2388,6 +2398,7 @@ static std::vector<VideoSource> create_video_sources(const args_parser &arg_pars
         }
     }
 
+    // TODO: Video size should be end pos - start pos, where start pos = pos and end pos = pos + size
     video_size = {0, 0};
     for(const VideoSource &video_source : video_sources) {
         video_size.x = std::max(video_size.x, video_source.metadata.video_size.x);
@@ -3441,6 +3452,7 @@ static bool av_open_file_write_header(AVFormatContext *av_format_context, const 
 
     AVDictionary *options = nullptr;
     av_dict_set(&options, "strict", "experimental", 0);
+
     if(ffmpeg_opts)
         av_dict_parse_string(&options, ffmpeg_opts, "=", ";", 0);
 
@@ -3934,7 +3946,7 @@ int main(int argc, char **argv) {
         if(audio_stream && !merged_audio_inputs.track_name.empty())
             av_dict_set(&audio_stream->metadata, "title", merged_audio_inputs.track_name.c_str(), 0);
 
-        open_audio(audio_codec_context);
+        open_audio(audio_codec_context, arg_parser.ffmpeg_audio_opts);
         if(audio_stream)
             avcodec_parameters_from_context(audio_stream->codecpar, audio_codec_context);
 

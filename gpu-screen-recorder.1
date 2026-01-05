@@ -302,9 +302,25 @@ Script to run after saving video. Receives filepath and type ("regular", "replay
 Portal session token file (default: ~/.config/gpu-screen-recorder/restore_token).
 .TP
 .BI \-ffmpeg-opts " options"
-Additional arguments to pass to FFmpeg in a list of key-values pairs in the format "key=value;key=value",
+Additional arguments to pass to FFmpeg for the file in a list of key-values pairs in the format "key=value;key=value",
 .br
 for example: -ffmpeg-opts "hls_list_size=3;hls_time=1;hls_flags=delete_segments".
+.br
+Note: this overwrites options set by GPU Screen Recorder with the same name.
+.TP
+.BI \-ffmpeg-video-opts " options"
+Additional arguments to pass to FFmpeg for the video in a list of key-values pairs in the format "key=value;key=value",
+.br
+for example: -ffmpeg-video-opts "codec=cabac;rc_mode=CQP;qp=16".
+.br
+Note: this overwrites options set by GPU Screen Recorder with the same name.
+.TP
+.BI \-ffmpeg-audio-opts " options"
+Additional arguments to pass to FFmpeg for the audio in a list of key-values pairs in the format "key=value;key=value",
+.br
+for example: -ffmpeg-audio-opts "aac_coder=fast;aac_pce=true".
+.br
+Note: this overwrites options set by GPU Screen Recorder with the same name.
 .TP
 .BI \-gl\-debug " yes|no"
 OpenGL debug output (default: no).

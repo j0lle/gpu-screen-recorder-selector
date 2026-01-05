@@ -8,7 +8,7 @@
 
 typedef struct gsr_egl gsr_egl;
 
-#define NUM_ARGS 33
+#define NUM_ARGS 35
 
 typedef enum {
     GSR_CAPTURE_SOURCE_TYPE_WINDOW,
@@ -86,6 +86,8 @@ typedef struct {
     const char *portal_session_token_filepath;
     const char *recording_saved_script;
     const char *ffmpeg_opts;
+    const char *ffmpeg_video_opts;
+    const char *ffmpeg_audio_opts;
     bool verbose;
     bool gl_debug;
     bool fallback_cpu_encoding;

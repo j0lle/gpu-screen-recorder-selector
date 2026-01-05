@@ -387,3 +387,7 @@ Support camera controls, such as white balance. Otherwise tell user to use camer
 Camera capture doesn't work perfectly. The image gets glitched, need to properly wait for image to be done.
 
 Use one pipewire connection (pipewire video) instead of multiple ones when recording with portal multiple times (multiple sources).
+
+Close pipewire links or maybe there are file descriptor leaks?
+
+Make multiple capture sources work properly in regards to size. The size of the video should be the region size of each capture source.

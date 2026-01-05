@@ -441,6 +441,8 @@ static bool args_parser_set_values(args_parser *self) {
     }
 
     self->ffmpeg_opts = args_get_value_by_key(self->args, NUM_ARGS, "-ffmpeg-opts");
+    self->ffmpeg_video_opts = args_get_value_by_key(self->args, NUM_ARGS, "-ffmpeg-video-opts");
+    self->ffmpeg_audio_opts = args_get_value_by_key(self->args, NUM_ARGS, "-ffmpeg-audio-opts");
 
     return true;
 }
@@ -532,6 +534,8 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     self->args[arg_index++] = (Arg){ .key = "-replay-storage",                .optional = true,  .list = false, .type = ARG_TYPE_ENUM, .enum_values = replay_storage_enums, .num_enum_values = sizeof(replay_storage_enums)/sizeof(ArgEnum) };
     self->args[arg_index++] = (Arg){ .key = "-p",                             .optional = true,  .list = true,  .type = ARG_TYPE_STRING };
     self->args[arg_index++] = (Arg){ .key = "-ffmpeg-opts",                   .optional = true,  .list = false, .type = ARG_TYPE_STRING };
+    self->args[arg_index++] = (Arg){ .key = "-ffmpeg-video-opts",             .optional = true,  .list = false, .type = ARG_TYPE_STRING };
+    self->args[arg_index++] = (Arg){ .key = "-ffmpeg-audio-opts",             .optional = true,  .list = false, .type = ARG_TYPE_STRING };
     assert(arg_index == NUM_ARGS);
 
     for(int i = 1; i < argc; i += 2) {
