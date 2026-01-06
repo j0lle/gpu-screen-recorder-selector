@@ -781,7 +781,6 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
     self->params.egl->glBindBuffer(GL_ARRAY_BUFFER, self->vertex_buffer_object_id);
     self->params.egl->glBufferSubData(GL_ARRAY_BUFFER, 0, 24 * sizeof(float), vertices);
 
-    // TODO:
     switch(source_color) {
         case GSR_SOURCE_COLOR_RGB:
         case GSR_SOURCE_COLOR_BGR: {

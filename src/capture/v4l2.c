@@ -553,6 +553,9 @@ static int gsr_capture_v4l2_capture(gsr_capture *cap, gsr_capture_metadata *capt
     const vec2i target_pos = gsr_capture_get_target_position(output_size, capture_metadata);
 
     self->params.egl->glFlush();
+    // TODO: Use the minimal barrier required
+    self->params.egl->glMemoryBarrier(GL_ALL_BARRIER_BITS);
+    // TODO: Remove this?
     if(self->params.egl->gpu_info.vendor == GSR_GPU_VENDOR_NVIDIA)
         self->params.egl->glFinish();
 
