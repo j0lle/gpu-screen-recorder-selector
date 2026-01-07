@@ -3387,8 +3387,6 @@ static AudioDeviceData create_application_audio_audio_input(const MergedAudioInp
     combined_sink_name.append(random_str, sizeof(random_str));
     combined_sink_name += ".monitor";
 
-    fprintf(stderr, "creating audio sink: %s\n", combined_sink_name.c_str());
-
     if(sound_device_get_by_name(&audio_device.sound_device, combined_sink_name.c_str(), "", "gpu-screen-recorder", num_channels, audio_codec_context->frame_size, audio_codec_context_get_audio_format(audio_codec_context)) != 0) {
         fprintf(stderr, "gsr error: failed to setup audio recording to combined sink\n");
         _exit(1);

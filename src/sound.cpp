@@ -59,16 +59,24 @@ struct pa_handle {
     std::mutex reconnect_mutex;
     DeviceType device_type;
     char stream_name[256];
+    char node_name[256];
     bool reconnect;
     double reconnect_last_tried_seconds;
 
     char device_name[DEVICE_NAME_MAX_SIZE];
     char default_output_device_name[DEVICE_NAME_MAX_SIZE];
     char default_input_device_name[DEVICE_NAME_MAX_SIZE];
+
+    pa_proplist *proplist;
 };
 
 static void pa_sound_device_free(pa_handle *p) {
     assert(p);
+
+    if(p->proplist) {
+        pa_proplist_free(p->proplist);
+        p->proplist = NULL;
+    }
 
     if (p->stream) {
         pa_stream_unref(p->stream);
@@ -186,6 +194,7 @@ static pa_handle* pa_sound_device_new(const char *server,
     p = pa_xnew0(pa_handle, 1);
     p->attr = *attr;
     p->ss = *ss;
+    snprintf(p->node_name, sizeof(p->node_name), "%s", name);
     snprintf(p->stream_name, sizeof(p->stream_name), "%s", stream_name);
 
     p->reconnect = true;
@@ -206,20 +215,17 @@ static pa_handle* pa_sound_device_new(const char *server,
     p->output_length = buffer_size;
     p->output_index = 0;
 
-    pa_proplist *proplist = pa_proplist_new();
-    pa_proplist_sets(proplist, PA_PROP_MEDIA_ROLE, "production");
+    p->proplist = pa_proplist_new();
+    pa_proplist_sets(p->proplist, PA_PROP_MEDIA_ROLE, "production");
     if(strcmp(device_name, "") == 0) {
-        pa_proplist_sets(proplist, "node.autoconnect", "false");
-        pa_proplist_sets(proplist, "node.dont-reconnect", "true");
-        pa_proplist_sets(proplist, "node.suspend-on-idle", "false");
-        pa_proplist_sets(proplist, "node.pause-on-idle", "false");
-        pa_proplist_sets(proplist, "node.always-process", "true");
+        pa_proplist_sets(p->proplist, "node.autoconnect", "false");
+        pa_proplist_sets(p->proplist, "node.dont-reconnect", "true");
     }
 
     if (!(p->mainloop = pa_mainloop_new()))
         goto fail;
 
-    if (!(p->context = pa_context_new_with_proplist(pa_mainloop_get_api(p->mainloop), name, proplist)))
+    if (!(p->context = pa_context_new_with_proplist(pa_mainloop_get_api(p->mainloop), p->node_name, p->proplist)))
         goto fail;
 
     if (pa_context_connect(p->context, server, PA_CONTEXT_NOFLAGS, NULL) < 0) {
@@ -249,15 +255,49 @@ static pa_handle* pa_sound_device_new(const char *server,
     if(pa)
         pa_operation_unref(pa);
 
-    pa_proplist_free(proplist);
     return p;
 
 fail:
     if (rerror)
         *rerror = error;
     pa_sound_device_free(p);
-    pa_proplist_free(proplist);
     return NULL;
+}
+
+static bool pa_sound_device_handle_context_recreate(pa_handle *p) {
+    pa_operation *pa = NULL;
+
+    if(p->context) {
+        pa_context_disconnect(p->context);
+        pa_context_unref(p->context);
+        p->context = NULL;
+    }
+
+    if (!(p->context = pa_context_new_with_proplist(pa_mainloop_get_api(p->mainloop), p->node_name, p->proplist))) {
+        fprintf(stderr, "gsr error: pa_context_new_with_proplist failed\n");
+        goto fail;
+    }
+
+    if(pa_context_connect(p->context, nullptr, PA_CONTEXT_NOFLAGS, NULL) < 0) {
+        fprintf(stderr, "gsr error: pa_context_connect failed\n");
+        goto fail;
+    }
+
+    pa_context_set_subscribe_callback(p->context, subscribe_cb, p);
+    pa = pa_context_subscribe(p->context, PA_SUBSCRIPTION_MASK_SERVER, NULL, NULL);
+    if(pa)
+        pa_operation_unref(pa);
+
+    pa_mainloop_iterate(p->mainloop, 0, NULL);
+    return true;
+
+    fail:
+    if(p->context) {
+        pa_context_disconnect(p->context);
+        pa_context_unref(p->context);
+        p->context = NULL;
+    }
+    return false;
 }
 
 static bool pa_sound_device_should_reconnect(pa_handle *p, double now, char *device_name, size_t device_name_size) {
@@ -279,7 +319,6 @@ static bool pa_sound_device_should_reconnect(pa_handle *p, double now, char *dev
 }
 
 static bool pa_sound_device_handle_reconnect(pa_handle *p, char *device_name, size_t device_name_size, double now) {
-    int r;
     if(!pa_sound_device_should_reconnect(p, now, device_name, device_name_size))
         return true;
 
@@ -287,6 +326,10 @@ static bool pa_sound_device_handle_reconnect(pa_handle *p, char *device_name, si
         pa_stream_disconnect(p->stream);
         pa_stream_unref(p->stream);
         p->stream = NULL;
+
+        pa_sound_device_handle_context_recreate(p);
+        if(!p->context || pa_context_get_state(p->context) != PA_CONTEXT_READY)
+            return false;
     }
 
     if(!(p->stream = pa_stream_new(p->context, p->stream_name, &p->ss, NULL))) {
@@ -294,7 +337,7 @@ static bool pa_sound_device_handle_reconnect(pa_handle *p, char *device_name, si
         return false;
     }
 
-    r = pa_stream_connect_record(p->stream, device_name, &p->attr,
+    const int r = pa_stream_connect_record(p->stream, device_name, &p->attr,
         (pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING|PA_STREAM_ADJUST_LATENCY|PA_STREAM_AUTO_TIMING_UPDATE|PA_STREAM_DONT_MOVE));
 
     if(r < 0) {
@@ -322,6 +365,14 @@ static int pa_sound_device_read(pa_handle *p, double timeout_seconds) {
     int negative = 0;
 
     pa_mainloop_iterate(p->mainloop, 0, NULL);
+
+    if(!p->context) {
+        if(!pa_sound_device_handle_context_recreate(p))
+            goto fail;
+    }
+
+    if(!p->context || pa_context_get_state(p->context) != PA_CONTEXT_READY)
+        goto fail;
 
     if(!pa_sound_device_handle_reconnect(p, device_name, sizeof(device_name), start_time) || !p->stream)
         goto fail;
