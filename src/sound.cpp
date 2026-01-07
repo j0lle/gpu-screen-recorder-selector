@@ -211,6 +211,9 @@ static pa_handle* pa_sound_device_new(const char *server,
     if(strcmp(device_name, "") == 0) {
         pa_proplist_sets(proplist, "node.autoconnect", "false");
         pa_proplist_sets(proplist, "node.dont-reconnect", "true");
+        pa_proplist_sets(proplist, "node.suspend-on-idle", "false");
+        pa_proplist_sets(proplist, "node.pause-on-idle", "false");
+        pa_proplist_sets(proplist, "node.always-process", "true");
     }
 
     if (!(p->mainloop = pa_mainloop_new()))
