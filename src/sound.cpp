@@ -295,7 +295,7 @@ static bool pa_sound_device_handle_reconnect(pa_handle *p, char *device_name, si
     }
 
     r = pa_stream_connect_record(p->stream, device_name, &p->attr,
-        (pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING|PA_STREAM_ADJUST_LATENCY|PA_STREAM_AUTO_TIMING_UPDATE));
+        (pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING|PA_STREAM_ADJUST_LATENCY|PA_STREAM_AUTO_TIMING_UPDATE|PA_STREAM_DONT_MOVE));
 
     if(r < 0) {
         //pa_context_errno(p->context);
