@@ -68,6 +68,7 @@ struct pa_handle {
     char default_input_device_name[DEVICE_NAME_MAX_SIZE];
 
     pa_proplist *proplist;
+    bool connected;
 };
 
 static void pa_sound_device_free(pa_handle *p) {
@@ -255,6 +256,7 @@ static pa_handle* pa_sound_device_new(const char *server,
     if(pa)
         pa_operation_unref(pa);
 
+    p->connected = true;
     return p;
 
 fail:
@@ -264,13 +266,23 @@ fail:
     return NULL;
 }
 
-static bool pa_sound_device_handle_context_recreate(pa_handle *p) {
-    pa_operation *pa = NULL;
+static void pa_sound_device_update_context_status(pa_handle *p) {
+    if(p->connected || !p->context || pa_context_get_state(p->context) != PA_CONTEXT_READY)
+        return;
 
+    p->connected = true;
+    pa_context_set_subscribe_callback(p->context, subscribe_cb, p);
+    pa_operation *pa = pa_context_subscribe(p->context, PA_SUBSCRIPTION_MASK_SERVER, NULL, NULL);
+    if(pa)
+        pa_operation_unref(pa);
+}
+
+static bool pa_sound_device_handle_context_recreate(pa_handle *p) {
     if(p->context) {
         pa_context_disconnect(p->context);
         pa_context_unref(p->context);
         p->context = NULL;
+        p->connected = false;
     }
 
     if (!(p->context = pa_context_new_with_proplist(pa_mainloop_get_api(p->mainloop), p->node_name, p->proplist))) {
@@ -283,12 +295,8 @@ static bool pa_sound_device_handle_context_recreate(pa_handle *p) {
         goto fail;
     }
 
-    pa_context_set_subscribe_callback(p->context, subscribe_cb, p);
-    pa = pa_context_subscribe(p->context, PA_SUBSCRIPTION_MASK_SERVER, NULL, NULL);
-    if(pa)
-        pa_operation_unref(pa);
-
     pa_mainloop_iterate(p->mainloop, 0, NULL);
+    pa_sound_device_update_context_status(p);
     return true;
 
     fail:
@@ -328,7 +336,7 @@ static bool pa_sound_device_handle_reconnect(pa_handle *p, char *device_name, si
         p->stream = NULL;
 
         pa_sound_device_handle_context_recreate(p);
-        if(!p->context || pa_context_get_state(p->context) != PA_CONTEXT_READY)
+        if(!p->connected)
             return false;
     }
 
@@ -371,7 +379,8 @@ static int pa_sound_device_read(pa_handle *p, double timeout_seconds) {
             goto fail;
     }
 
-    if(!p->context || pa_context_get_state(p->context) != PA_CONTEXT_READY)
+    pa_sound_device_update_context_status(p);
+    if(!p->connected)
         goto fail;
 
     if(!pa_sound_device_handle_reconnect(p, device_name, sizeof(device_name), start_time) || !p->stream)
