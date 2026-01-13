@@ -34,7 +34,8 @@ typedef struct {
     vec2i capture_size;
     MonitorId monitor_id;
 
-    gsr_monitor_rotation monitor_rotation;
+    gsr_monitor_rotation display_server_monitor_rotation;
+    gsr_monitor_rotation final_monitor_rotation;
 
     unsigned int input_texture_id;
     unsigned int external_input_texture_id;
@@ -137,8 +138,8 @@ static void monitor_callback(const gsr_monitor *monitor, void *userdata) {
         fprintf(stderr, "gsr warning: reached max connector ids\n");
 }
 
-static vec2i rotate_capture_size_if_rotated(gsr_capture_kms *self, vec2i capture_size) {
-    if(self->monitor_rotation == GSR_MONITOR_ROT_90 || self->monitor_rotation == GSR_MONITOR_ROT_270) {
+static vec2i rotate_capture_size_if_rotated(gsr_capture_kms *self, vec2i capture_size, gsr_monitor_rotation rotation) {
+    if(rotation == GSR_MONITOR_ROT_90 || rotation == GSR_MONITOR_ROT_270) {
         int tmp_x = capture_size.x;
         capture_size.x = capture_size.y;
         capture_size.y = tmp_x;
@@ -172,14 +173,14 @@ static int gsr_capture_kms_start(gsr_capture *cap, gsr_capture_metadata *capture
 
     monitor.name = self->params.display_to_capture;
     vec2i monitor_position = {0, 0};
-    drm_monitor_get_display_server_data(self->params.egl->window, &monitor, &self->monitor_rotation, &monitor_position);
+    drm_monitor_get_display_server_data(self->params.egl->window, &monitor, &self->display_server_monitor_rotation, &monitor_position);
 
     self->capture_pos = monitor.pos;
     /* Monitor size is already rotated on x11 when the monitor is rotated, no need to apply it ourselves */
     if(self->is_x11)
         self->capture_size = monitor.size;
     else
-        self->capture_size = rotate_capture_size_if_rotated(self, monitor.size);
+        self->capture_size = rotate_capture_size_if_rotated(self, monitor.size, self->display_server_monitor_rotation);
 
     if(self->params.output_resolution.x > 0 && self->params.output_resolution.y > 0) {
         self->params.output_resolution = scale_keep_aspect_ratio(self->capture_size, self->params.output_resolution);
@@ -403,7 +404,7 @@ static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color
     const vec2i cursor_size = {cursor_drm_fd->width, cursor_drm_fd->height};
 
     const gsr_monitor_rotation cursor_plane_rotation = kms_rotation_to_gsr_monitor_rotation(cursor_drm_fd->rotation);
-    const gsr_monitor_rotation rotation = sub_rotations(self->monitor_rotation, cursor_plane_rotation);
+    const gsr_monitor_rotation rotation = sub_rotations(self->display_server_monitor_rotation, cursor_plane_rotation);
 
     vec2i cursor_pos = {cursor_drm_fd->x, cursor_drm_fd->y};
     switch(rotation) {
@@ -539,14 +540,14 @@ static void gsr_capture_kms_update_connector_ids(gsr_capture_kms *self) {
     monitor.name = self->params.display_to_capture;
     vec2i monitor_position = {0, 0};
     // TODO: This is cached. We need it updated.
-    drm_monitor_get_display_server_data(self->params.egl->window, &monitor, &self->monitor_rotation, &monitor_position);
+    drm_monitor_get_display_server_data(self->params.egl->window, &monitor, &self->display_server_monitor_rotation, &monitor_position);
 
     self->capture_pos = monitor.pos;
     /* Monitor size is already rotated on x11 when the monitor is rotated, no need to apply it ourselves */
     if(self->is_x11)
         self->capture_size = monitor.size;
     else
-        self->capture_size = rotate_capture_size_if_rotated(self, monitor.size);
+        self->capture_size = rotate_capture_size_if_rotated(self, monitor.size, self->display_server_monitor_rotation);
 }
 
 static void gsr_capture_kms_pre_capture(gsr_capture *cap, gsr_capture_metadata *capture_metadata, gsr_color_conversion *color_conversion) {
@@ -571,7 +572,10 @@ static void gsr_capture_kms_pre_capture(gsr_capture *cap, gsr_capture_metadata *
     if(self->drm_fd->has_hdr_metadata && self->params.hdr && hdr_metadata_is_supported_format(&self->drm_fd->hdr_metadata))
         gsr_kms_set_hdr_metadata(self, self->drm_fd);
 
-    self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ self->drm_fd->src_w, self->drm_fd->src_h });
+    const gsr_monitor_rotation plane_rotation = kms_rotation_to_gsr_monitor_rotation(self->drm_fd->rotation);
+    self->final_monitor_rotation = self->capture_is_combined_plane ? GSR_MONITOR_ROT_0 : sub_rotations(self->display_server_monitor_rotation, plane_rotation);
+
+    self->capture_size = rotate_capture_size_if_rotated(self, (vec2i){ self->drm_fd->src_w, self->drm_fd->src_h }, self->final_monitor_rotation);
     if(self->params.region_size.x > 0 && self->params.region_size.y > 0)
         self->capture_size = self->params.region_size;
 
@@ -603,13 +607,10 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
         self->params.egl->eglDestroyImage(self->params.egl->egl_display, image);
     }
 
-    const gsr_monitor_rotation plane_rotation = kms_rotation_to_gsr_monitor_rotation(self->drm_fd->rotation);
-    const gsr_monitor_rotation rotation = self->capture_is_combined_plane ? GSR_MONITOR_ROT_0 : sub_rotations(self->monitor_rotation, plane_rotation);
-
     gsr_color_conversion_draw(color_conversion, self->external_texture_fallback ? self->external_input_texture_id : self->input_texture_id,
         self->target_pos, self->output_size,
         capture_pos, self->capture_size, (vec2i){ self->drm_fd->width, self->drm_fd->height },
-        gsr_monitor_rotation_to_rotation(rotation), capture_metadata->flip, GSR_SOURCE_COLOR_RGB, self->external_texture_fallback);
+        gsr_monitor_rotation_to_rotation(self->final_monitor_rotation), capture_metadata->flip, GSR_SOURCE_COLOR_RGB, self->external_texture_fallback);
 
     if(self->params.record_cursor) {
         gsr_kms_response_item *cursor_drm_fd = find_cursor_drm_if_on_monitor(self, self->drm_fd->connector_id, self->capture_is_combined_plane);
@@ -623,7 +624,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
             cursor_monitor_offset.y += self->params.region_position.y;
             render_x11_cursor(self, color_conversion, capture_metadata, cursor_monitor_offset, self->target_pos, self->output_size);
         } else if(cursor_drm_fd) {
-            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ self->drm_fd->src_w, self->drm_fd->src_h });
+            const vec2i framebuffer_size = rotate_capture_size_if_rotated(self, (vec2i){ self->drm_fd->src_w, self->drm_fd->src_h }, self->final_monitor_rotation);
             render_drm_cursor(self, color_conversion, capture_metadata, cursor_drm_fd, self->target_pos, self->output_size, framebuffer_size);
         }
     }
