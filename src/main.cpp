@@ -2396,9 +2396,11 @@ static std::vector<VideoSource> create_video_sources(const args_parser &arg_pars
     vec2i start_pos = {99999, 99999};
     vec2i end_pos = {-99999, -99999};
     for(const VideoSource &video_source : video_sources) {
-        // TODO: Skip scalar positions for now, but this should be handled in a better way
-        if(video_source.capture_source->pos.x_type == VVEC2I_TYPE_SCALAR || video_source.capture_source->pos.y_type == VVEC2I_TYPE_SCALAR/*
-            || video_source.capture_source->size.x_type == VVEC2I_TYPE_SCALAR || video_source.capture_source->size.y_type == VVEC2I_TYPE_SCALAR*/)
+        // TODO: Skip scalar positions for now, but this should be handled in a better way.
+        // Maybe handle scalars at the next loop by multiplying video size by the scalar.
+        if(video_source.capture_source->pos.x_type == VVEC2I_TYPE_SCALAR || video_source.capture_source->pos.y_type == VVEC2I_TYPE_SCALAR
+            || (video_source.capture_source->size.x_type == VVEC2I_TYPE_SCALAR && video_source.capture_source->size.x != 100)
+            || (video_source.capture_source->size.y_type == VVEC2I_TYPE_SCALAR && video_source.capture_source->size.y != 100))
         {
             continue;
         }
