@@ -358,6 +358,20 @@ OpenGL debug output (default: no).
 .TP
 .BI \-v " yes|no"
 Print FPS and damage info (default: yes).
+.TP
+.BI \-low-power " yes|no"
+Run in low power mode. This currently has only an affect on AMD (as it's only an issue on AMD) and allows the GPU to go into a lower power mode when recording (default: no).
+.br
+Setting this to
+.B yes
+might not always be ideal because of AMD driver issues where after playing a video with VAAPI on the system the video encoding performance
+also reduces, which affects GPU Screen Recorder.
+.br
+It's recommended to also use the option
+.B -fm content
+when this is set to
+.B yes
+to only encode frames when the screen content updates to lower GPU and video encoding usage when the system is idle.
 .SS Output Options
 .TP
 .BI \-o " output"

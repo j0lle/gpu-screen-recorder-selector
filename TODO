@@ -395,3 +395,7 @@ Make multiple capture sources work properly in regards to size. The size of the 
 Support hdr camera capture.
 
 Return the max resolution of each codec in --info to display an error in the UI before capture starts. Right now its fine since the UI will report bad resolution after capture starts and fails but it doesn't say what the max resolution is.
+
+Should -low-power option also use vaapi/vulkan low power, if available?
+
+Should capture option x=bla;y=bla be scaled by -s (output resolution scale)? width and height is.

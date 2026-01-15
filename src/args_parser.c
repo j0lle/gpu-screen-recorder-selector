@@ -197,7 +197,7 @@ static void usage_header(void) {
            "[-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-p <plugin_path>] "
            "[-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] "
            "[-fallback-cpu-encoding yes|no] [-o <output_file>] [-ro <output_directory>] [-ffmpeg-opts <options>] [--list-capture-options [card_path]] "
-           "[--list-audio-devices] [--list-application-audio] [--list-v4l2-devices] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+           "[--list-audio-devices] [--list-application-audio] [--list-v4l2-devices] [-low-power yes|no] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -256,6 +256,7 @@ static bool args_parser_set_values(args_parser *self) {
     self->restart_replay_on_save = args_get_boolean_by_key(self->args, NUM_ARGS, "-restart-replay-on-save", false);
     self->overclock = args_get_boolean_by_key(self->args, NUM_ARGS, "-oc", false);
     self->fallback_cpu_encoding = args_get_boolean_by_key(self->args, NUM_ARGS, "-fallback-cpu-encoding", false);
+    self->low_power = args_get_boolean_by_key(self->args, NUM_ARGS, "-low-power", false);
 
     self->audio_bitrate = args_get_i64_by_key(self->args, NUM_ARGS, "-ab", 0);
     self->audio_bitrate *= 1000LL;
@@ -536,6 +537,7 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
     self->args[arg_index++] = (Arg){ .key = "-ffmpeg-opts",                   .optional = true,  .list = false, .type = ARG_TYPE_STRING };
     self->args[arg_index++] = (Arg){ .key = "-ffmpeg-video-opts",             .optional = true,  .list = false, .type = ARG_TYPE_STRING };
     self->args[arg_index++] = (Arg){ .key = "-ffmpeg-audio-opts",             .optional = true,  .list = false, .type = ARG_TYPE_STRING };
+    self->args[arg_index++] = (Arg){ .key = "-low-power",                     .optional = true,  .list = false, .type = ARG_TYPE_BOOLEAN };
     assert(arg_index == NUM_ARGS);
 
     for(int i = 1; i < argc; i += 2) {
