@@ -336,7 +336,7 @@ static bool gsr_capture_v4l2_get_best_matching_setup(
             setup_framerate = 50000;
         }
 
-        const uint64_t match_score = setup_resolution_width * setup_resolution_height * setup_framerate;
+        const uint64_t match_score = setup_resolution_width * setup_resolution_height * setup_framerate + (pixfmt == GSR_CAPTURE_V4L2_PIXFMT_YUYV ? 5 : 0);
         if(match_score > best_match_score) {
             best_match_score = match_score;
             best_match_index = i;
