@@ -1194,6 +1194,8 @@ struct CaptureSource {
     vec2i region_size = {0, 0};
     bool region_set = false;
     int64_t window_id = 0;
+    int camera_fps = 0;
+    vec2i camera_resolution = {0, 0};
 };
 
 struct VideoSource {
@@ -1869,18 +1871,9 @@ static void output_monitor_info(const gsr_monitor *monitor, void *userdata) {
     ++options->num_monitors;
 }
 
-static void camera_query_callback(const char *path, gsr_capture_v4l2_supported_pixfmts supported_pixfmts, vec2i size, void *userdata) {
+static void camera_query_callback(const char *path, const gsr_capture_v4l2_supported_setup *setup, void *userdata) {
     (void)userdata;
-
-    char pixfmt_str[32];
-    if(supported_pixfmts.yuyv && supported_pixfmts.mjpeg)
-        snprintf(pixfmt_str, sizeof(pixfmt_str), "yuyv,mjpeg");
-    else if(supported_pixfmts.yuyv)
-        snprintf(pixfmt_str, sizeof(pixfmt_str), "yuyv");
-    else if(supported_pixfmts.mjpeg)
-        snprintf(pixfmt_str, sizeof(pixfmt_str), "mjpeg");
-
-    printf("%s|%dx%d|%s\n", path, size.x, size.y, pixfmt_str);
+    printf("%s|%ux%u@%uhz|%s\n", path, setup->resolution.width, setup->resolution.height, gsr_capture_v4l2_framerate_to_number(setup->framerate), gsr_capture_v4l2_pixfmt_to_string(setup->pixfmt));
 }
 
 static void list_supported_capture_options(const gsr_window *window, const char *card_path, bool list_monitors) {
@@ -2316,7 +2309,9 @@ static gsr_capture* create_capture_impl(const args_parser &arg_parser, gsr_egl *
         v4l2_params.output_resolution = arg_parser.output_resolution;
         v4l2_params.device_path = capture_source.name.c_str();
         v4l2_params.pixfmt = capture_source.v4l2_pixfmt;
-        v4l2_params.fps = arg_parser.fps;
+        v4l2_params.camera_fps = capture_source.camera_fps;
+        v4l2_params.camera_resolution.width = capture_source.camera_resolution.x;
+        v4l2_params.camera_resolution.height = capture_source.camera_resolution.y;
         capture = gsr_capture_v4l2_create(&v4l2_params);
         if(!capture)
             _exit(1);
@@ -2398,12 +2393,27 @@ static std::vector<VideoSource> create_video_sources(const args_parser &arg_pars
         }
     }
 
-    // TODO: Video size should be end pos - start pos, where start pos = pos and end pos = pos + size
-    video_size = {0, 0};
+    vec2i start_pos = {99999, 99999};
+    vec2i end_pos = {-99999, -99999};
     for(const VideoSource &video_source : video_sources) {
-        video_size.x = std::max(video_size.x, video_source.metadata.video_size.x);
-        video_size.y = std::max(video_size.y, video_source.metadata.video_size.y);
+        // TODO: Skip scalar positions for now, but this should be handled in a better way
+        if(video_source.capture_source->pos.x_type == VVEC2I_TYPE_SCALAR || video_source.capture_source->pos.y_type == VVEC2I_TYPE_SCALAR/*
+            || video_source.capture_source->size.x_type == VVEC2I_TYPE_SCALAR || video_source.capture_source->size.y_type == VVEC2I_TYPE_SCALAR*/)
+        {
+            continue;
+        }
+        const vec2i video_source_start_pos = {video_source.capture_source->pos.x, video_source.capture_source->pos.y};
+        const vec2i video_source_end_pos = {video_source_start_pos.x + video_source.metadata.video_size.x, video_source_start_pos.y + video_source.metadata.video_size.y};
+
+        start_pos.x = std::min(start_pos.x, video_source_start_pos.x);
+        start_pos.y = std::min(start_pos.y, video_source_start_pos.y);
+
+        end_pos.x = std::max(end_pos.x, video_source_end_pos.x);
+        end_pos.y = std::max(end_pos.y, video_source_end_pos.y);
     }
+
+    video_size.x = std::max(0, end_pos.x - start_pos.x);
+    video_size.y = std::max(0, end_pos.y - start_pos.y);
 
     for(VideoSource &video_source : video_sources) {
         video_source.metadata.video_size = video_size;
@@ -2761,6 +2771,15 @@ static bool string_to_bool(const char *str, size_t len, bool *value) {
     }
 }
 
+static int clamp_scalar(int value) {
+    if(value < 0)
+        return 0;
+    else if(value > 100)
+        return 100;
+    else
+        return value;
+}
+
 static void parse_capture_source_options(const std::string &capture_source_str, CaptureSource &capture_source) {
     bool is_first_column = true;
 
@@ -2782,6 +2801,9 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
                 fprintf(stderr, "gsr error: invalid capture target value for option x: \"%.*s\", expected a number\n", (int)size, sub);
                 _exit(1);
             }
+
+            if(capture_source.pos.x_type == VVEC2I_TYPE_SCALAR)
+                capture_source.pos.x = clamp_scalar(capture_source.pos.x);
         } else if(string_starts_with(sub, size, "y=")) {
             capture_source.pos.y_type = sub[size - 1] == '%' ? VVEC2I_TYPE_SCALAR : VVEC2I_TYPE_PIXELS;
             sub += 2;
@@ -2790,6 +2812,9 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
                 fprintf(stderr, "gsr error: invalid capture target value for option y: \"%.*s\", expected a number\n", (int)size, sub);
                 _exit(1);
             }
+
+            if(capture_source.pos.y_type == VVEC2I_TYPE_SCALAR)
+                capture_source.pos.y = clamp_scalar(capture_source.pos.y);
         } else if(string_starts_with(sub, size, "width=")) {
             capture_source.size.x_type = sub[size - 1] == '%' ? VVEC2I_TYPE_SCALAR : VVEC2I_TYPE_PIXELS;
             sub += 6;
@@ -2798,6 +2823,9 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
                 fprintf(stderr, "gsr error: invalid capture target value for option width: \"%.*s\", expected a number\n", (int)size, sub);
                 _exit(1);
             }
+
+            if(capture_source.size.x_type == VVEC2I_TYPE_SCALAR)
+                capture_source.size.x = clamp_scalar(capture_source.size.x);
         } else if(string_starts_with(sub, size, "height=")) {
             capture_source.size.y_type = sub[size - 1] == '%' ? VVEC2I_TYPE_SCALAR : VVEC2I_TYPE_PIXELS;
             sub += 7;
@@ -2806,6 +2834,9 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
                 fprintf(stderr, "gsr error: invalid capture target value for option height: \"%.*s\", expected a number\n", (int)size, sub);
                 _exit(1);
             }
+
+            if(capture_source.size.y_type == VVEC2I_TYPE_SCALAR)
+                capture_source.size.y = clamp_scalar(capture_source.size.y);
         } else if(string_starts_with(sub, size, "halign=")) {
             sub += 7;
             size -= 7;
@@ -2849,8 +2880,29 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
 
             if(vflip)
                 capture_source.flip |= GSR_FLIP_VERTICAL;
+        } else if(string_starts_with(sub, size, "camera_fps=")) {
+            sub += 11;
+            size -= 11;
+            if(!string_to_int(sub, size, &capture_source.camera_fps)) {
+                fprintf(stderr, "gsr error: invalid capture target value for option camera_fps: \"%.*s\", expected a number\n", (int)size, sub);
+                _exit(1);
+            }
+        } else if(string_starts_with(sub, size, "camera_width=")) {
+            sub += 13;
+            size -= 13;
+            if(!string_to_int(sub, size, &capture_source.camera_resolution.x)) {
+                fprintf(stderr, "gsr error: invalid capture target value for option camera_width: \"%.*s\", expected a number\n", (int)size, sub);
+                _exit(1);
+            }
+        } else if(string_starts_with(sub, size, "camera_height=")) {
+            sub += 14;
+            size -= 14;
+            if(!string_to_int(sub, size, &capture_source.camera_resolution.y)) {
+                fprintf(stderr, "gsr error: invalid capture target value for option camera_height: \"%.*s\", expected a number\n", (int)size, sub);
+                _exit(1);
+            }
         } else {
-            fprintf(stderr, "gsr error: invalid capture target option \"%.*s\", expected x, y, width, height, halign, valign, pixfmt, hflip or vflip\n", (int)size, sub);
+            fprintf(stderr, "gsr error: invalid capture target option \"%.*s\", expected x, y, width, height, halign, valign, pixfmt, hflip, vflip, camera_fps, camera_width or camera_height\n", (int)size, sub);
             _exit(1);
         }
 
@@ -2860,6 +2912,7 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
 
 static std::vector<CaptureSource> parse_capture_source_arg(const char *capture_source_arg, const args_parser &arg_parser) {
     std::vector<CaptureSource> requested_capture_sources;
+    const bool has_multiple_capture_sources = strchr(capture_source_arg, '|') != nullptr;
 
     split_string(capture_source_arg, '|', [&](const char *sub, size_t size) {
         if(size == 0)
@@ -2901,12 +2954,10 @@ static std::vector<CaptureSource> parse_capture_source_arg(const char *capture_s
             }
         }
 
-        /* We want good default values for v4l2 (webcam) capture, by setting webcam at bottom right, offset by -10%,-10% pixels and at size 30%,30% */
-        if(capture_source.type == GSR_CAPTURE_SOURCE_TYPE_V4L2 && !requested_capture_sources.empty()) {
+        if(has_multiple_capture_sources) {
             capture_source.halign = GSR_CAPTURE_ALIGN_START;
-            capture_source.valign = GSR_CAPTURE_ALIGN_END;
+            capture_source.valign = GSR_CAPTURE_ALIGN_START;
             capture_source.pos = {0, 0, VVEC2I_TYPE_PIXELS, VVEC2I_TYPE_PIXELS};
-            capture_source.size = {30, 30, VVEC2I_TYPE_SCALAR, VVEC2I_TYPE_SCALAR};
         }
 
         parse_capture_source_options(std::string(substr_start, size), capture_source);
@@ -3271,12 +3322,12 @@ static gsr_video_codec select_appropriate_video_codec_automatically(vec2i video_
         fprintf(stderr, "gsr info: using h264 encoder because a codec was not specified\n");
         return GSR_VIDEO_CODEC_H264;
     } else if(supported_video_codecs->hevc.supported && codec_supports_resolution(supported_video_codecs->hevc.max_resolution, video_size)) {
-        fprintf(stderr, "gsr info: using hevc encoder because a codec was not specified and h264 supported max resolution (%dx%d) is less than capture resolution (%dx%d)\n",
+        fprintf(stderr, "gsr info: using hevc encoder because a codec was not specified and h264 supported max resolution (%dx%d) is less than the capture resolution (%dx%d)\n",
             supported_video_codecs->h264.max_resolution.x, supported_video_codecs->h264.max_resolution.y,
             video_size.x, video_size.y);
         return GSR_VIDEO_CODEC_HEVC;
     } else if(supported_video_codecs->av1.supported && codec_supports_resolution(supported_video_codecs->av1.max_resolution, video_size)) {
-        fprintf(stderr, "gsr info: using av1 encoder because a codec was not specified and hevc supported max resolution (%dx%d) is less than capture resolution (%dx%d)\n",
+        fprintf(stderr, "gsr info: using av1 encoder because a codec was not specified and hevc supported max resolution (%dx%d) is less than the capture resolution (%dx%d)\n",
             supported_video_codecs->hevc.max_resolution.x, supported_video_codecs->hevc.max_resolution.y,
             video_size.x, video_size.y);
         return GSR_VIDEO_CODEC_AV1;
@@ -3314,7 +3365,6 @@ static const AVCodec* select_video_codec_with_fallback(vec2i video_size, args_pa
         }
     }
 
-    // TODO: Allow hevc, vp9 and av1 in (enhanced) flv (supported since ffmpeg 6.1)
     if(LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(60, 10, 100) && strcmp(file_extension, "flv") == 0) {
         if(args_parser->video_codec != GSR_VIDEO_CODEC_H264) {
             args_parser->video_codec = GSR_VIDEO_CODEC_H264;

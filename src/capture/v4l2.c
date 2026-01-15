@@ -44,6 +44,11 @@ typedef enum {
 } v4l2_buffer_type;
 
 typedef struct {
+    bool yuyv;
+    bool mjpeg;
+} gsr_capture_v4l2_supported_pixfmts;
+
+typedef struct {
     gsr_capture_v4l2_params params;
     vec2i capture_size;
 
@@ -157,7 +162,35 @@ static void gsr_capture_v4l2_reset_cropping(gsr_capture_v4l2 *self) {
     }
 }
 
-gsr_capture_v4l2_supported_pixfmts gsr_capture_v4l2_get_supported_pixfmts(int fd) {
+static uint32_t gsr_pixfmt_to_v4l2_pixfmt(gsr_capture_v4l2_pixfmt pixfmt) {
+    switch(pixfmt) {
+        case GSR_CAPTURE_V4L2_PIXFMT_AUTO:
+            assert(false);
+            break;
+        case GSR_CAPTURE_V4L2_PIXFMT_YUYV:
+            return V4L2_PIX_FMT_YUYV;
+        case GSR_CAPTURE_V4L2_PIXFMT_MJPEG:
+            return V4L2_PIX_FMT_MJPEG;
+    }
+    assert(false);
+    return V4L2_PIX_FMT_YUYV;
+}
+
+const char* gsr_capture_v4l2_pixfmt_to_string(gsr_capture_v4l2_pixfmt pixfmt) {
+    switch(pixfmt) {
+        case GSR_CAPTURE_V4L2_PIXFMT_AUTO:
+            assert(false);
+            break;
+        case GSR_CAPTURE_V4L2_PIXFMT_YUYV:
+            return "yuyv";
+        case GSR_CAPTURE_V4L2_PIXFMT_MJPEG:
+            return "mjpeg";
+    }
+    assert(false);
+    return "";
+}
+
+static gsr_capture_v4l2_supported_pixfmts gsr_capture_v4l2_get_supported_pixfmts(int fd) {
     gsr_capture_v4l2_supported_pixfmts result = {0};
 
     struct v4l2_fmtdesc fmt = {
@@ -179,28 +212,189 @@ gsr_capture_v4l2_supported_pixfmts gsr_capture_v4l2_get_supported_pixfmts(int fd
     return result;
 }
 
-static uint32_t gsr_pixfmt_to_v4l2_pixfmt(gsr_capture_v4l2_pixfmt pixfmt) {
-    switch(pixfmt) {
-        case GSR_CAPTURE_V4L2_PIXFMT_AUTO:
-            assert(false);
-            break;
-        case GSR_CAPTURE_V4L2_PIXFMT_YUYV:
-            return V4L2_PIX_FMT_YUYV;
-        case GSR_CAPTURE_V4L2_PIXFMT_MJPEG:
-            return V4L2_PIX_FMT_MJPEG;
+/* Returns the number of resolutions added */
+static size_t gsr_capture_v4l2_get_supported_resolutions(int fd, gsr_capture_v4l2_pixfmt pixfmt, gsr_capture_v4l2_resolution *resolutions, size_t max_resolutions) {
+    size_t resolution_index = 0;
+    struct v4l2_frmsizeenum fmt = {
+        .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+        .pixel_format = gsr_pixfmt_to_v4l2_pixfmt(pixfmt),
+    };
+
+    while(xioctl(fd, VIDIOC_ENUM_FRAMESIZES, &fmt) == 0) {
+        if(fmt.type == V4L2_FRMSIZE_TYPE_DISCRETE && resolution_index < max_resolutions) {
+            resolutions[resolution_index] = (gsr_capture_v4l2_resolution){
+                .width = fmt.discrete.width,
+                .height = fmt.discrete.height,
+            };
+            ++resolution_index;
+        }
+        ++fmt.index;
     }
-    assert(false);
-    return V4L2_PIX_FMT_YUYV;
+
+    return resolution_index;
 }
 
-static bool gsr_capture_v4l2_validate_pixfmt(gsr_capture_v4l2 *self, const gsr_capture_v4l2_supported_pixfmts supported_pixfmts) {
+/* Returns the number of framerates added */
+static size_t gsr_capture_v4l2_get_supported_framerates(int fd, gsr_capture_v4l2_pixfmt pixfmt, gsr_capture_v4l2_resolution resolution, gsr_capture_v4l2_framerate *framerates, size_t max_framerates) {
+    size_t framerate_index = 0;
+    struct v4l2_frmivalenum fmt = {
+        .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+        .pixel_format = gsr_pixfmt_to_v4l2_pixfmt(pixfmt),
+        .width = resolution.width,
+        .height = resolution.height,
+    };
+
+    while(xioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &fmt) == 0) {
+        if(fmt.type == V4L2_FRMIVAL_TYPE_DISCRETE && fmt.discrete.denominator > 0 && fmt.discrete.numerator > 0 && framerate_index < max_framerates) {
+            framerates[framerate_index] = (gsr_capture_v4l2_framerate){
+                .denominator = fmt.discrete.denominator,
+                .numerator = fmt.discrete.numerator,
+            };
+            ++framerate_index;
+        }
+        ++fmt.index;
+    }
+
+    return framerate_index;
+}
+
+/* Returns the number of setups added */
+static size_t gsr_capture_v4l2_get_supported_setups(int fd, gsr_capture_v4l2_supported_setup *supported_setups, size_t max_supported_setups, bool has_libturbojpeg_lib) {
+    const gsr_capture_v4l2_supported_pixfmts supported_pixfmts = gsr_capture_v4l2_get_supported_pixfmts(fd);
+
+    size_t num_pixfmts = 0;
+    gsr_capture_v4l2_pixfmt pixfmts[2];
+
+    if(supported_pixfmts.yuyv)
+        pixfmts[num_pixfmts++] = GSR_CAPTURE_V4L2_PIXFMT_YUYV;
+
+    if(supported_pixfmts.mjpeg && has_libturbojpeg_lib)
+        pixfmts[num_pixfmts++] = GSR_CAPTURE_V4L2_PIXFMT_MJPEG;
+
+    gsr_capture_v4l2_resolution resolutions[32];
+    gsr_capture_v4l2_framerate framerates[32];
+    size_t supported_setup_index = 0;
+
+    for(size_t pixfmt_index = 0; pixfmt_index < num_pixfmts; ++pixfmt_index) {
+        const gsr_capture_v4l2_pixfmt pixfmt = pixfmts[pixfmt_index];
+        const size_t num_resolutions = gsr_capture_v4l2_get_supported_resolutions(fd, pixfmt, resolutions, 32);
+
+        for(size_t resolution_index = 0; resolution_index < num_resolutions; ++resolution_index) {
+            const gsr_capture_v4l2_resolution resolution = resolutions[resolution_index];
+            const size_t num_framerates = gsr_capture_v4l2_get_supported_framerates(fd, pixfmt, resolution, framerates, 32);
+
+            for(size_t framerate_index = 0; framerate_index < num_framerates; ++framerate_index) {
+                const gsr_capture_v4l2_framerate framerate = framerates[framerate_index];
+
+                if(supported_setup_index < max_supported_setups) {
+                    supported_setups[supported_setup_index] = (gsr_capture_v4l2_supported_setup){
+                        .pixfmt = pixfmt,
+                        .resolution = resolution,
+                        .framerate = framerate,
+                    };
+                    ++supported_setup_index;
+                }
+            }
+        }
+    }
+
+    return supported_setup_index;
+}
+
+uint32_t gsr_capture_v4l2_framerate_to_number(gsr_capture_v4l2_framerate framerate) {
+    return (uint32_t)((double)framerate.denominator / (double)framerate.numerator);
+}
+
+static bool gsr_capture_v4l2_get_best_matching_setup(
+    const gsr_capture_v4l2_supported_setup *supported_setups,
+    size_t num_supported_setups,
+    gsr_capture_v4l2_pixfmt pixfmt,
+    uint32_t camera_fps,
+    gsr_capture_v4l2_resolution camera_resolution,
+    gsr_capture_v4l2_supported_setup *best_supported_setup)
+{
+    memset(best_supported_setup, 0, sizeof(*best_supported_setup));
+
+    int best_match_index = -1;
+    uint64_t best_match_score = 0;
+
+    for(size_t i = 0; i < num_supported_setups; ++i) {
+        const gsr_capture_v4l2_supported_setup *setup = &supported_setups[i];
+        if(pixfmt != GSR_CAPTURE_V4L2_PIXFMT_AUTO && pixfmt != setup->pixfmt)
+            continue;
+
+        uint64_t setup_resolution_width = (uint64_t)setup->resolution.width;
+        uint64_t setup_resolution_height = (uint64_t)setup->resolution.height;
+        uint64_t setup_framerate = gsr_capture_v4l2_framerate_to_number(setup->framerate);
+
+        if(setup_resolution_width == camera_resolution.width && setup_resolution_height == camera_resolution.height) {
+            setup_resolution_width = 50000;
+            setup_resolution_height = 50000;
+        }
+
+        if(setup_framerate == camera_fps) {
+            setup_framerate = 50000;
+        }
+
+        const uint64_t match_score = setup_resolution_width * setup_resolution_height * setup_framerate;
+        if(match_score > best_match_score) {
+            best_match_score = match_score;
+            best_match_index = i;
+        }
+
+        //fprintf(stderr, "supported setup[%d]: pixfmt: %d, size: %ux%u, fps: %u/%u\n", (int)i, setup->pixfmt, setup->resolution.width, setup->resolution.height, setup->framerate.denominator, setup->framerate.numerator);
+    }
+
+    if(best_match_index == -1)
+        return false;
+
+    //fprintf(stderr, "best match index: %d\n", best_match_index);
+    *best_supported_setup = supported_setups[best_match_index];
+    return true;
+}
+
+/* Seems like some cameras need this? */
+static void gsr_capture_v4l2_update_params(int fd) {
+    struct v4l2_streamparm streamparm = {
+        .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+    };
+    if(xioctl(fd, VIDIOC_G_PARM, &streamparm) == -1) {
+        fprintf(stderr, "gsr error: gsr_capture_v4l2_set_framerate: VIDIOC_G_PARM failed, error: %s\n", strerror(errno));
+        return;
+    }
+
+    if(xioctl(fd, VIDIOC_S_PARM, &streamparm) == -1) {
+        fprintf(stderr, "gsr error: gsr_capture_v4l2_set_framerate: VIDIOC_S_PARM failed, error: %s\n", strerror(errno));
+        return;
+    }
+}
+
+static void gsr_capture_v4l2_set_framerate(int fd, gsr_capture_v4l2_framerate framerate) {
+    struct v4l2_streamparm streamparm = {
+        .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+    };
+    if(xioctl(fd, VIDIOC_G_PARM, &streamparm) == -1) {
+        fprintf(stderr, "gsr error: gsr_capture_v4l2_set_framerate: VIDIOC_G_PARM failed, error: %s\n", strerror(errno));
+        return;
+    }
+
+    streamparm.parm.capture.timeperframe.denominator = framerate.denominator;
+    streamparm.parm.capture.timeperframe.numerator = framerate.numerator;
+    if(xioctl(fd, VIDIOC_S_PARM, &streamparm) == -1) {
+        fprintf(stderr, "gsr error: gsr_capture_v4l2_set_framerate: VIDIOC_S_PARM failed, error: %s\n", strerror(errno));
+        return;
+    }
+
+    if(streamparm.parm.capture.timeperframe.denominator == 0 || streamparm.parm.capture.timeperframe.numerator == 0) {
+        fprintf(stderr, "gsr error: gsr_capture_v4l2_set_framerate: VIDIOC_S_PARM failed, error: invalid framerate: %u/%u\n", framerate.denominator, framerate.numerator);;
+        return;
+    }
+}
+
+static bool gsr_capture_v4l2_validate_pixfmt(const gsr_capture_v4l2 *self, const gsr_capture_v4l2_supported_pixfmts supported_pixfmts) {
     switch(self->params.pixfmt) {
         case GSR_CAPTURE_V4L2_PIXFMT_AUTO: {
-            if(supported_pixfmts.yuyv) {
-                self->params.pixfmt = GSR_CAPTURE_V4L2_PIXFMT_YUYV;
-            } else if(supported_pixfmts.mjpeg) {
-                self->params.pixfmt = GSR_CAPTURE_V4L2_PIXFMT_MJPEG;
-            } else {
+            if(!supported_pixfmts.yuyv && !supported_pixfmts.mjpeg) {
                 fprintf(stderr, "gsr error: gsr_capture_v4l2_create: %s doesn't support yuyv nor mjpeg. GPU Screen Recorder supports only yuyv and mjpeg at the moment. Report this as an issue, see: https://git.dec05eba.com/?p=about\n", self->params.device_path);
                 return false;
             }
@@ -208,14 +402,14 @@ static bool gsr_capture_v4l2_validate_pixfmt(gsr_capture_v4l2 *self, const gsr_c
         }
         case GSR_CAPTURE_V4L2_PIXFMT_YUYV: {
             if(!supported_pixfmts.yuyv) {
-                fprintf(stderr, "gsr error: gsr_capture_v4l2_create: %s doesn't support yuyv. Try recording with -pixfmt mjpeg or -pixfmt auto instead\n", self->params.device_path);
+                fprintf(stderr, "gsr error: gsr_capture_v4l2_create: %s doesn't support yuyv. Try recording with pixfmt=mjpeg or pixfmt=auto instead\n", self->params.device_path);
                 return false;
             }
             break;
         }
         case GSR_CAPTURE_V4L2_PIXFMT_MJPEG: {
             if(!supported_pixfmts.mjpeg) {
-                fprintf(stderr, "gsr error: gsr_capture_v4l2_create: %s doesn't support mjpeg. Try recording with -pixfmt yuyv or -pixfmt auto instead\n", self->params.device_path);
+                fprintf(stderr, "gsr error: gsr_capture_v4l2_create: %s doesn't support mjpeg. Try recording with pixfmt=yuyv or pixfmt=auto instead\n", self->params.device_path);
                 return false;
             }
             break;
@@ -321,6 +515,14 @@ static bool gsr_capture_v4l2_map_buffer(gsr_capture_v4l2 *self, const struct v4l
     return true;
 }
 
+static bool is_libturbojpeg_library_available(void) {
+    void *libturbojpeg_lib = dlopen("libturbojpeg.so.0", RTLD_LAZY);
+    const bool has_libturbojpeg_lib = libturbojpeg_lib != NULL;
+    if(libturbojpeg_lib)
+        dlclose(libturbojpeg_lib);
+    return has_libturbojpeg_lib;
+}
+
 static int gsr_capture_v4l2_setup(gsr_capture_v4l2 *self) {
     self->fd = open(self->params.device_path, O_RDWR | O_NONBLOCK);
     if(self->fd < 0) {
@@ -351,9 +553,34 @@ static int gsr_capture_v4l2_setup(gsr_capture_v4l2 *self) {
 
     gsr_capture_v4l2_reset_cropping(self);
 
+    const bool has_libturbojpeg_lib = is_libturbojpeg_library_available();
+    if(!has_libturbojpeg_lib && self->params.pixfmt == GSR_CAPTURE_V4L2_PIXFMT_AUTO) {
+        fprintf(stderr, "gsr warning: gsr_capture_v4l2_create: libturbojpeg.so.0 isn't available on the system, yuyv camera capture will be used\n");
+        self->params.pixfmt = GSR_CAPTURE_V4L2_PIXFMT_YUYV;
+    }
+
     const gsr_capture_v4l2_supported_pixfmts supported_pixfmts = gsr_capture_v4l2_get_supported_pixfmts(self->fd);
     if(!gsr_capture_v4l2_validate_pixfmt(self, supported_pixfmts))
         return -1;
+
+    gsr_capture_v4l2_supported_setup supported_setups[128];
+    const size_t num_supported_setups = gsr_capture_v4l2_get_supported_setups(self->fd, supported_setups, 128, has_libturbojpeg_lib);
+
+    gsr_capture_v4l2_supported_setup best_supported_setup = {0};
+    if(!gsr_capture_v4l2_get_best_matching_setup(supported_setups, num_supported_setups, self->params.pixfmt, self->params.camera_fps, self->params.camera_resolution, &best_supported_setup)) {
+        fprintf(stderr, "gsr error: gsr_capture_v4l2_create: %s doesn't report any frame resolutions and framerates\n", self->params.device_path);
+        return -1;
+    }
+
+    fprintf(stderr, "gsr info: gsr_capture_v4l2_create: capturing %s at %ux%u@%dhz, pixfmt: %s\n",
+        self->params.device_path,
+        best_supported_setup.resolution.width,
+        best_supported_setup.resolution.height,
+        gsr_capture_v4l2_framerate_to_number(best_supported_setup.framerate),
+        gsr_capture_v4l2_pixfmt_to_string(best_supported_setup.pixfmt));
+
+    gsr_capture_v4l2_update_params(self->fd);
+    self->params.pixfmt = best_supported_setup.pixfmt;
 
     if(self->params.pixfmt == GSR_CAPTURE_V4L2_PIXFMT_MJPEG) {
         dlerror(); /* clear */
@@ -384,7 +611,9 @@ static int gsr_capture_v4l2_setup(gsr_capture_v4l2 *self) {
     const uint32_t v4l2_pixfmt = gsr_pixfmt_to_v4l2_pixfmt(self->params.pixfmt);
     struct v4l2_format fmt = {
         .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
-        .fmt.pix.pixelformat = v4l2_pixfmt
+        .fmt.pix.pixelformat = v4l2_pixfmt,
+        .fmt.pix.width = best_supported_setup.resolution.width,
+        .fmt.pix.height = best_supported_setup.resolution.height,
     };
     if(xioctl(self->fd, VIDIOC_S_FMT, &fmt) == -1) {
         fprintf(stderr, "gsr error: gsr_capture_v4l2_create: VIDIOC_S_FMT failed, error: %s\n", strerror(errno));
@@ -398,6 +627,8 @@ static int gsr_capture_v4l2_setup(gsr_capture_v4l2 *self) {
 
     self->capture_size.x = fmt.fmt.pix.width;
     self->capture_size.y = fmt.fmt.pix.height;
+
+    gsr_capture_v4l2_set_framerate(self->fd, best_supported_setup.framerate);
 
     struct v4l2_requestbuffers reqbuf = {
         .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -645,12 +876,10 @@ gsr_capture* gsr_capture_v4l2_create(const gsr_capture_v4l2_params *params) {
 }
 
 void gsr_capture_v4l2_list_devices(v4l2_devices_query_callback callback, void *userdata) {
-    void *libturbojpeg_lib = dlopen("libturbojpeg.so.0", RTLD_LAZY);
-    const bool has_libturbojpeg_lib = libturbojpeg_lib != NULL;
-    if(libturbojpeg_lib)
-        dlclose(libturbojpeg_lib);
-
+    const bool has_libturbojpeg_lib = is_libturbojpeg_library_available();
     char v4l2_device_path[128];
+    gsr_capture_v4l2_supported_setup supported_setups[128];
+
     for(int i = 0; i < 8; ++i) {
         snprintf(v4l2_device_path, sizeof(v4l2_device_path), "/dev/video%d", i);
 
@@ -674,12 +903,14 @@ void gsr_capture_v4l2_list_devices(v4l2_devices_query_callback callback, void *u
         if(xioctl(fd, VIDIOC_G_FMT, &fmt) == -1)
             goto next;
 
-        gsr_capture_v4l2_supported_pixfmts supported_pixfmts = gsr_capture_v4l2_get_supported_pixfmts(fd);
-        if(!has_libturbojpeg_lib)
-            supported_pixfmts.mjpeg = false;
+        const size_t num_supported_setups = gsr_capture_v4l2_get_supported_setups(fd, supported_setups, 128, has_libturbojpeg_lib);
+        if(num_supported_setups == 0)
+            continue;
 
-        if(supported_pixfmts.yuyv || supported_pixfmts.mjpeg)
-            callback(v4l2_device_path, supported_pixfmts, (vec2i){ fmt.fmt.pix.width, fmt.fmt.pix.height }, userdata);
+        for(size_t j = 0; j < num_supported_setups; ++j) {
+            const gsr_capture_v4l2_supported_setup *setup = &supported_setups[j];
+            callback(v4l2_device_path, setup, userdata);
+        }
 
         next:
         close(fd);

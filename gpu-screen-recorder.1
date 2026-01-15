@@ -101,7 +101,7 @@ Additional options can be passed to each capture source by splitting capture sou
 for example
 .BR "screen;x=50;y=50".
 .br
-These are the available options for capture sources:
+These are the available options for all capture sources (optional):
 .RS
 .IP \(bu 3
 .B x
@@ -129,9 +129,9 @@ or
 
 Set to
 .B center
-by default, except for camera (V4L2) when capturing the camera above something else in which case this is set to
+by default when using one capture source, otherwise it's set to
 .B start
-by default
+by default.
 .IP \(bu 3
 .B valign
 - The vertical alignment, should be either
@@ -142,9 +142,9 @@ or
 
 Set to
 .B center
-by default, except for camera (V4L2) when capturing the camera above something else in which case this is set to
-.B end
-by default
+by default when using one capture source, otherwise it's set to
+.B start
+by default.
 .IP \(bu 3
 .B hflip
 - If the source should be flipped horizontally, should be either
@@ -163,9 +163,13 @@ or
 Set to
 .B false
 by default
+.RE
+.PP
+These are the additional options available for camera (V4L2) sources (optional):
+.RS
 .IP \(bu 3
 .B pixfmt
-- The pixel format for cameras (V4L2), should be either
+- The pixel format, should be either
 .BR "auto",
 .B yuyv
 or
@@ -173,6 +177,33 @@ or
 Set to
 .B auto
 by default
+.IP \(bu 3
+.B camera_fps
+- The camera fps. Has to match a camera fps returned in
+.B --info
+or
+.B --list-v4l2-devices
+for the device.
+
+A value of 0 means to use the best option available.
+.IP \(bu 3
+.B camera_width
+- The camera width in pixels. Has to match a camera width returned in
+.B --info
+or
+.B --list-v4l2-devices
+for the device.
+
+A value of 0 means to use the best option available.
+.IP \(bu 3
+.B camera_height
+- The camera height in pixels. Has to match a camera height returned in
+.B --info
+or
+.B --list-v4l2-devices
+for the device.
+
+A value of 0 means to use the best option available.
 .RE
 .TP
 .BI \-region " WxH+X+Y"
@@ -474,11 +505,19 @@ gpu-screen-recorder -w "screen|/dev/video0" -o video.mp4
 .PP
 .RE
 .fi
-Record screen and camera. The camera is located at the bottom right flipped horizontally:
+Record screen and camera. The camera is located at the bottom right and flipped horizontally:
 .PP
 .nf
 .RS
-gpu-screen-recorder -w "monitor:screen|v4l2:/dev/video0;halign=end;valign=end;hflip=true" -o video.mp4
+gpu-screen-recorder -w "screen|/dev/video0;halign=end;valign=end;hflip=true;width=30%;height=30%" -o video.mp4
+.PP
+.RE
+.fi
+Record two monitors, side by side (assuming the first monitor has a resolution of 1920x1080)
+.PP
+.nf
+.RS
+gpu-screen-recorder -w "DP-1|DP-2;x=1920" -o video.mp4
 .RE
 .fi
 .SH FILES
