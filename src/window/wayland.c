@@ -21,7 +21,6 @@ typedef struct {
     struct zxdg_output_v1 *xdg_output;
     vec2i pos;
     vec2i size;
-    vec2i logical_pos;
     vec2i logical_size;
     int32_t transform;
     char *name;
@@ -125,7 +124,6 @@ static void registry_add_object(void *data, struct wl_registry *registry, uint32
             .output = wl_registry_bind(registry, name, &wl_output_interface, 4),
             .pos = { .x = 0, .y = 0 },
             .size = { .x = 0, .y = 0 },
-            .logical_pos = { .x = 0, .y = 0 },
             .logical_size = { .x = 0, .y = 0 },
             .transform = 0,
             .name = NULL,
@@ -396,8 +394,13 @@ static void gsr_window_wayland_for_each_active_monitor_output_cached(const gsr_w
             continue;
 
         const gsr_monitor_rotation rotation = wayland_transform_to_gsr_rotation(output->transform);
+
         vec2i size = { .x = output->size.x, .y = output->size.y };
         size = get_monitor_size_rotated(size.x, size.y, rotation);
+
+        vec2i logical_size = { .x = output->logical_size.x, .y = output->logical_size.y };
+        if(logical_size.x == 0 || logical_size.y == 0)
+            logical_size = size;
 
         const int connector_type_index = get_connector_type_by_name(output->name);
         const int connector_type_id = get_connector_type_id_by_name(output->name);
@@ -407,7 +410,7 @@ static void gsr_window_wayland_for_each_active_monitor_output_cached(const gsr_w
             .pos = { .x = output->pos.x, .y = output->pos.y },
             .size = size,
             .logical_pos = { .x = output->pos.x, .y = output->pos.y },
-            .logical_size = { .x = output->logical_size.x, .y = output->logical_size.y },
+            .logical_size = logical_size,
             .connector_id = 0,
             .rotation = rotation,
             .monitor_identifier = (connector_type_index != -1 && connector_type_id != -1) ? monitor_identifier_from_type_and_count(connector_type_index, connector_type_id) : 0
