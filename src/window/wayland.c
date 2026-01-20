@@ -21,6 +21,8 @@ typedef struct {
     struct zxdg_output_v1 *xdg_output;
     vec2i pos;
     vec2i size;
+    vec2i logical_pos;
+    vec2i logical_size;
     int32_t transform;
     char *name;
 } gsr_wayland_output;
@@ -123,6 +125,8 @@ static void registry_add_object(void *data, struct wl_registry *registry, uint32
             .output = wl_registry_bind(registry, name, &wl_output_interface, 4),
             .pos = { .x = 0, .y = 0 },
             .size = { .x = 0, .y = 0 },
+            .logical_pos = { .x = 0, .y = 0 },
+            .logical_size = { .x = 0, .y = 0 },
             .transform = 0,
             .name = NULL,
         };
@@ -160,10 +164,10 @@ static void xdg_output_logical_position(void *data, struct zxdg_output_v1 *zxdg_
 }
 
 static void xdg_output_handle_logical_size(void *data, struct zxdg_output_v1 *xdg_output, int32_t width, int32_t height) {
-    (void)data;
     (void)xdg_output;
-    (void)width;
-    (void)height;
+    gsr_wayland_output *gsr_xdg_output = data;
+    gsr_xdg_output->logical_size.x = width;
+    gsr_xdg_output->logical_size.y = height;
 }
 
 static void xdg_output_handle_done(void *data, struct zxdg_output_v1 *xdg_output) {
@@ -204,6 +208,42 @@ static void gsr_window_wayland_set_monitor_outputs_from_xdg_output(gsr_window_wa
 
     // Fetch xdg_output
     wl_display_roundtrip(self->display);
+}
+
+// static int monitor_sort_x_pos(const void* a, const void* b) {
+//     const gsr_wayland_output *arg1 = *(const gsr_wayland_output**)a;
+//     const gsr_wayland_output *arg2 = *(const gsr_wayland_output**)b;
+//     return arg1->logical_pos.x - arg2->logical_pos.x;
+// }
+
+// static int monitor_sort_y_pos(const void* a, const void* b) {
+//     const gsr_wayland_output *arg1 = *(const gsr_wayland_output**)a;
+//     const gsr_wayland_output *arg2 = *(const gsr_wayland_output**)b;
+//     return arg1->logical_pos.y - arg2->logical_pos.y;
+// }
+
+static void gsr_window_wayland_set_monitor_real_positions(gsr_window_wayland *self) {
+    gsr_wayland_output *sorted_outputs[GSR_MAX_OUTPUTS];
+    for(int i = 0; i < self->num_outputs; ++i) {
+        sorted_outputs[i] = &self->outputs[i];
+    }
+
+    // TODO: set correct physical positions
+
+    // qsort(sorted_outputs, self->num_outputs, sizeof(gsr_wayland_output*), monitor_sort_x_pos);
+    // int x_pos = 0;
+    // for(int i = 0; i < self->num_outputs; ++i) {
+    //     fprintf(stderr, "monitor: %s\n", sorted_outputs[i]->name);
+    //     sorted_outputs[i]->pos.x = x_pos;
+    //     x_pos += sorted_outputs[i]->logical_size.x;
+    // }
+
+    // qsort(sorted_outputs, self->num_outputs, sizeof(gsr_wayland_output*), monitor_sort_y_pos);
+    // int y_pos = 0;
+    // for(int i = 0; i < self->num_outputs; ++i) {
+    //     sorted_outputs[i]->pos.y = y_pos;
+    //     y_pos += sorted_outputs[i]->logical_size.y;
+    // }
 }
 
 static void gsr_window_wayland_deinit(gsr_window_wayland *self) {
@@ -273,6 +313,7 @@ static bool gsr_window_wayland_init(gsr_window_wayland *self) {
     wl_display_roundtrip(self->display);
 
     gsr_window_wayland_set_monitor_outputs_from_xdg_output(self);
+    gsr_window_wayland_set_monitor_real_positions(self);
 
     if(!self->compositor) {
         fprintf(stderr, "gsr error: gsr_window_wayland_init failed: failed to find compositor\n");
@@ -337,6 +378,16 @@ static gsr_monitor_rotation wayland_transform_to_gsr_rotation(int32_t rot) {
     return GSR_MONITOR_ROT_0;
 }
 
+static vec2i get_monitor_size_rotated(int width, int height, gsr_monitor_rotation rotation) {
+    vec2i size = { .x = width, .y = height };
+    if(rotation == GSR_MONITOR_ROT_90 || rotation == GSR_MONITOR_ROT_270) {
+        int tmp_x = size.x;
+        size.x = size.y;
+        size.y = tmp_x;
+    }
+    return size;
+}
+
 static void gsr_window_wayland_for_each_active_monitor_output_cached(const gsr_window *window, active_monitor_callback callback, void *userdata) {
     const gsr_window_wayland *self = window->priv;
     for(int i = 0; i < self->num_outputs; ++i) {
@@ -344,15 +395,21 @@ static void gsr_window_wayland_for_each_active_monitor_output_cached(const gsr_w
         if(!output->name)
             continue;
 
+        const gsr_monitor_rotation rotation = wayland_transform_to_gsr_rotation(output->transform);
+        vec2i size = { .x = output->size.x, .y = output->size.y };
+        size = get_monitor_size_rotated(size.x, size.y, rotation);
+
         const int connector_type_index = get_connector_type_by_name(output->name);
         const int connector_type_id = get_connector_type_id_by_name(output->name);
         const gsr_monitor monitor = {
             .name = output->name,
             .name_len = strlen(output->name),
             .pos = { .x = output->pos.x, .y = output->pos.y },
-            .size = { .x = output->size.x, .y = output->size.y },
+            .size = size,
+            .logical_pos = { .x = output->pos.x, .y = output->pos.y },
+            .logical_size = { .x = output->logical_size.x, .y = output->logical_size.y },
             .connector_id = 0,
-            .rotation = wayland_transform_to_gsr_rotation(output->transform),
+            .rotation = rotation,
             .monitor_identifier = (connector_type_index != -1 && connector_type_id != -1) ? monitor_identifier_from_type_and_count(connector_type_index, connector_type_id) : 0
         };
         callback(&monitor, userdata);

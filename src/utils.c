@@ -121,6 +121,8 @@ void for_each_active_monitor_output_x11_not_cached(Display *display, active_moni
                         .name_len = out_info->nameLen,
                         .pos = { .x = crt_info->x, .y = crt_info->y },
                         .size = monitor_size,
+                        .logical_pos = { .x = crt_info->x, .y = crt_info->y },
+                        .logical_size = monitor_size,
                         .connector_id = x11_output_get_connector_id(display, screen_res->outputs[i], randr_connector_id_atom),
                         .rotation = rotation,
                         .monitor_identifier = out_info->crtc
@@ -229,6 +231,8 @@ static void for_each_active_monitor_output_drm(const char *card_path, active_mon
                     .name_len = display_name_len,
                     .pos = { .x = crtc->x, .y = crtc->y },
                     .size = { .x = (int)crtc->width, .y = (int)crtc->height },
+                    .logical_pos = { .x = crtc->x, .y = crtc->y },
+                    .logical_size = { .x = (int)crtc->width, .y = (int)crtc->height },
                     .connector_id = connector->connector_id,
                     .rotation = GSR_MONITOR_ROT_0,
                     .monitor_identifier = connector_type_index_name != -1 ? monitor_identifier_from_type_and_count(connector_type_index_name, connector->connector_type_id) : 0
@@ -264,6 +268,8 @@ static void get_monitor_by_name_callback(const gsr_monitor *monitor, void *userd
     if(!data->found_monitor && strcmp(data->name, monitor->name) == 0) {
         data->monitor->pos = monitor->pos;
         data->monitor->size = monitor->size;
+        data->monitor->logical_pos = monitor->logical_pos;
+        data->monitor->logical_size = monitor->logical_size;
         data->monitor->connector_id = monitor->connector_id;
         data->monitor->rotation = monitor->rotation;
         data->monitor->monitor_identifier = monitor->monitor_identifier;

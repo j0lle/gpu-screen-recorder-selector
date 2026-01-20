@@ -16,6 +16,8 @@ typedef struct {
     int name_len;
     vec2i pos; /* This is 0, 0 on wayland. Use |drm_monitor_get_display_server_data| to get the position */
     vec2i size;
+    vec2i logical_pos;
+    vec2i logical_size;
     uint32_t connector_id; /* Only on x11 and drm */
     gsr_monitor_rotation rotation; /* Only on x11 and wayland */
     uint32_t monitor_identifier; /* On x11 this is the crtc id */

@@ -9,7 +9,6 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <assert.h>
-#include <errno.h>
 #include <libgen.h>
 #include <sys/stat.h>
 

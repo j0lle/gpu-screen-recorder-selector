@@ -110,26 +110,23 @@ typedef struct {
     char *output_name;
     vec2i monitor_pos;
     vec2i monitor_size;
+    double monitor_scale_inverted;
 } MonitorByPositionCallback;
 
 static void get_monitor_by_position_callback(const gsr_monitor *monitor, void *userdata) {
     MonitorByPositionCallback *data = (MonitorByPositionCallback*)userdata;
 
-    vec2i monitor_position = monitor->pos;
-    vec2i monitor_size = monitor->size;
-    if(gsr_window_get_display_server(data->window) == GSR_DISPLAY_SERVER_WAYLAND) {
-        gsr_monitor_rotation monitor_rotation = GSR_MONITOR_ROT_0;
-        drm_monitor_get_display_server_data(data->window, monitor, &monitor_rotation, &monitor_position);
-        if(monitor_rotation == GSR_MONITOR_ROT_90 || monitor_rotation == GSR_MONITOR_ROT_270)
-            std::swap(monitor_size.x, monitor_size.y);
-    }
+    const vec2i monitor_position = monitor->logical_pos;
+    const vec2i monitor_size = monitor->size;
+    const vec2i monitor_logical_size = monitor->logical_size;
 
-    if(!data->output_name && data->position.x >= monitor_position.x && data->position.x <= monitor_position.x + monitor_size.x
-        && data->position.y >= monitor_position.y && data->position.y <= monitor_position.y + monitor_size.y)
+    if(!data->output_name && data->position.x >= monitor_position.x && data->position.x <= monitor_position.x + monitor_logical_size.x
+        && data->position.y >= monitor_position.y && data->position.y <= monitor_position.y + monitor_logical_size.y)
     {
         data->output_name = strdup(monitor->name);
         data->monitor_pos = monitor_position;
         data->monitor_size = monitor_size;
+        data->monitor_scale_inverted = (double)monitor_size.x / (double)monitor_logical_size.x;
     }
 }
 
@@ -1204,9 +1201,9 @@ struct VideoSource {
     CaptureSource *capture_source;
 };
 
-static RecordingStartResult start_recording_create_streams(const char *filename, const args_parser &args_parser, AVCodecContext *video_codec_context, const std::vector<AudioTrack> &audio_tracks, bool hdr, std::vector<VideoSource> &video_sources) {
+static RecordingStartResult start_recording_create_streams(const char *filename, const args_parser &arg_parser, AVCodecContext *video_codec_context, const std::vector<AudioTrack> &audio_tracks, bool hdr, std::vector<VideoSource> &video_sources) {
     AVFormatContext *av_format_context;
-    avformat_alloc_output_context2(&av_format_context, nullptr, args_parser.container_format, filename);
+    avformat_alloc_output_context2(&av_format_context, nullptr, arg_parser.container_format, filename);
 
     AVStream *video_stream = create_stream(av_format_context, video_codec_context);
     avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
@@ -1231,8 +1228,8 @@ static RecordingStartResult start_recording_create_streams(const char *filename,
     AVDictionary *options = nullptr;
     av_dict_set(&options, "strict", "experimental", 0);
 
-    if(args_parser.ffmpeg_opts)
-        av_dict_parse_string(&options, args_parser.ffmpeg_opts, "=", ";", 0);
+    if(arg_parser.ffmpeg_opts)
+        av_dict_parse_string(&options, arg_parser.ffmpeg_opts, "=", ";", 0);
 
     const int header_write_ret = avformat_write_header(av_format_context, &options);
     av_dict_free(&options);
@@ -2140,9 +2137,9 @@ static std::string validate_monitor_get_valid(const gsr_egl *egl, const char* wi
     return capture_source_result;
 }
 
-static std::string get_monitor_by_region_center(const gsr_egl *egl, vec2i region_position, vec2i region_size, vec2i *monitor_pos, vec2i *monitor_size) {
+static std::string get_monitor_by_region_center(const gsr_egl *egl, vec2i region_position, vec2i region_size, vec2i *monitor_pos, vec2i *monitor_size, double *monitor_scale_inverted) {
     const bool is_x11 = gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11;
-    const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
+    const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_WAYLAND;
 
     MonitorByPositionCallback data;
     data.window = egl->window;
@@ -2150,6 +2147,7 @@ static std::string get_monitor_by_region_center(const gsr_egl *egl, vec2i region
     data.output_name = NULL;
     data.monitor_pos = {0, 0};
     data.monitor_size = {0, 0};
+    data.monitor_scale_inverted = 1.0;
     for_each_active_monitor_output(egl->window, egl->card_path, connection_type, get_monitor_by_position_callback, &data);
 
     std::string result;
@@ -2159,6 +2157,7 @@ static std::string get_monitor_by_region_center(const gsr_egl *egl, vec2i region
     }
     *monitor_pos = data.monitor_pos;
     *monitor_size = data.monitor_size;
+    *monitor_scale_inverted = data.monitor_scale_inverted;
     return result;
 }
 
@@ -2229,7 +2228,8 @@ static gsr_capture* create_monitor_capture(const args_parser &arg_parser, gsr_eg
 static std::string region_get_data(gsr_egl *egl, vec2i *region_size, vec2i *region_position) {
     vec2i monitor_pos = {0, 0};
     vec2i monitor_size = {0, 0};
-    std::string window = get_monitor_by_region_center(egl, *region_position, *region_size, &monitor_pos, &monitor_size);
+    double monitor_scale_inverted = 1.0;
+    std::string window = get_monitor_by_region_center(egl, *region_position, *region_size, &monitor_pos, &monitor_size, &monitor_scale_inverted);
     if(window.empty()) {
         const bool is_x11 = gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11;
         const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
@@ -2248,6 +2248,11 @@ static std::string region_get_data(gsr_egl *egl, vec2i *region_size, vec2i *regi
     } else {
         region_position->x -= monitor_pos.x;
         region_position->y -= monitor_pos.y;
+        region_position->x *= monitor_scale_inverted;
+        region_position->y *= monitor_scale_inverted;
+
+        region_size->x *= monitor_scale_inverted;
+        region_size->y *= monitor_scale_inverted;
     }
     return window;
 }

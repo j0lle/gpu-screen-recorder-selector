@@ -121,6 +121,8 @@ static void gsr_window_x11_for_each_active_monitor_output_cached(const gsr_windo
             .name_len = strlen(output->name),
             .pos = output->pos,
             .size = output->size,
+            .logical_pos = output->pos,
+            .logical_size = output->size,
             .connector_id = output->connector_id,
             .rotation = output->rotation,
             .monitor_identifier = output->monitor_identifier
