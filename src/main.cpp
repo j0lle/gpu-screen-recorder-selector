@@ -2225,6 +2225,12 @@ static gsr_capture* create_monitor_capture(const args_parser &arg_parser, gsr_eg
     }
 }
 
+static void monitor_output_callback_print_region(const gsr_monitor *monitor, void *userdata) {
+    const vec2i monitor_position = monitor->logical_pos;
+    const vec2i monitor_size = monitor->logical_size;
+    fprintf(stderr, "  \"%.*s\"    (%dx%d+%d+%d)\n", monitor->name_len, monitor->name, monitor_size.x, monitor_size.y, monitor_position.x, monitor_position.y);
+}
+
 static std::string region_get_data(gsr_egl *egl, vec2i *region_size, vec2i *region_position) {
     vec2i monitor_pos = {0, 0};
     vec2i monitor_size = {0, 0};
@@ -2232,12 +2238,12 @@ static std::string region_get_data(gsr_egl *egl, vec2i *region_size, vec2i *regi
     std::string window = get_monitor_by_region_center(egl, *region_position, *region_size, &monitor_pos, &monitor_size, &monitor_scale_inverted);
     if(window.empty()) {
         const bool is_x11 = gsr_window_get_display_server(egl->window) == GSR_DISPLAY_SERVER_X11;
-        const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
+        const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_WAYLAND;
         fprintf(stderr, "gsr error: the region %dx%d+%d+%d doesn't match any monitor. Available monitors and their regions:\n", region_size->x, region_size->y, region_position->x, region_position->y);
 
         MonitorOutputCallbackUserdata userdata;
         userdata.window = egl->window;
-        for_each_active_monitor_output(egl->window, egl->card_path, connection_type, monitor_output_callback_print, &userdata);
+        for_each_active_monitor_output(egl->window, egl->card_path, connection_type, monitor_output_callback_print_region, &userdata);
         _exit(51);
     }
 
