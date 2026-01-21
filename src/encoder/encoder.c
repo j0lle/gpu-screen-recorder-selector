@@ -14,9 +14,17 @@ bool gsr_encoder_init(gsr_encoder *self, gsr_replay_storage replay_storage, size
 
     if(pthread_mutex_init(&self->file_write_mutex, NULL) != 0) {
         fprintf(stderr, "gsr error: gsr_encoder_init: failed to create mutex\n");
+        gsr_encoder_deinit(self);
         return false;
     }
-    self->mutex_created = true;
+    self->file_write_mutex_created = true;
+
+    if(pthread_mutex_init(&self->replay_mutex, NULL) != 0) {
+        fprintf(stderr, "gsr error: gsr_encoder_init: failed to create mutex\n");
+        gsr_encoder_deinit(self);
+        return false;
+    }
+    self->replay_mutex_created = true;
 
     if(replay_buffer_num_packets > 0) {
         self->replay_buffer = gsr_replay_buffer_create(replay_storage, replay_directory, replay_buffer_time, replay_buffer_num_packets);
@@ -31,14 +39,21 @@ bool gsr_encoder_init(gsr_encoder *self, gsr_replay_storage replay_storage, size
 }
 
 void gsr_encoder_deinit(gsr_encoder *self)  {
-    if(self->mutex_created) {
-        self->mutex_created = false;
+    if(self->replay_buffer) {
+        pthread_mutex_lock(&self->replay_mutex);
+        gsr_replay_buffer_destroy(self->replay_buffer);
+        self->replay_buffer = NULL;
+        pthread_mutex_unlock(&self->replay_mutex);
+    }
+
+    if(self->file_write_mutex_created) {
+        self->file_write_mutex_created = false;
         pthread_mutex_destroy(&self->file_write_mutex);
     }
 
-    if(self->replay_buffer) {
-        gsr_replay_buffer_destroy(self->replay_buffer);
-        self->replay_buffer = NULL;
+    if(self->replay_mutex_created) {
+        self->replay_mutex_created = false;
+        pthread_mutex_destroy(&self->replay_mutex);
     }
 
     self->num_recording_destinations = 0;
@@ -60,9 +75,11 @@ void gsr_encoder_receive_packets(gsr_encoder *self, AVCodecContext *codec_contex
             av_packet->dts = pts;
 
             if(self->replay_buffer) {
+                pthread_mutex_lock(&self->replay_mutex);
                 const double time_now = clock_get_monotonic_seconds();
                 if(!gsr_replay_buffer_append(self->replay_buffer, av_packet, time_now))
                     fprintf(stderr, "gsr error: gsr_encoder_receive_packets: failed to add replay buffer data\n");
+                pthread_mutex_unlock(&self->replay_mutex);
             }
 
             pthread_mutex_lock(&self->file_write_mutex);

@@ -94,7 +94,6 @@ static void gsr_replay_buffer_file_unref(gsr_replay_buffer_file *self, const cha
 
 static void gsr_replay_buffer_disk_clear(gsr_replay_buffer *replay_buffer) {
     gsr_replay_buffer_disk *self = (gsr_replay_buffer_disk*)replay_buffer;
-    gsr_replay_buffer_lock(&self->replay_buffer);
 
     for(size_t i = 0; i < self->num_files; ++i) {
         gsr_replay_buffer_file_unref(self->files[i], self->replay_directory);
@@ -107,7 +106,6 @@ static void gsr_replay_buffer_disk_clear(gsr_replay_buffer *replay_buffer) {
     }
 
     self->storage_num_bytes_written = 0;
-    gsr_replay_buffer_unlock(&self->replay_buffer);
 }
 
 static void gsr_replay_buffer_disk_destroy(gsr_replay_buffer *replay_buffer) {
@@ -197,7 +195,6 @@ static void gsr_replay_buffer_disk_remove_first_file(gsr_replay_buffer_disk *sel
 static bool gsr_replay_buffer_disk_append(gsr_replay_buffer *replay_buffer, const AVPacket *av_packet, double timestamp) {
     gsr_replay_buffer_disk *self = (gsr_replay_buffer_disk*)replay_buffer;
     bool success = false;
-    gsr_replay_buffer_lock(&self->replay_buffer);
 
     if(self->storage_fd <= 0) {
         if(!gsr_replay_buffer_disk_create_next_file(self, timestamp))
@@ -215,7 +212,6 @@ static bool gsr_replay_buffer_disk_append(gsr_replay_buffer *replay_buffer, cons
     success = data_written;
 
     done:
-    gsr_replay_buffer_unlock(&self->replay_buffer);
     return success;
 }
 
@@ -265,11 +261,7 @@ static gsr_replay_buffer* gsr_replay_buffer_disk_clone(gsr_replay_buffer *replay
         return NULL;
 
     gsr_replay_buffer_disk_set_impl_funcs(destination);
-    gsr_replay_buffer_lock(&self->replay_buffer);
 
-    destination->replay_buffer.original_replay_buffer = replay_buffer;
-    destination->replay_buffer.mutex = self->replay_buffer.mutex;
-    destination->replay_buffer.mutex_initialized = self->replay_buffer.mutex_initialized;
     destination->replay_buffer_time = self->replay_buffer_time;
     destination->storage_counter = self->storage_counter;
     destination->storage_num_bytes_written = self->storage_num_bytes_written;
@@ -283,7 +275,6 @@ static gsr_replay_buffer* gsr_replay_buffer_disk_clone(gsr_replay_buffer *replay
     snprintf(destination->replay_directory, sizeof(destination->replay_directory), "%s", self->replay_directory);
     destination->owns_directory = false;
 
-    gsr_replay_buffer_unlock(&self->replay_buffer);
     return (gsr_replay_buffer*)destination;
 }
 
@@ -319,11 +310,9 @@ static size_t gsr_replay_buffer_file_find_packet_index_by_time_passed(const gsr_
 /* Binary search */
 static gsr_replay_buffer_iterator gsr_replay_buffer_disk_find_file_index_by_time_passed(gsr_replay_buffer *replay_buffer, int seconds) {
     gsr_replay_buffer_disk *self = (gsr_replay_buffer_disk*)replay_buffer;
-    gsr_replay_buffer_lock(&self->replay_buffer);
 
     const double now = clock_get_monotonic_seconds();
     if(self->num_files == 0) {
-        gsr_replay_buffer_unlock(&self->replay_buffer);
         return (gsr_replay_buffer_iterator){0, 0};
     }
 
@@ -352,14 +341,12 @@ static gsr_replay_buffer_iterator gsr_replay_buffer_disk_find_file_index_by_time
     const gsr_replay_buffer_file *file = self->files[file_index];
     const size_t packet_index = gsr_replay_buffer_file_find_packet_index_by_time_passed(file, seconds);
 
-    gsr_replay_buffer_unlock(&self->replay_buffer);
     return (gsr_replay_buffer_iterator){packet_index, file_index};
 }
 
 static gsr_replay_buffer_iterator gsr_replay_buffer_disk_find_keyframe(gsr_replay_buffer *replay_buffer, gsr_replay_buffer_iterator start_iterator, int stream_index, bool invert_stream_index) {
     gsr_replay_buffer_disk *self = (gsr_replay_buffer_disk*)replay_buffer;
     gsr_replay_buffer_iterator keyframe_iterator = {(size_t)-1, 0};
-    gsr_replay_buffer_lock(&self->replay_buffer);
     size_t packet_index = start_iterator.packet_index;
     for(size_t file_index = start_iterator.file_index; file_index < self->num_files; ++file_index) {
         const gsr_replay_buffer_file *file = self->files[file_index];
@@ -374,7 +361,6 @@ static gsr_replay_buffer_iterator gsr_replay_buffer_disk_find_keyframe(gsr_repla
         packet_index = 0;
     }
     done:
-    gsr_replay_buffer_unlock(&self->replay_buffer);
     return keyframe_iterator;
 }
 

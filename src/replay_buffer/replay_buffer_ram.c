@@ -54,7 +54,6 @@ static void gsr_av_packet_ram_unref(gsr_av_packet_ram *self) {
 
 static void gsr_replay_buffer_ram_destroy(gsr_replay_buffer *replay_buffer) {
     gsr_replay_buffer_ram *self = (gsr_replay_buffer_ram*)replay_buffer;
-    gsr_replay_buffer_lock(&self->replay_buffer);
     for(size_t i = 0; i < self->num_packets; ++i) {
         if(self->packets[i]) {
             gsr_av_packet_ram_unref(self->packets[i]);
@@ -62,7 +61,6 @@ static void gsr_replay_buffer_ram_destroy(gsr_replay_buffer *replay_buffer) {
         }
     }
     self->num_packets = 0;
-    gsr_replay_buffer_unlock(&self->replay_buffer);
 
     if(self->packets) {
         free(self->packets);
@@ -75,12 +73,9 @@ static void gsr_replay_buffer_ram_destroy(gsr_replay_buffer *replay_buffer) {
 
 static bool gsr_replay_buffer_ram_append(gsr_replay_buffer *replay_buffer, const AVPacket *av_packet, double timestamp) {
     gsr_replay_buffer_ram *self = (gsr_replay_buffer_ram*)replay_buffer;
-    gsr_replay_buffer_lock(&self->replay_buffer);
     gsr_av_packet_ram *packet = gsr_av_packet_ram_create(av_packet, timestamp);
-    if(!packet) {
-        gsr_replay_buffer_unlock(&self->replay_buffer);
+    if(!packet)
         return false;
-    }
 
     if(self->packets[self->index]) {
         gsr_av_packet_ram_unref(self->packets[self->index]);
@@ -93,13 +88,11 @@ static bool gsr_replay_buffer_ram_append(gsr_replay_buffer *replay_buffer, const
     if(self->num_packets > self->capacity_num_packets)
         self->num_packets = self->capacity_num_packets;
 
-    gsr_replay_buffer_unlock(&self->replay_buffer);
     return true;
 }
 
 static void gsr_replay_buffer_ram_clear(gsr_replay_buffer *replay_buffer) {
     gsr_replay_buffer_ram *self = (gsr_replay_buffer_ram*)replay_buffer;
-    gsr_replay_buffer_lock(&self->replay_buffer);
     for(size_t i = 0; i < self->num_packets; ++i) {
         if(self->packets[i]) {
             gsr_av_packet_ram_unref(self->packets[i]);
@@ -108,7 +101,6 @@ static void gsr_replay_buffer_ram_clear(gsr_replay_buffer *replay_buffer) {
     }
     self->num_packets = 0;
     self->index = 0;
-    gsr_replay_buffer_unlock(&self->replay_buffer);
 }
 
 static gsr_av_packet_ram* gsr_replay_buffer_ram_get_packet_at_index(gsr_replay_buffer *replay_buffer, size_t index) {
@@ -141,17 +133,12 @@ static gsr_replay_buffer* gsr_replay_buffer_ram_clone(gsr_replay_buffer *replay_
         return NULL;
 
     gsr_replay_buffer_ram_set_impl_funcs(destination);
-    gsr_replay_buffer_lock(&self->replay_buffer);
 
-    destination->replay_buffer.original_replay_buffer = replay_buffer;
-    destination->replay_buffer.mutex = self->replay_buffer.mutex;
-    destination->replay_buffer.mutex_initialized = self->replay_buffer.mutex_initialized;
     destination->capacity_num_packets = self->capacity_num_packets;
     destination->index = self->index;
     destination->packets = calloc(destination->capacity_num_packets, sizeof(gsr_av_packet_ram*));
     if(!destination->packets) {
         free(destination);
-        gsr_replay_buffer_unlock(&self->replay_buffer);
         return NULL;
     }
 
@@ -160,18 +147,15 @@ static gsr_replay_buffer* gsr_replay_buffer_ram_clone(gsr_replay_buffer *replay_
         destination->packets[i] = gsr_av_packet_ram_ref(self->packets[i]);
     }
 
-    gsr_replay_buffer_unlock(&self->replay_buffer);
     return (gsr_replay_buffer*)destination;
 }
 
 /* Binary search */
 static gsr_replay_buffer_iterator gsr_replay_buffer_ram_find_packet_index_by_time_passed(gsr_replay_buffer *replay_buffer, int seconds) {
     gsr_replay_buffer_ram *self = (gsr_replay_buffer_ram*)replay_buffer;
-    gsr_replay_buffer_lock(&self->replay_buffer);
 
     const double now = clock_get_monotonic_seconds();
     if(self->num_packets == 0) {
-        gsr_replay_buffer_unlock(&self->replay_buffer);
         return (gsr_replay_buffer_iterator){0, 0};
     }
 
@@ -194,14 +178,12 @@ static gsr_replay_buffer_iterator gsr_replay_buffer_ram_find_packet_index_by_tim
         }
     }
 
-    gsr_replay_buffer_unlock(&self->replay_buffer);
     return (gsr_replay_buffer_iterator){index, 0};
 }
 
 static gsr_replay_buffer_iterator gsr_replay_buffer_ram_find_keyframe(gsr_replay_buffer *replay_buffer, gsr_replay_buffer_iterator start_iterator, int stream_index, bool invert_stream_index) {
     gsr_replay_buffer_ram *self = (gsr_replay_buffer_ram*)replay_buffer;
     size_t keyframe_index = (size_t)-1;
-    gsr_replay_buffer_lock(&self->replay_buffer);
     for(size_t i = start_iterator.packet_index; i < self->num_packets; ++i) {
         const gsr_av_packet_ram *packet = gsr_replay_buffer_ram_get_packet_at_index(replay_buffer, i);
         if((packet->packet.flags & AV_PKT_FLAG_KEY) && (invert_stream_index ? packet->packet.stream_index != stream_index : packet->packet.stream_index == stream_index)) {
@@ -209,7 +191,6 @@ static gsr_replay_buffer_iterator gsr_replay_buffer_ram_find_keyframe(gsr_replay
             break;
         }
     }
-    gsr_replay_buffer_unlock(&self->replay_buffer);
     return (gsr_replay_buffer_iterator){keyframe_index, 0};
 }
 

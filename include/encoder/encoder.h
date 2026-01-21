@@ -24,8 +24,12 @@ typedef struct {
 
 typedef struct {
     gsr_replay_buffer *replay_buffer;
+
     pthread_mutex_t file_write_mutex;
-    bool mutex_created;
+    bool file_write_mutex_created;
+
+    pthread_mutex_t replay_mutex;
+    bool replay_mutex_created;
 
     gsr_encoder_recording_destination recording_destinations[GSR_MAX_RECORDING_DESTINATIONS];
     size_t num_recording_destinations;
