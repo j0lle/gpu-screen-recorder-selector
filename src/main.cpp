@@ -1342,8 +1342,11 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
         for(;;) {
             AVPacket *replay_packet = gsr_replay_buffer_iterator_get_packet(cloned_replay_buffer, replay_iterator);
             uint8_t *replay_packet_data = NULL;
-            if(replay_packet)
+            if(replay_packet) {
+                pthread_mutex_lock(&encoder->replay_mutex);
                 replay_packet_data = gsr_replay_buffer_iterator_get_packet_data(cloned_replay_buffer, replay_iterator);
+                pthread_mutex_unlock(&encoder->replay_mutex);
+            }
 
             if(!replay_packet) {
                 fprintf(stderr, "gsr error: save_replay_async: no replay packet\n");
