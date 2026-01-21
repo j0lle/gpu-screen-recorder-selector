@@ -1298,37 +1298,42 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
         return;
 
     pthread_mutex_lock(&encoder->replay_mutex);
-    const gsr_replay_buffer_iterator search_start_iterator = current_save_replay_seconds == save_replay_seconds_full ? gsr_replay_buffer_iterator{0, 0} : gsr_replay_buffer_find_packet_index_by_time_passed(encoder->replay_buffer, current_save_replay_seconds);
-    const gsr_replay_buffer_iterator video_start_iterator = gsr_replay_buffer_find_keyframe(encoder->replay_buffer, search_start_iterator, video_stream_index, false);
+    gsr_replay_buffer *cloned_replay_buffer = gsr_replay_buffer_clone(encoder->replay_buffer);
+    pthread_mutex_unlock(&encoder->replay_mutex);
+    if(!cloned_replay_buffer) {
+        // TODO: Return this error to mark the replay as failed
+        fprintf(stderr, "gsr error: failed to save replay: failed to clone replay buffer\n");
+        return;
+    }
+
+    const gsr_replay_buffer_iterator search_start_iterator = current_save_replay_seconds == save_replay_seconds_full ? gsr_replay_buffer_iterator{0, 0} : gsr_replay_buffer_find_packet_index_by_time_passed(cloned_replay_buffer, current_save_replay_seconds);
+    const gsr_replay_buffer_iterator video_start_iterator = gsr_replay_buffer_find_keyframe(cloned_replay_buffer, search_start_iterator, video_stream_index, false);
     if(video_start_iterator.packet_index == (size_t)-1) {
         fprintf(stderr, "gsr error: failed to save replay: failed to find a video keyframe. perhaps replay was saved too fast, before anything has been recorded\n");
+        pthread_mutex_lock(&encoder->replay_mutex);
+        gsr_replay_buffer_destroy(cloned_replay_buffer);
         pthread_mutex_unlock(&encoder->replay_mutex);
         return;
     }
 
-    const int64_t video_pts_offset = gsr_replay_buffer_iterator_get_packet(encoder->replay_buffer, video_start_iterator)->pts;
+    const int64_t video_pts_offset = gsr_replay_buffer_iterator_get_packet(cloned_replay_buffer, video_start_iterator)->pts;
 
     std::vector<AudioPtsOffset> audio_pts_offsets;
     audio_pts_offsets.reserve(audio_tracks.size());
     for(const AudioTrack &audio_track : audio_tracks) {
-        const gsr_replay_buffer_iterator audio_start_iterator = gsr_replay_buffer_find_keyframe(encoder->replay_buffer, video_start_iterator, audio_track.stream_index, false);
-        const int64_t audio_pts_offset = audio_start_iterator.packet_index == (size_t)-1 ? 0 : gsr_replay_buffer_iterator_get_packet(encoder->replay_buffer, audio_start_iterator)->pts;
+        const gsr_replay_buffer_iterator audio_start_iterator = gsr_replay_buffer_find_keyframe(cloned_replay_buffer, video_start_iterator, audio_track.stream_index, false);
+        const int64_t audio_pts_offset = audio_start_iterator.packet_index == (size_t)-1 ? 0 : gsr_replay_buffer_iterator_get_packet(cloned_replay_buffer, audio_start_iterator)->pts;
         audio_pts_offsets.push_back(AudioPtsOffset{audio_pts_offset, audio_track.stream_index});
     }
 
-    gsr_replay_buffer *cloned_replay_buffer = gsr_replay_buffer_clone(encoder->replay_buffer);
-    if(!cloned_replay_buffer) {
-        // TODO: Return this error to mark the replay as failed
-        fprintf(stderr, "gsr error: failed to save replay: failed to clone replay buffer\n");
+    std::string output_filepath = create_new_recording_filepath_from_timestamp(arg_parser.filename, "Replay", file_extension, date_folders);
+    RecordingStartResult recording_start_result = start_recording_create_streams(output_filepath.c_str(), arg_parser, video_codec_context, audio_tracks, hdr, video_sources);
+    if(!recording_start_result.av_format_context) {
+        pthread_mutex_lock(&encoder->replay_mutex);
+        gsr_replay_buffer_destroy(cloned_replay_buffer);
         pthread_mutex_unlock(&encoder->replay_mutex);
         return;
     }
-    pthread_mutex_unlock(&encoder->replay_mutex);
-
-    std::string output_filepath = create_new_recording_filepath_from_timestamp(arg_parser.filename, "Replay", file_extension, date_folders);
-    RecordingStartResult recording_start_result = start_recording_create_streams(output_filepath.c_str(), arg_parser, video_codec_context, audio_tracks, hdr, video_sources);
-    if(!recording_start_result.av_format_context)
-        return;
 
     save_replay_output_filepath = std::move(output_filepath);
 
@@ -1401,6 +1406,7 @@ static void save_replay_async(AVCodecContext *video_codec_context, int video_str
         }
 
         stop_recording_close_streams(recording_start_result.av_format_context);
+
         pthread_mutex_lock(&encoder->replay_mutex);
         gsr_replay_buffer_destroy(cloned_replay_buffer);
         pthread_mutex_unlock(&encoder->replay_mutex);
