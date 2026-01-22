@@ -2800,8 +2800,8 @@ static bool string_to_bool(const char *str, size_t len, bool *value) {
 }
 
 static int clamp_scalar(int value) {
-    if(value < 0)
-        return 0;
+    if(value < -100)
+        return -100;
     else if(value > 100)
         return 100;
     else
