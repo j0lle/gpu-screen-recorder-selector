@@ -2799,15 +2799,6 @@ static bool string_to_bool(const char *str, size_t len, bool *value) {
     }
 }
 
-static int clamp_scalar(int value) {
-    if(value < -100)
-        return -100;
-    else if(value > 100)
-        return 100;
-    else
-        return value;
-}
-
 static void parse_capture_source_options(const std::string &capture_source_str, CaptureSource &capture_source) {
     bool is_first_column = true;
 
@@ -2829,9 +2820,6 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
                 fprintf(stderr, "gsr error: invalid capture target value for option x: \"%.*s\", expected a number\n", (int)size, sub);
                 _exit(1);
             }
-
-            if(capture_source.pos.x_type == VVEC2I_TYPE_SCALAR)
-                capture_source.pos.x = clamp_scalar(capture_source.pos.x);
         } else if(string_starts_with(sub, size, "y=")) {
             capture_source.pos.y_type = sub[size - 1] == '%' ? VVEC2I_TYPE_SCALAR : VVEC2I_TYPE_PIXELS;
             sub += 2;
@@ -2841,8 +2829,6 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
                 _exit(1);
             }
 
-            if(capture_source.pos.y_type == VVEC2I_TYPE_SCALAR)
-                capture_source.pos.y = clamp_scalar(capture_source.pos.y);
         } else if(string_starts_with(sub, size, "width=")) {
             capture_source.size.x_type = sub[size - 1] == '%' ? VVEC2I_TYPE_SCALAR : VVEC2I_TYPE_PIXELS;
             sub += 6;
@@ -2851,9 +2837,6 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
                 fprintf(stderr, "gsr error: invalid capture target value for option width: \"%.*s\", expected a number\n", (int)size, sub);
                 _exit(1);
             }
-
-            if(capture_source.size.x_type == VVEC2I_TYPE_SCALAR)
-                capture_source.size.x = clamp_scalar(capture_source.size.x);
         } else if(string_starts_with(sub, size, "height=")) {
             capture_source.size.y_type = sub[size - 1] == '%' ? VVEC2I_TYPE_SCALAR : VVEC2I_TYPE_PIXELS;
             sub += 7;
@@ -2862,9 +2845,6 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
                 fprintf(stderr, "gsr error: invalid capture target value for option height: \"%.*s\", expected a number\n", (int)size, sub);
                 _exit(1);
             }
-
-            if(capture_source.size.y_type == VVEC2I_TYPE_SCALAR)
-                capture_source.size.y = clamp_scalar(capture_source.size.y);
         } else if(string_starts_with(sub, size, "halign=")) {
             sub += 7;
             size -= 7;
