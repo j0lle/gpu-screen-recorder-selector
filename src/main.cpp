@@ -3648,7 +3648,7 @@ int main(int argc, char **argv) {
     signal(SIGRTMIN+5, save_replay_10_minutes_handler);
     signal(SIGRTMIN+6, save_replay_30_minutes_handler);
 
-    //set_display_server_environment_variables();
+    set_display_server_environment_variables();
 
     // Linux nvidia driver 580.105.08 added the environment variable CUDA_DISABLE_PERF_BOOST to disable the p2 power level issue,
     // where running cuda (which includes nvenc) causes the gpu to be forcefully set to p2 power level which on many nvidia gpus
