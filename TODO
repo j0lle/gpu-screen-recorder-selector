@@ -312,8 +312,6 @@ Check if region capture works properly with fractional scaling on wayland.
 Add option to specify medium/high/very high/ultra for -bm cbr as well, which should automatically pick bitrate based on resolution and framerate.
     This should also be reflected in gsr ui.
 
-Create a manpage and move --help text there and mention the manpage command to view it (and make it work in flatpak, maybe with man <link-to-manpage-file>).
-
 Implement webcam support by using mjpeg with v4l2 and use ffmpeg mjpeg decoder.
 
 After adding rpc, making recording while in replay/streaming work differently. Start recording should take audio as an argument, to optionally specify different audio for recording than replay/stream.

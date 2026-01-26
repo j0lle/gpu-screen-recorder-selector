@@ -2269,6 +2269,7 @@ static std::string region_get_data(gsr_egl *egl, vec2i *region_size, vec2i *regi
     } else {
         region_position->x -= monitor_pos.x;
         region_position->y -= monitor_pos.y;
+        // Match drm plane coordinate space (1x scaling) to wayland coordinate space (which may have scaling set by user)
         region_position->x *= monitor_scale_inverted;
         region_position->y *= monitor_scale_inverted;
 
