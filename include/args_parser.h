@@ -8,7 +8,7 @@
 
 typedef struct gsr_egl gsr_egl;
 
-#define NUM_ARGS 36
+#define NUM_ARGS 37
 
 typedef enum {
     GSR_CAPTURE_SOURCE_TYPE_WINDOW,
@@ -97,6 +97,7 @@ typedef struct {
     bool restore_portal_session;
     bool restart_replay_on_save;
     bool overclock;
+    bool write_first_frame_ts;
     bool is_livestream;
     bool is_output_piped;
     bool low_latency_recording;

@@ -3988,7 +3988,11 @@ int main(int argc, char **argv) {
 
     if(video_stream) {
         avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
-        gsr_encoder_add_recording_destination(&encoder, video_codec_context, av_format_context, video_stream, 0);
+        const size_t video_destination_id = gsr_encoder_add_recording_destination(&encoder, video_codec_context, av_format_context, video_stream, 0);
+        if(arg_parser.write_first_frame_ts && video_destination_id != (size_t)-1) {
+            std::string ts_filepath = std::string(arg_parser.filename) + ".ts";
+            gsr_encoder_set_recording_destination_first_frame_ts_filepath(&encoder, video_destination_id, ts_filepath.c_str());
+        }
     }
 
     int audio_max_frame_size = 1024;
@@ -4527,6 +4531,11 @@ int main(int argc, char **argv) {
                 replay_recording_start_result = start_recording_create_streams(replay_recording_filepath.c_str(), arg_parser, video_codec_context, audio_tracks, hdr, video_sources);
                 if(replay_recording_start_result.av_format_context) {
                     const size_t video_recording_destination_id = gsr_encoder_add_recording_destination(&encoder, video_codec_context, replay_recording_start_result.av_format_context, replay_recording_start_result.video_stream, video_frame->pts);
+                    if(arg_parser.write_first_frame_ts && video_recording_destination_id != (size_t)-1) {
+                        std::string ts_filepath = replay_recording_filepath + ".ts";
+                        gsr_encoder_set_recording_destination_first_frame_ts_filepath(&encoder, video_recording_destination_id, ts_filepath.c_str());
+                    }
+
                     if(video_recording_destination_id != (size_t)-1)
                         replay_recording_items.push_back(video_recording_destination_id);
 

@@ -372,6 +372,14 @@ It's recommended to also use the option
 when this is set to
 .B yes
 to only encode frames when the screen content updates to lower GPU and video encoding usage when the system is idle.
+.TP
+.BI \-write\-first\-frame\-ts " yes|no"
+When enabled, writes a timestamp file with extra extension \fI.ts\fR next to the output video containing:
+.nf
+monotonic_microsec	realtime_microsec
+<monotonic_microsec>	<realtime_microsec>
+.fi
+(default: no). Ignored for livestreaming and when output is piped.
 .SS Output Options
 .TP
 .BI \-o " output"

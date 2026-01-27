@@ -3,9 +3,36 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <inttypes.h>
+#include <time.h>
+#include <errno.h>
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+
+static uint64_t clock_gettime_microseconds(clockid_t clock_id) {
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = 0;
+    clock_gettime(clock_id, &ts);
+    return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+}
+
+static void gsr_write_first_frame_timestamp_file(const char *filepath) {
+    const uint64_t evdev_compatible_ts = clock_gettime_microseconds(CLOCK_MONOTONIC);
+    const uint64_t unix_time_microsec = clock_gettime_microseconds(CLOCK_REALTIME);
+
+    FILE *file = fopen(filepath, "w");
+    if(!file) {
+        fprintf(stderr, "gsr warning: failed to open timestamp file '%s': %s\n", filepath, strerror(errno));
+        return;
+    }
+
+    fputs("monotonic_microsec\trealtime_microsec\n", file);
+    fprintf(file, "%" PRIu64 "\t%" PRIu64 "\n", evdev_compatible_ts, unix_time_microsec);
+    fclose(file);
+}
 
 bool gsr_encoder_init(gsr_encoder *self, gsr_replay_storage replay_storage, size_t replay_buffer_num_packets, double replay_buffer_time, const char *replay_directory) {
     memset(self, 0, sizeof(*self));
@@ -39,6 +66,16 @@ bool gsr_encoder_init(gsr_encoder *self, gsr_replay_storage replay_storage, size
 }
 
 void gsr_encoder_deinit(gsr_encoder *self)  {
+    if(self->file_write_mutex_created)
+        pthread_mutex_lock(&self->file_write_mutex);
+    for(size_t i = 0; i < self->num_recording_destinations; ++i) {
+        free(self->recording_destinations[i].first_frame_ts_filepath);
+        self->recording_destinations[i].first_frame_ts_filepath = NULL;
+        self->recording_destinations[i].first_frame_ts_written = false;
+    }
+    if(self->file_write_mutex_created)
+        pthread_mutex_unlock(&self->file_write_mutex);
+
     if(self->replay_buffer) {
         pthread_mutex_lock(&self->replay_mutex);
         gsr_replay_buffer_destroy(self->replay_buffer);
@@ -94,6 +131,11 @@ void gsr_encoder_receive_packets(gsr_encoder *self, AVCodecContext *codec_contex
                 else if(!recording_destination->has_received_keyframe)
                     continue;
 
+                if(recording_destination->first_frame_ts_filepath && !recording_destination->first_frame_ts_written) {
+                    gsr_write_first_frame_timestamp_file(recording_destination->first_frame_ts_filepath);
+                    recording_destination->first_frame_ts_written = true;
+                }
+
                 av_packet->pts = pts - recording_destination->start_pts;
                 av_packet->dts = pts - recording_destination->start_pts;
 
@@ -148,6 +190,8 @@ size_t gsr_encoder_add_recording_destination(gsr_encoder *self, AVCodecContext *
     recording_destination->stream = stream;
     recording_destination->start_pts = start_pts;
     recording_destination->has_received_keyframe = false;
+    recording_destination->first_frame_ts_filepath = NULL;
+    recording_destination->first_frame_ts_written = false;
 
     ++self->recording_destination_id_counter;
     ++self->num_recording_destinations;
@@ -161,8 +205,34 @@ bool gsr_encoder_remove_recording_destination(gsr_encoder *self, size_t id) {
     pthread_mutex_lock(&self->file_write_mutex);
     for(size_t i = 0; i < self->num_recording_destinations; ++i) {
         if(self->recording_destinations[i].id == id) {
+            free(self->recording_destinations[i].first_frame_ts_filepath);
+            self->recording_destinations[i].first_frame_ts_filepath = NULL;
+            self->recording_destinations[i].first_frame_ts_written = false;
             self->recording_destinations[i] = self->recording_destinations[self->num_recording_destinations - 1];
             --self->num_recording_destinations;
+            found = true;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&self->file_write_mutex);
+    return found;
+}
+
+bool gsr_encoder_set_recording_destination_first_frame_ts_filepath(gsr_encoder *self, size_t id, const char *filepath) {
+    if(!filepath)
+        return false;
+
+    bool found = false;
+    pthread_mutex_lock(&self->file_write_mutex);
+    for(size_t i = 0; i < self->num_recording_destinations; ++i) {
+        if(self->recording_destinations[i].id == id) {
+            char *filepath_copy = strdup(filepath);
+            if(!filepath_copy)
+                break;
+
+            free(self->recording_destinations[i].first_frame_ts_filepath);
+            self->recording_destinations[i].first_frame_ts_filepath = filepath_copy;
+            self->recording_destinations[i].first_frame_ts_written = false;
             found = true;
             break;
         }
