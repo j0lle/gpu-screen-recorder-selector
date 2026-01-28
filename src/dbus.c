@@ -78,14 +78,6 @@ bool gsr_dbus_init(gsr_dbus *self, const char *screencast_restore_token) {
         return false;
     }
 
-    /* TODO: Check the name */
-    const int ret = dbus_bus_request_name(self->con, "com.dec05eba.gpu_screen_recorder", DBUS_NAME_FLAG_REPLACE_EXISTING, &self->err);
-    if(dbus_error_is_set(&self->err)) {
-        fprintf(stderr, "gsr error: gsr_dbus_init: dbus_bus_request_name failed with error: %s\n", self->err.message);
-        gsr_dbus_deinit(self);
-        return false;
-    }
-
     if(screencast_restore_token) {
         self->screencast_restore_token = strdup(screencast_restore_token);
         if(!self->screencast_restore_token) {
@@ -94,12 +86,6 @@ bool gsr_dbus_init(gsr_dbus *self, const char *screencast_restore_token) {
             return false;
         }
     }
-
-    (void)ret;
-    // if(ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
-    //     fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: dbus_bus_request_name failed to get primary owner\n");
-    //     return false;
-    // }
 
     return true;
 }
@@ -118,8 +104,6 @@ void gsr_dbus_deinit(gsr_dbus *self) {
 
     if(self->con) {
         dbus_error_free(&self->err);
-
-        dbus_bus_release_name(self->con, "com.dec05eba.gpu_screen_recorder", NULL);
 
         // Apparently shouldn't be used when a connection is setup by using dbus_bus_get
         //dbus_connection_close(self->con);
