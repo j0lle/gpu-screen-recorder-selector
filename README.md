@@ -261,3 +261,5 @@ If the root user is disabled on your system then you can instead record with `-w
 ## GPU usage is high on my laptop
 GPU usage on battery powered devices is misleading. For example Intel iGPUs has multiple performance levels and the GPU usage reported on the system is the GPU usage at the current performance level.
 The performance level changes depending on the GPU load, so it may say that GPU usage is 80%, but the actual GPU usage may be 5%.
+## The video is too dark when capturing full-range video or 10-bit video
+This is an issue in some broken video players such as vlc. Play the video with a video player such as mpv (or a mpv frontend such as celluloid) or a browser instead.
