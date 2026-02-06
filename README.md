@@ -29,14 +29,14 @@ Supported image formats:
 This software works on X11 and Wayland on AMD, Intel and NVIDIA.
 
 # Installation
-If you are running an Arch Linux based distro then you can find gpu screen recorder on aur under the name gpu-screen-recorder (`yay -S gpu-screen-recorder`).\
+If you are running an Arch Linux based distro then you can find gpu screen recorder in the official repositories under the name gpu-screen-recorder (`sudo pacman -S gpu-screen-recorder`).\
 If you are running another distro then you can run `sudo ./install.sh`, but you need to manually install the dependencies, as described below.\
 You can also install gpu screen recorder ([the ui version](https://git.dec05eba.com/gpu-screen-recorder-gtk/)) from [flathub](https://flathub.org/apps/details/com.dec05eba.gpu_screen_recorder), which is the easiest method
 to install GPU Screen Recorder on non-arch based distros.\
 If you install GPU Screen Recorder flatpak, which is the gtk gui version then you can still run GPU Screen Recorder command line by using the flatpak command option, for example `flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder -w screen -f 60 -o video.mp4`. Note that if you want to record your monitor on AMD/Intel then you need to install the flatpak system-wide (like so: `flatpak install --system com.dec05eba.gpu_screen_recorder`).
 
 ## Unofficial install methods
-The only official ways to install GPU Screen Recorder is either from source, AUR or flathub. Other sources may be out of date and missing features or may not work correctly.\
+The only official ways to install GPU Screen Recorder is either from source, arch linux extra repository or flathub. Other sources may be out of date and missing features or may not work correctly.\
 If you install GPU Screen Recorder from somewhere else and have an issue then try installing it from one of the official sources before reporting it as an issue.\
 If you still prefer to install GPU Screen Recorder with a package manager instead of from source or as a flatpak then you may be able to find a package for your distro.\
 Here are some known unofficial packages:
