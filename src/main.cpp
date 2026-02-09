@@ -1888,23 +1888,31 @@ static void camera_query_callback(const char *path, const gsr_capture_v4l2_suppo
     printf("%s|%ux%u@%uhz|%s\n", path, setup->resolution.width, setup->resolution.height, gsr_capture_v4l2_framerate_to_number(setup->framerate), gsr_capture_v4l2_pixfmt_to_string(setup->pixfmt));
 }
 
-static void list_supported_capture_options(const gsr_window *window, const char *card_path, bool list_monitors) {
+// Returns the number of monitors found
+static int list_monitors(const gsr_window *window, const char *card_path) {
+    capture_options_callback options;
+    options.window = window;
+    options.num_monitors = 0;
+
+    const bool is_x11 = gsr_window_get_display_server(window) == GSR_DISPLAY_SERVER_X11;
+    const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
+    for_each_active_monitor_output(window, card_path, connection_type, output_monitor_info, &options);
+
+    return options.num_monitors;
+}
+
+static void list_supported_capture_options(const gsr_window *window, const char *card_path, bool do_list_monitors) {
     const bool wayland = gsr_window_get_display_server(window) == GSR_DISPLAY_SERVER_WAYLAND;
     if(!wayland) {
         puts("window");
         puts("focused");
     }
 
-    capture_options_callback options;
-    options.window = window;
-    options.num_monitors = 0;
-    if(list_monitors) {
-        const bool is_x11 = gsr_window_get_display_server(window) == GSR_DISPLAY_SERVER_X11;
-        const gsr_connection_type connection_type = is_x11 ? GSR_CONNECTION_X11 : GSR_CONNECTION_DRM;
-        for_each_active_monitor_output(window, card_path, connection_type, output_monitor_info, &options);
-    }
+    int num_monitors = 0;
+    if(do_list_monitors)
+        num_monitors = list_monitors(window, card_path);
 
-    if(options.num_monitors > 0)
+    if(num_monitors > 0)
         puts("region");
 
     gsr_capture_v4l2_list_devices(camera_query_callback, NULL);
@@ -1933,11 +1941,20 @@ static void version_command(void *userdata) {
     _exit(0);
 }
 
-static void info_command(void *userdata) {
-    (void)userdata;
+struct WindowingSetup {
+    Display *dpy;
+    gsr_window *window;
+    gsr_egl egl;
+    bool list_monitors;
+};
+
+static WindowingSetup setup_windowing(bool setup_egl) {
+    WindowingSetup setup;
+    memset(&setup, 0, sizeof(setup));
+
     bool wayland = false;
-    Display *dpy = XOpenDisplay(nullptr);
-    if (!dpy) {
+    setup.dpy = XOpenDisplay(nullptr);
+    if (!setup.dpy) {
         wayland = true;
         fprintf(stderr, "gsr warning: failed to connect to the X server. Assuming wayland is running without Xwayland\n");
     }
@@ -1946,7 +1963,7 @@ static void info_command(void *userdata) {
     XSetIOErrorHandler(x11_io_error_handler);
 
     if(!wayland)
-        wayland = is_xwayland(dpy);
+        wayland = is_xwayland(setup.dpy);
 
     if(!wayland && is_using_prime_run()) {
         // Disable prime-run and similar options as it doesn't work, the monitor to capture has to be run on the same device.
@@ -1956,46 +1973,56 @@ static void info_command(void *userdata) {
         disable_prime_run();
     }
 
-    gsr_window *window = gsr_window_create(dpy, wayland);
-    if(!window) {
+    setup.window = gsr_window_create(setup.dpy, wayland);
+    if(!setup.window) {
         fprintf(stderr, "gsr error: failed to create window\n");
         _exit(1);
     }
 
-    gsr_egl egl;
-    if(!gsr_egl_load(&egl, window, false, false)) {
-        fprintf(stderr, "gsr error: failed to load opengl\n");
-        _exit(22);
-    }
+    setup.list_monitors = true;
 
-    bool list_monitors = true;
-    egl.card_path[0] = '\0';
-    if(monitor_capture_use_drm(window, egl.gpu_info.vendor)) {
-        // TODO: Allow specifying another card, and in other places
-        if(!gsr_get_valid_card_path(&egl, egl.card_path, true)) {
-            fprintf(stderr, "gsr error: no /dev/dri/cardX device found. Make sure that you have at least one monitor connected\n");
-            list_monitors = false;
+    if(setup_egl) {
+        if(!gsr_egl_load(&setup.egl, setup.window, false, false)) {
+            fprintf(stderr, "gsr error: failed to load opengl\n");
+            _exit(22);
+        }
+
+        setup.egl.card_path[0] = '\0';
+        if(monitor_capture_use_drm(setup.window, setup.egl.gpu_info.vendor)) {
+            // TODO: Allow specifying another card, and in other places
+            if(!gsr_get_valid_card_path(&setup.egl, setup.egl.card_path, true)) {
+                fprintf(stderr, "gsr error: no /dev/dri/cardX device found. Make sure that you have at least one monitor connected\n");
+                setup.list_monitors = false;
+            }
         }
     }
+
+    return setup;
+}
+
+static void info_command(void *userdata) {
+    (void)userdata;
+    WindowingSetup windowing_setup = setup_windowing(true);
+    const bool wayland = gsr_window_get_display_server(windowing_setup.window) == GSR_DISPLAY_SERVER_WAYLAND;
 
     av_log_set_level(AV_LOG_FATAL);
 
     puts("section=system_info");
     list_system_info(wayland);
-    if(egl.gpu_info.is_steam_deck)
+    if(windowing_setup.egl.gpu_info.is_steam_deck)
         puts("is_steam_deck|yes");
     else
         puts("is_steam_deck|no");
     printf("gsr_version|%s\n", GSR_VERSION);
     puts("section=gpu_info");
-    list_gpu_info(&egl);
+    list_gpu_info(&windowing_setup.egl);
     puts("section=video_codecs");
-    list_supported_video_codecs(&egl, wayland);
+    list_supported_video_codecs(&windowing_setup.egl, wayland);
     puts("section=image_formats");
     puts("jpeg");
     puts("png");
     puts("section=capture_options");
-    list_supported_capture_options(window, egl.card_path, list_monitors);
+    list_supported_capture_options(windowing_setup.window, windowing_setup.egl.card_path, windowing_setup.list_monitors);
 
     fflush(stdout);
 
@@ -2058,53 +2085,30 @@ static void list_v4l2_devices(void *userdata) {
 // |card_path| can be NULL. If not NULL then |vendor| has to be valid
 static void list_capture_options_command(const char *card_path, void *userdata) {
     (void)userdata;
-    bool wayland = false;
-    Display *dpy = XOpenDisplay(nullptr);
-    if (!dpy) {
-        wayland = true;
-        fprintf(stderr, "gsr warning: failed to connect to the X server. Assuming wayland is running without Xwayland\n");
-    }
+    WindowingSetup windowing_setup = setup_windowing(card_path != nullptr);
 
-    XSetErrorHandler(x11_error_handler);
-    XSetIOErrorHandler(x11_io_error_handler);
+    if(card_path)
+        list_supported_capture_options(windowing_setup.window, card_path, true);
+    else
+        list_supported_capture_options(windowing_setup.window, windowing_setup.egl.card_path, windowing_setup.list_monitors);
 
-    if(!wayland)
-        wayland = is_xwayland(dpy);
+    fflush(stdout);
 
-    if(!wayland && is_using_prime_run()) {
-        // Disable prime-run and similar options as it doesn't work, the monitor to capture has to be run on the same device.
-        // This is fine on wayland since nvidia uses drm interface there and the monitor query checks the monitors connected
-        // to the drm device.
-        fprintf(stderr, "gsr warning: use of prime-run on X11 is not supported. Disabling prime-run\n");
-        disable_prime_run();
-    }
+    // Not needed as this will just slow down shutdown
+    //gsr_egl_unload(&egl);
+    //gsr_window_destroy(&window);
+    //if(dpy)
+    //    XCloseDisplay(dpy);
 
-    gsr_window *window = gsr_window_create(dpy, wayland);
-    if(!window) {
-        fprintf(stderr, "gsr error: failed to create window\n");
-        _exit(1);
-    }
+    _exit(0);
+}
 
-    if(card_path) {
-        list_supported_capture_options(window, card_path, true);
-    } else {
-        gsr_egl egl;
-        if(!gsr_egl_load(&egl, window, false, false)) {
-            fprintf(stderr, "gsr error: failed to load opengl\n");
-            _exit(1);
-        }
+static void list_monitors_command(void *userdata) {
+    (void)userdata;
+    WindowingSetup windowing_setup = setup_windowing(true);
 
-        bool list_monitors = true;
-        egl.card_path[0] = '\0';
-        if(monitor_capture_use_drm(window, egl.gpu_info.vendor)) {
-            // TODO: Allow specifying another card, and in other places
-            if(!gsr_get_valid_card_path(&egl, egl.card_path, true)) {
-                fprintf(stderr, "gsr error: no /dev/dri/cardX device found. Make sure that you have at least one monitor connected\n");
-                list_monitors = false;
-            }
-        }
-        list_supported_capture_options(window, egl.card_path, list_monitors);
-    }
+    if(windowing_setup.list_monitors)
+        list_monitors(windowing_setup.window, windowing_setup.egl.card_path);
 
     fflush(stdout);
 
@@ -3682,6 +3686,7 @@ int main(int argc, char **argv) {
     arg_handlers.list_application_audio = list_application_audio_command;
     arg_handlers.list_v4l2_devices = list_v4l2_devices;
     arg_handlers.list_capture_options = list_capture_options_command;
+    arg_handlers.list_monitors = list_monitors_command;
 
     args_parser arg_parser;
     if(!args_parser_parse(&arg_parser, argc, argv, &arg_handlers, NULL))

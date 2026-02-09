@@ -196,7 +196,8 @@ static void usage_header(void) {
            "[-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-p <plugin_path>] "
            "[-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] "
            "[-fallback-cpu-encoding yes|no] [-o <output_file>] [-ro <output_directory>] [-ffmpeg-opts <options>] [--list-capture-options [card_path]] "
-           "[--list-audio-devices] [--list-application-audio] [--list-v4l2-devices] [-write-first-frame-ts yes|no] [-low-power yes|no] [-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
+           "[--list-monitors] [--list-audio-devices] [--list-application-audio] [--list-v4l2-devices] [-write-first-frame-ts yes|no] [-low-power yes|no] "
+           "[-v yes|no] [-gl-debug yes|no] [--version] [-h|--help]\n", program_name);
     fflush(stdout);
 }
 
@@ -498,6 +499,11 @@ bool args_parser_parse(args_parser *self, int argc, char **argv, const args_hand
             fprintf(stderr, "gsr error: expected --list-capture-options to be called with either no extra arguments or 1 extra argument (card path)\n");
             return false;
         }
+    }
+
+    if(strcmp(argv[1], "--list-monitors") == 0) {
+        arg_handlers->list_monitors(userdata);
+        return true;
     }
 
     if(argc == 2 && strcmp(argv[1], "--version") == 0) {

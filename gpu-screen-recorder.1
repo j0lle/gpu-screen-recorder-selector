@@ -14,13 +14,17 @@ gpu-screen-recorder \- The fastest screen recording tool for Linux
 |
 .B \-\-version
 |
+.B \-\-info
+|
 .B \-\-list\-capture\-options
+|
+.B \-\-list\-monitors
+|
+.B \-\-list\-v4l2\-devices
 |
 .B \-\-list\-audio\-devices
 |
 .B \-\-list\-application\-audio
-|
-.B \-\-info
 .SH DESCRIPTION
 .B gpu-screen-recorder
 is the fastest screen recording tool for Linux. It uses the GPU
@@ -91,10 +95,6 @@ Combine sources with | (e.g.,
 Run
 .B \-\-list\-capture\-options
 to list available capture sources.
-.PP
-Run
-.B \-\-list\-v4l2\-devices
-to list available camera devices (V4L2).
 .PP
 Additional options can be passed to each capture source by splitting capture source with
 .B ;
@@ -402,6 +402,9 @@ Show system info (codecs, capture options).
 .TP
 .B \-\-list\-capture\-options
 List available capture sources (window, monitors, portal, v4l2 device path).
+.TP
+.B \-\-list\-monitors
+List available monitors.
 .TP
 .B \-\-list\-v4l2\-devices
 List available cameras devices (V4L2).

@@ -63,6 +63,7 @@ typedef struct {
     void (*list_application_audio)(void *userdata);
     void (*list_v4l2_devices)(void *userdata);
     void (*list_capture_options)(const char *card_path, void *userdata);
+    void (*list_monitors)(void *userdata);
 } args_handlers;
 
 typedef struct {
