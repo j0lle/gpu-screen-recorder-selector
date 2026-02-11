@@ -687,6 +687,7 @@ bool gsr_pipewire_video_init(gsr_pipewire_video *self, int pipewire_fd, uint32_t
     self->video_info.fps_num = fps;
     self->video_info.fps_den = 1;
     self->cursor.visible = capture_cursor;
+    self->renegotiated_modifier = DRM_FORMAT_MOD_INVALID;
     
     if(!gsr_pipewire_video_setup_stream(self)) {
         gsr_pipewire_video_deinit(self);
@@ -792,8 +793,14 @@ static EGLImage gsr_pipewire_video_create_egl_image_with_fallback(gsr_pipewire_v
                 fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, trying without modifiers\n");
                 self->no_modifiers_fallback = true;
                 image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
+            } else if(self->renegotiated_modifier == self->format.info.raw.modifier) {
+                fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: modifier 0x%" PRIx64 " failed again after renegotiation, trying without modifiers as last resort\n", self->format.info.raw.modifier);
+                image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
+                if(image)
+                    self->no_modifiers_fallback = true;
             } else {
-                fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, renegotiating with a different modifier\n");
+                fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifier 0x%" PRIx64 ", renegotiating with a different modifier\n", self->format.info.raw.modifier);
+                self->renegotiated_modifier = self->format.info.raw.modifier;
                 self->negotiated = false;
                 pw_thread_loop_lock(self->thread_loop);
                 gsr_pipewire_video_remove_modifier(self, self->format.info.raw.modifier);
