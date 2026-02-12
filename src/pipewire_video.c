@@ -532,31 +532,36 @@ static bool spa_video_format_get_modifiers(gsr_pipewire_video *self, const enum 
 static void gsr_pipewire_video_init_modifiers(gsr_pipewire_video *self) {
     for(size_t i = 0; i < GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS; i++) {
         self->supported_video_formats[i].format = video_formats[i];
-        int32_t num_modifiers = 0;
-        spa_video_format_get_modifiers(self, self->supported_video_formats[i].format, self->modifiers + self->num_modifiers, GSR_PIPEWIRE_VIDEO_MAX_MODIFIERS - self->num_modifiers, &num_modifiers);
+        int32_t num_modifiers_video_format = 0;
+        spa_video_format_get_modifiers(self, self->supported_video_formats[i].format, self->modifiers + self->num_modifiers, GSR_PIPEWIRE_VIDEO_MAX_MODIFIERS - self->num_modifiers, &num_modifiers_video_format);
         self->supported_video_formats[i].modifiers_index = self->num_modifiers;
-        self->supported_video_formats[i].modifiers_size = num_modifiers;
-        self->num_modifiers += num_modifiers;
+        self->supported_video_formats[i].modifiers_size = num_modifiers_video_format;
+        self->num_modifiers += num_modifiers_video_format;
     }
 }
 
-static void gsr_pipewire_video_format_remove_modifier(gsr_pipewire_video *self, gsr_video_format *video_format, uint64_t modifier) {
+/* Returns the number of modifiers  */
+static size_t gsr_pipewire_video_format_remove_modifier(gsr_pipewire_video *self, gsr_video_format *video_format, uint64_t modifier) {
     for(size_t i = 0; i < video_format->modifiers_size; ++i) {
-        if(self->modifiers[video_format->modifiers_index + i] != modifier)
-            continue;
+        if(self->modifiers[video_format->modifiers_index + i] == modifier) {
+            for(size_t j = i + 1; j < video_format->modifiers_size; ++j) {
+                self->modifiers[video_format->modifiers_index + j - 1] = self->modifiers[video_format->modifiers_index + j];
+            }
 
-        for(size_t j = i + 1; j < video_format->modifiers_size; ++j) {
-            self->modifiers[j - 1] = self->modifiers[j];
+            --video_format->modifiers_size;
+            break;
         }
-        --video_format->modifiers_size;
-        return;
     }
+    return video_format->modifiers_size;
 }
 
 static void gsr_pipewire_video_remove_modifier(gsr_pipewire_video *self, uint64_t modifier) {
+    self->num_modifiers = 0;
     for(size_t i = 0; i < GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS; i++) {
         gsr_video_format *video_format = &self->supported_video_formats[i];
-        gsr_pipewire_video_format_remove_modifier(self, video_format, modifier);
+        const size_t num_modifiers_video_format = gsr_pipewire_video_format_remove_modifier(self, video_format, modifier);
+        video_format->modifiers_index = self->num_modifiers;
+        self->num_modifiers += num_modifiers_video_format;
     }
 }
 
