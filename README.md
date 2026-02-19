@@ -209,7 +209,7 @@ Newer ffmpeg versions don't support older nvidia cards. Try installing GPU Scree
 ## I get a black screen/glitches while live streaming
 It seems like ffmpeg earlier than version 6.1 has some type of bug. Install ffmpeg version 6.1 or later and then reinstall GPU Screen Recorder to fix this issue. The flatpak version of GPU Screen Recorder comes with a newer version of ffmpeg so no extra steps are needed.
 ## I can't play the video in my browser directly or in discord
-Browsers and discord don't support hevc video codec at the moment. Choose h264 video codec instead with the -k h264 option.
+Browsers and discord don't support hevc video codec at the moment. You can instead choose h264 video codec with the -k h264 option or av1 video codec with the -k av1 option.
 Note that websites such as youtube support hevc so there is no need to choose h264 video codec if you intend to upload the video to youtube or if you want to play the video locally or if you intend to
 edit the video with a video editor. Hevc allows for better video quality (especially at lower file sizes) so hevc (or av1) is recommended for source videos.
 ## I get a black bar/distorted colors on the sides in the video

@@ -312,8 +312,6 @@ Check if region capture works properly with fractional scaling on wayland.
 Add option to specify medium/high/very high/ultra for -bm cbr as well, which should automatically pick bitrate based on resolution and framerate.
     This should also be reflected in gsr ui.
 
-Implement webcam support by using mjpeg with v4l2 and use ffmpeg mjpeg decoder.
-
 After adding rpc, making recording while in replay/streaming work differently. Start recording should take audio as an argument, to optionally specify different audio for recording than replay/stream.
 
 After adding rpc, make it possible to add/remove audio and video. The same number of audio tracks should remain, but the audio devices/app should be possible to configure. You should be able to configure the capture sources however you want.
@@ -403,3 +401,9 @@ Certain webcam resolutions yuyv resolutions dont work (on amd at least), such as
 Add option to capture all monitors automatically.
 
 Make -w optional, to only capture audio.
+
+Use GL_RGBA16F or GL_RGBA32F for hdr, that allows color values to be outside the 0.0 to 1.0 range.
+
+https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_surface_SMPTE2086_metadata.txt
+
+Doesn't work: sibs run --args -w "/dev/video0;camera_width=800;camera_height=600;pixfmt=yuyv" -fm content -o video.mp4

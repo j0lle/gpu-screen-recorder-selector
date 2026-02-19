@@ -187,6 +187,7 @@ static void gsr_capture_xcomposite_on_event(gsr_capture *cap, gsr_egl *egl) {
             break;
         }
         case ConfigureNotify: {
+            // TODO: Use PresentConfigureNotify instead
             self->window_pos.x = xev->xconfigure.x;
             self->window_pos.y = xev->xconfigure.y;
 
