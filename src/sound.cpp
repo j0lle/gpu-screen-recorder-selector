@@ -340,10 +340,17 @@ static bool pa_sound_device_handle_reconnect(pa_handle *p, char *device_name, si
             return false;
     }
 
-    if(!(p->stream = pa_stream_new(p->context, p->stream_name, &p->ss, NULL))) {
+    pa_proplist *proplist = pa_proplist_new();
+    // This prevents microphone recording indicator from being shown on KDE
+    pa_proplist_sets(proplist, "node.virtual", "true");
+
+    if(!(p->stream = pa_stream_new_with_proplist(p->context, p->stream_name, &p->ss, NULL, proplist))) {
         //pa_context_errno(p->context);
+        pa_proplist_free(proplist);
         return false;
     }
+
+    pa_proplist_free(proplist);
 
     const int r = pa_stream_connect_record(p->stream, device_name, &p->attr,
         (pa_stream_flags_t)(PA_STREAM_INTERPOLATE_TIMING|PA_STREAM_ADJUST_LATENCY|PA_STREAM_AUTO_TIMING_UPDATE|PA_STREAM_DONT_MOVE));
