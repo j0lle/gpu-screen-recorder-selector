@@ -3564,7 +3564,7 @@ static void set_display_server_environment_variables() {
 
     const char *wayland_display = getenv("WAYLAND_DISPLAY");
     if(!wayland_display) {
-        wayland_display = "wayland-1";
+        wayland_display = "wayland-0";
         setenv("WAYLAND_DISPLAY", wayland_display, true);
     }
 }
