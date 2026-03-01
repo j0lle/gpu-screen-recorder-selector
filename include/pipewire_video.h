@@ -112,6 +112,7 @@ typedef struct {
 
     bool paused;
     double paused_start_secs;
+    bool streaming;
 
     gsr_monitor_rotation rotation;
 } gsr_pipewire_video;

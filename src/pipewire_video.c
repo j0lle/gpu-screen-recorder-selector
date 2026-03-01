@@ -348,6 +348,7 @@ static void on_state_changed_cb(void *user_data, enum pw_stream_state prev_state
     } else {
         self->paused = false;
     }
+    self->streaming = (new_state == PW_STREAM_STATE_STREAMING);
     pthread_mutex_unlock(&self->mutex);
 }
 
@@ -858,7 +859,7 @@ bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map te
     output->rotation = GSR_MONITOR_ROT_0;
     pthread_mutex_lock(&self->mutex);
 
-    if(!self->negotiated || self->dmabuf_data[0].fd <= 0) {
+    if(!self->negotiated || !self->streaming || self->dmabuf_data[0].fd <= 0) {
         pthread_mutex_unlock(&self->mutex);
         return false;
     }
