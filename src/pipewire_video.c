@@ -134,7 +134,7 @@ static void on_process_cb(void *user_data) {
     }
 
     struct spa_buffer *buffer = pw_buf->buffer;
-    const bool has_buffer = buffer->datas[0].chunk->size != 0;
+    const bool has_buffer = buffer->n_datas > 0 && buffer->datas[0].chunk->size != 0;
 
     pthread_mutex_lock(&self->mutex);
 
