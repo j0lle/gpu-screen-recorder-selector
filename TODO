@@ -396,8 +396,6 @@ Should -low-power option also use vaapi/vulkan low power, if available?
 
 Should capture option x=bla;y=bla be scaled by -s (output resolution scale)? width and height is.
 
-Certain webcam resolutions yuyv resolutions dont work (on amd at least), such as 800x600. Maybe it's because of alignment issue, 600 isn't divisible by 16.
-
 Add option to capture all monitors automatically.
 
 Make -w optional, to only capture audio.

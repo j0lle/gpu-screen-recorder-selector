@@ -3267,7 +3267,7 @@ static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, b
     if(!video_codec_f && use_fallback_codec && args_parser->video_encoder != GSR_VIDEO_ENCODER_HW_CPU) {
         switch(args_parser->video_codec) {
             case GSR_VIDEO_CODEC_H264: {
-                fprintf(stderr, "gsr error: selected video codec h264 is not supported\n");
+                fprintf(stderr, "gsr error: selected video codec h264 is not supported by your hardware\n");
                 if(args_parser->fallback_cpu_encoding) {
                     fprintf(stderr, "gsr warning: gpu encoding is not available on your system, trying cpu encoding instead because -fallback-cpu-encoding is enabled. Install the proper vaapi drivers on your system (if supported) if you experience performance issues\n");
                     force_cpu_encoding(args_parser);
@@ -3277,14 +3277,14 @@ static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, b
             case GSR_VIDEO_CODEC_HEVC:
             case GSR_VIDEO_CODEC_HEVC_HDR:
             case GSR_VIDEO_CODEC_HEVC_10BIT: {
-                fprintf(stderr, "gsr warning: selected video codec hevc is not supported, trying h264 instead\n");
+                fprintf(stderr, "gsr warning: selected video codec hevc is not supported by your hardware, trying h264 instead\n");
                 args_parser->video_codec = GSR_VIDEO_CODEC_H264;
                 return pick_video_codec(egl, args_parser, true, low_power, supported_video_codecs);
             }
             case GSR_VIDEO_CODEC_AV1:
             case GSR_VIDEO_CODEC_AV1_HDR:
             case GSR_VIDEO_CODEC_AV1_10BIT: {
-                fprintf(stderr, "gsr warning: selected video codec av1 is not supported, trying h264 instead\n");
+                fprintf(stderr, "gsr warning: selected video codec av1 is not supported by your hardware, trying h264 instead\n");
                 args_parser->video_codec = GSR_VIDEO_CODEC_H264;
                 return pick_video_codec(egl, args_parser, true, low_power, supported_video_codecs);
             }
@@ -3293,7 +3293,7 @@ static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, b
                 // TODO: Cant fallback to other codec because webm only supports vp8/vp9
                 break;
             case GSR_VIDEO_CODEC_H264_VULKAN: {
-                fprintf(stderr, "gsr warning: selected video codec h264_vulkan is not supported, trying h264 instead\n");
+                fprintf(stderr, "gsr warning: selected video codec h264_vulkan is not supported by your hardware, trying h264 instead\n");
                 args_parser->video_codec = GSR_VIDEO_CODEC_H264;
                 // Need to do a query again because this time it's without vulkan
                 if(!get_supported_video_codecs(egl, args_parser->video_codec, false, true, supported_video_codecs)) {
@@ -3304,7 +3304,7 @@ static const AVCodec* pick_video_codec(gsr_egl *egl, args_parser *args_parser, b
                 return pick_video_codec(egl, args_parser, true, low_power, supported_video_codecs);
             }
             case GSR_VIDEO_CODEC_HEVC_VULKAN: {
-                fprintf(stderr, "gsr warning: selected video codec hevc_vulkan is not supported, trying hevc instead\n");
+                fprintf(stderr, "gsr warning: selected video codec hevc_vulkan is not supported by your hardware, trying hevc instead\n");
                 args_parser->video_codec = GSR_VIDEO_CODEC_HEVC;
                 // Need to do a query again because this time it's without vulkan
                 if(!get_supported_video_codecs(egl, args_parser->video_codec, false, true, supported_video_codecs)) {

@@ -106,7 +106,6 @@ typedef struct {
 
     bool no_modifiers_fallback;
     bool external_texture_fallback;
-    uint64_t renegotiated_modifier;
 
     uint64_t modifiers[GSR_PIPEWIRE_VIDEO_MAX_MODIFIERS];
     size_t num_modifiers;
