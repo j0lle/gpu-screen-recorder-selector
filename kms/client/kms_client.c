@@ -378,6 +378,7 @@ int gsr_kms_client_init(gsr_kms_client *self, const char *card_path) {
                 goto err;
             }
         }
+        poll_fd.revents = 0;
     }
     fprintf(stderr, "gsr info: gsr_kms_client_init: server connected\n");
 
