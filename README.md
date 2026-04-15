@@ -92,7 +92,7 @@ There are also additional dependencies needed at runtime depending on your GPU v
 * xnvctrl (libxnvctrl0, when using the `-oc` option)
 
 # How to use
-Run `gpu-screen-recorder --help` to see all options and also examples.\
+Run `gpu-screen-recorder --help` to see all options and run `man gpu-screen-recorder` to see more detailed explanations for the options and also examples.\
 There is also a gui for the gpu screen recorder called [GPU Screen Recorder GTK](https://git.dec05eba.com/gpu-screen-recorder-gtk/).\
 There is also a new alternative UI for GPU Screen Recorder in the style of ShadowPlay called [GPU Screen Recorder UI](https://git.dec05eba.com/gpu-screen-recorder-ui/).
 ## Recording

@@ -405,3 +405,7 @@ Use GL_RGBA16F or GL_RGBA32F for hdr, that allows color values to be outside the
 https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_surface_SMPTE2086_metadata.txt
 
 Doesn't work: sibs run --args -w "/dev/video0;camera_width=800;camera_height=600;pixfmt=yuyv" -fm content -o video.mp4
+
+Delay adding audio data until 1 frames time has passed.
+
+Allow av1 in the flatpak. Do that by patching ffmpeg to support multiple nvenc codepaths by using header versions, the same way gsr does in the nvenc query.
