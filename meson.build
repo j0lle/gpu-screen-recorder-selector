@@ -74,6 +74,7 @@ dep = [
     dependency('libdrm'),
     dependency('wayland-egl'),
     dependency('wayland-client'),
+    dependency('vulkan'),
 ]
 
 if build_machine.system() == 'linux'

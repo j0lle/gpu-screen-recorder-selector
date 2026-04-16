@@ -222,6 +222,13 @@ static size_t gsr_capture_v4l2_get_supported_resolutions(int fd, gsr_capture_v4l
 
     while(xioctl(fd, VIDIOC_ENUM_FRAMESIZES, &fmt) == 0) {
         if(fmt.type == V4L2_FRMSIZE_TYPE_DISCRETE && resolution_index < max_resolutions) {
+            // Skip unsupported resolutions for now (those that eglCreateImage cant import because of pitch hardware limitation).
+            // TODO: Find a fix for this.
+            if(pixfmt == GSR_CAPTURE_V4L2_PIXFMT_YUYV && (fmt.discrete.width % 128 != 0)) {
+                ++fmt.index;
+                continue;
+            }
+
             resolutions[resolution_index] = (gsr_capture_v4l2_resolution){
                 .width = fmt.discrete.width,
                 .height = fmt.discrete.height,
