@@ -279,6 +279,10 @@ Video codec:
 HDR options not available on X11 or portal capture. 10-bit capture reduces banding but may not be supported properly by all video players.
 .br
 Vulkan codec options are experimental. They may not work properly on your system because of GPU driver issues.
+.br
+Using vulkan codecs may result in better gaming performance, especially on NVIDIA as it doesn't suffer from an issue known as "cuda p2 state"
+.br
+where the GPU gets downclocked when using nvenc (regular video codecs on NVIDIA).
 
 (default: auto → h264).
 .TP
