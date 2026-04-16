@@ -17,17 +17,24 @@
 #endif
 
 static const ArgEnum video_codec_enums[] = {
-    { .name = "auto",        .value = GSR_VIDEO_CODEC_AUTO       },
-    { .name = "h264",        .value = GSR_VIDEO_CODEC_H264       },
-    { .name = "h265",        .value = GSR_VIDEO_CODEC_HEVC       },
-    { .name = "hevc",        .value = GSR_VIDEO_CODEC_HEVC       },
-    { .name = "hevc_hdr",    .value = GSR_VIDEO_CODEC_HEVC_HDR   },
-    { .name = "hevc_10bit",  .value = GSR_VIDEO_CODEC_HEVC_10BIT },
-    { .name = "av1",         .value = GSR_VIDEO_CODEC_AV1        },
-    { .name = "av1_hdr",     .value = GSR_VIDEO_CODEC_AV1_HDR    },
-    { .name = "av1_10bit",   .value = GSR_VIDEO_CODEC_AV1_10BIT  },
-    { .name = "vp8",         .value = GSR_VIDEO_CODEC_VP8        },
-    { .name = "vp9",         .value = GSR_VIDEO_CODEC_VP9        },
+    { .name = "auto",              .value = GSR_VIDEO_CODEC_AUTO              },
+    { .name = "h264",              .value = GSR_VIDEO_CODEC_H264              },
+    { .name = "h265",              .value = GSR_VIDEO_CODEC_HEVC              },
+    { .name = "hevc",              .value = GSR_VIDEO_CODEC_HEVC              },
+    { .name = "hevc_hdr",          .value = GSR_VIDEO_CODEC_HEVC_HDR          },
+    { .name = "hevc_10bit",        .value = GSR_VIDEO_CODEC_HEVC_10BIT        },
+    { .name = "av1",               .value = GSR_VIDEO_CODEC_AV1               },
+    { .name = "av1_hdr",           .value = GSR_VIDEO_CODEC_AV1_HDR           },
+    { .name = "av1_10bit",         .value = GSR_VIDEO_CODEC_AV1_10BIT         },
+    { .name = "vp8",               .value = GSR_VIDEO_CODEC_VP8               },
+    { .name = "vp9",               .value = GSR_VIDEO_CODEC_VP9               },
+    { .name = "h264_vulkan",       .value = GSR_VIDEO_CODEC_H264_VULKAN       },
+    { .name = "hevc_vulkan",       .value = GSR_VIDEO_CODEC_HEVC_VULKAN       },
+    { .name = "hevc_hdr_vulkan",   .value = GSR_VIDEO_CODEC_HEVC_HDR_VULKAN   },
+    { .name = "hevc_10bit_vulkan", .value = GSR_VIDEO_CODEC_HEVC_10BIT_VULKAN },
+    { .name = "av1_vulkan",        .value = GSR_VIDEO_CODEC_AV1_VULKAN        },
+    { .name = "av1_hdr_vulkan",    .value = GSR_VIDEO_CODEC_AV1_HDR_VULKAN    },
+    { .name = "av1_10bit_vulkan",  .value = GSR_VIDEO_CODEC_AV1_10BIT_VULKAN  },
 };
 
 static const ArgEnum audio_codec_enums[] = {

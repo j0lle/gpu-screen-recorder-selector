@@ -169,6 +169,9 @@ typedef void (*FUNC_glTexStorageMem2DEXT)(unsigned int target, int levels, unsig
 typedef void (*FUNC_glBufferStorageMemEXT)(unsigned int target, ssize_t size, unsigned int memory, uint64_t offset);
 typedef void (*FUNC_glNamedBufferStorageMemEXT)(unsigned int buffer, ssize_t size, unsigned int memory, uint64_t offset);
 typedef void (*FUNC_glMemoryObjectParameterivEXT)(unsigned int memoryObject, unsigned int pname, const int *params);
+typedef void (*FUNC_glGenSemaphoresEXT)(int n, unsigned int *semaphores);
+typedef void (*FUNC_glImportSemaphoreFdEXT)(unsigned int semaphore, unsigned int handleType, int fd);
+typedef void (*FUNC_glSignalSemaphoreEXT)(unsigned int semaphore, unsigned int numBufferBarriers, const unsigned int *buffers, unsigned int numTextureBarriers, const unsigned int *textures, const unsigned int *dstLayouts);
 
 typedef enum {
     GSR_GL_CONTEXT_TYPE_EGL,
@@ -195,6 +198,7 @@ struct gsr_egl {
     gsr_gpu_info gpu_info;
 
     char card_path[128];
+    int vulkan_device_index;
 
     int32_t (*eglGetError)(void);
     EGLDisplay (*eglGetDisplay)(EGLNativeDisplayType display_id);
@@ -226,6 +230,9 @@ struct gsr_egl {
     FUNC_glBufferStorageMemEXT glBufferStorageMemEXT;
     FUNC_glNamedBufferStorageMemEXT glNamedBufferStorageMemEXT;
     FUNC_glMemoryObjectParameterivEXT glMemoryObjectParameterivEXT;
+    FUNC_glGenSemaphoresEXT glGenSemaphoresEXT;
+    FUNC_glImportSemaphoreFdEXT glImportSemaphoreFdEXT;
+    FUNC_glSignalSemaphoreEXT glSignalSemaphoreEXT;
 
     __GLXextFuncPtr (*glXGetProcAddress)(const unsigned char *procName);
     GLXFBConfig* (*glXChooseFBConfig)(Display *dpy, int screen, const int *attribList, int *nitems);

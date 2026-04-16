@@ -305,6 +305,7 @@ uint32_t gsr_capture_v4l2_framerate_to_number(gsr_capture_v4l2_framerate framera
     return (uint32_t)((double)framerate.denominator / (double)framerate.numerator);
 }
 
+// TODO: Select the resolution closest to |camera_resolution|, if it's not 0, 0
 static bool gsr_capture_v4l2_get_best_matching_setup(
     const gsr_capture_v4l2_supported_setup *supported_setups,
     size_t num_supported_setups,

@@ -216,6 +216,10 @@ static bool gsr_egl_proc_load_egl(gsr_egl *self) {
     self->glNamedBufferStorageMemEXT = (FUNC_glNamedBufferStorageMemEXT)self->eglGetProcAddress("glNamedBufferStorageMemEXT");
     self->glMemoryObjectParameterivEXT = (FUNC_glMemoryObjectParameterivEXT)self->eglGetProcAddress("glMemoryObjectParameterivEXT");
 
+    self->glGenSemaphoresEXT = (FUNC_glGenSemaphoresEXT)self->eglGetProcAddress("glGenSemaphoresEXT");
+    self->glImportSemaphoreFdEXT = (FUNC_glImportSemaphoreFdEXT)self->eglGetProcAddress("glImportSemaphoreFdEXT");
+    self->glSignalSemaphoreEXT = (FUNC_glSignalSemaphoreEXT)self->eglGetProcAddress("glSignalSemaphoreEXT");
+
     if(!self->eglExportDMABUFImageQueryMESA) {
         fprintf(stderr, "gsr error: gsr_egl_load failed: could not find eglExportDMABUFImageQueryMESA\n");
         return false;

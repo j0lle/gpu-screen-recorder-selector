@@ -409,3 +409,7 @@ Doesn't work: sibs run --args -w "/dev/video0;camera_width=800;camera_height=600
 Delay adding audio data until 1 frames time has passed.
 
 Allow av1 in the flatpak. Do that by patching ffmpeg to support multiple nvenc codepaths by using header versions, the same way gsr does in the nvenc query.
+
+Increase qp on av1 non-nvidia, decrease qp on h264 nvidia. For vulkan.
+
+Check if the vulkan codec query works on nvidia x11.

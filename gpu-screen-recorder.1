@@ -274,10 +274,13 @@ Audio bitrate in kbps (default: 128 for opus/flac, 160 for aac). 0 = automatic.
 .TP
 .BI \-k " codec"
 Video codec:
-.BR auto ", " h264 ", " hevc ", " av1 ", " vp8 ", " vp9 ", " hevc_hdr ", " av1_hdr ", " hevc_10bit ", " av1_10bit
-(default: auto → h264). HDR options not available on X11 or portal capture.
+.BR auto ", " h264 ", " hevc ", " av1 ", " vp8 ", " vp9 ", " hevc_hdr ", " av1_hdr ", " hevc_10bit ", " av1_10bit ", " h264_vulkan ", " hevc_vulkan ", " hevc_10bit_vulkan ", " av1_vulkan ", " av1_hdr_vulkan ", " av1_10bit_vulkan
 
-10-bit capture reduces banding but may not be supported properly by all video players.
+HDR options not available on X11 or portal capture. 10-bit capture reduces banding but may not be supported properly by all video players.
+.br
+Vulkan codec options are experimental. They may not work properly on your system because of GPU driver issues.
+
+(default: auto → h264).
 .TP
 .BI \-q " quality"
 Quality preset (medium, high, very_high, ultra) for QP/VBR mode, or bitrate (kbps) for CBR mode (default: very_high).
