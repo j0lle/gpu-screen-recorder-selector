@@ -24,6 +24,7 @@ static const char *required_device_extensions[] = {
 static int num_required_device_extensions = 8;
 
 static void set_h264_max_resolution(PFN_vkGetPhysicalDeviceVideoCapabilitiesKHR vkGetPhysicalDeviceVideoCapabilitiesKHR, VkPhysicalDevice physical_device, gsr_supported_video_codecs *video_codecs) {
+#ifdef VK_KHR_video_encode_h264
     const VkVideoEncodeH264ProfileInfoKHR h264_profile = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_PROFILE_INFO_KHR,
         .pNext = NULL,
@@ -53,9 +54,15 @@ static void set_h264_max_resolution(PFN_vkGetPhysicalDeviceVideoCapabilitiesKHR 
         video_codecs->h264.max_resolution.x = video_caps.maxCodedExtent.width;
         video_codecs->h264.max_resolution.y = video_caps.maxCodedExtent.height;
     }
+#else
+    (void)vkGetPhysicalDeviceVideoCapabilitiesKHR;
+    (void)physical_device;
+    (void)video_codecs;
+#endif
 }
 
 static void set_hevc_max_resolution(PFN_vkGetPhysicalDeviceVideoCapabilitiesKHR vkGetPhysicalDeviceVideoCapabilitiesKHR, VkPhysicalDevice physical_device, gsr_supported_video_codecs *video_codecs) {
+#ifdef VK_KHR_video_encode_h265
     const VkVideoEncodeH265ProfileInfoKHR hevc_profile = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_PROFILE_INFO_KHR,
         .pNext = NULL,
@@ -91,9 +98,15 @@ static void set_hevc_max_resolution(PFN_vkGetPhysicalDeviceVideoCapabilitiesKHR 
         video_codecs->hevc_10bit.max_resolution.x = video_caps.maxCodedExtent.width;
         video_codecs->hevc_10bit.max_resolution.y = video_caps.maxCodedExtent.height;
     }
+#else
+    (void)vkGetPhysicalDeviceVideoCapabilitiesKHR;
+    (void)physical_device;
+    (void)video_codecs;
+#endif
 }
 
 static void set_av1_max_resolution(PFN_vkGetPhysicalDeviceVideoCapabilitiesKHR vkGetPhysicalDeviceVideoCapabilitiesKHR, VkPhysicalDevice physical_device, gsr_supported_video_codecs *video_codecs) {
+#ifdef VK_KHR_video_encode_av1
     const VkVideoEncodeAV1ProfileInfoKHR av1_profile = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_PROFILE_INFO_KHR,
         .pNext = NULL,
@@ -109,7 +122,7 @@ static void set_av1_max_resolution(PFN_vkGetPhysicalDeviceVideoCapabilitiesKHR v
         .chromaBitDepth = VK_VIDEO_COMPONENT_BIT_DEPTH_8_BIT_KHR
     };
 
-    VkVideoEncodeH265CapabilitiesKHR encode_caps = {
+    VkVideoEncodeAV1CapabilitiesKHR encode_caps = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_CAPABILITIES_KHR,
         .pNext = NULL
     };
@@ -129,6 +142,11 @@ static void set_av1_max_resolution(PFN_vkGetPhysicalDeviceVideoCapabilitiesKHR v
         video_codecs->av1_10bit.max_resolution.x = video_caps.maxCodedExtent.width;
         video_codecs->av1_10bit.max_resolution.y = video_caps.maxCodedExtent.height;
     }
+#else
+    (void)vkGetPhysicalDeviceVideoCapabilitiesKHR;
+    (void)physical_device;
+    (void)video_codecs;
+#endif
 }
 
 bool gsr_get_supported_video_codecs_vulkan(gsr_supported_video_codecs *video_codecs, const char *card_path, int *device_index_ret, bool cleanup) {

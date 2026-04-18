@@ -466,7 +466,6 @@ static bool gsr_capture_v4l2_map_buffer(gsr_capture_v4l2 *self, const struct v4l
 
                 if(!self->dma_image[i]) {
                     self->yuyv_conversion_fallback = true;
-                    // This doesn't work for everybody on nvidia. On pop os 24.04 when egl_display is NULL (when capturing monitor on x11) then this fails with EGL_BAD_DISPLAY
                     self->dma_image[i] = self->params.egl->eglCreateImage(self->params.egl->egl_display, 0, EGL_LINUX_DMA_BUF_EXT, NULL, (intptr_t[]) {
                         EGL_WIDTH, fmt->fmt.pix.width,
                         EGL_HEIGHT, fmt->fmt.pix.height,

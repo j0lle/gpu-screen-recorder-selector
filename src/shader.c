@@ -91,6 +91,7 @@ static unsigned int load_program(gsr_egl *egl, const char *vertex_shader, const 
     if(!success) {
         if(program_id)
             egl->glDeleteProgram(program_id);
+        program_id = 0;
     }
     if(fragment_shader_id)
         egl->glDeleteShader(fragment_shader_id);
