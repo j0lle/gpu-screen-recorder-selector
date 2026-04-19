@@ -165,15 +165,19 @@ GPU Screen Recorder has much better performance than OBS Studio even with versio
 It is recommended to save the video to a SSD because of the large file size, which a slow HDD might not be fast enough to handle. Using variable framerate mode (-fm vfr) which is the default is also recommended as this reduces encoding load. Ultra quality is also overkill most of the time, very high (the default) or lower quality is usually enough.\
 Note that for best performance you should close other screen recorders such as OBS Studio when using GPU Screen Recorder even if they are not recording, since they can affect performance even when idle. This is the case with OBS Studio.
 ## Note about optimal performance on NVIDIA
-NVIDIA driver has a "feature" (read: bug) where it will downclock memory transfer rate when a program uses cuda (or nvenc, which uses cuda), such as GPU Screen Recorder. To work around this bug, GPU Screen Recorder can overclock your GPU memory transfer rate to it's normal optimal level.\
-To enable overclocking for optimal performance use the `-oc` option when running GPU Screen Recorder. You also need to have "Coolbits" NVIDIA X setting set to "12" to enable overclocking. You can automatically add this option if you run `sudo nvidia-xconfig --cool-bits=12` and then reboot your computer.\
-Note that this only works when Xorg server is running as root, and using this option will only give you a performance boost if the game you are recording is bottlenecked by your GPU.\
-Note! use at your own risk!
+NVIDIA driver has a "feature" (read: bug) where it will downclock memory transfer rate when a program uses cuda (or nvenc, which uses cuda), such as GPU Screen Recorder.
+This issue doesn't happen with vulkan video encoding so you may have better performance in games when recording with vulkan video.
+You can use vulkan video encoding by adding `_vulkan` at the end of the video codec option, for example: `-k h264_vulkan` or a full command example: `gpu-screen-recorder -w screen -k h264_vulkan -o video.mp4`.
+Vulkan video encoding in GPU Screen Recorder supports `h264`, `hevc` and `av1` (along with `hdr` and `10bit` options), assuming your gpu drivers, ffmpeg and vulkan is up to date.
+
+Note: vulkan video encoding support is experimental and you may experience GPU Screen Recorder or gpu driver bugs with it.
 
 # Issues
 ## NVIDIA
-Nvidia drivers have an issue where CUDA breaks if CUDA is running when suspend/hibernation happens, and it remains broken until you reload the nvidia driver. `extra/gsr-nvidia.conf` will be installed by default when you install GPU Screen Recorder and that should fix this issue. If this doesn't fix the issue for you then your distro may use a different path for modprobe files. In that case you have to install that `extra/gsr-nvidia.conf` yourself into that location.
+NVIDIA drivers have an issue where CUDA breaks if CUDA is running when suspend/hibernation happens, and it remains broken until you reload the nvidia driver. `extra/gsr-nvidia.conf` will be installed by default when you install GPU Screen Recorder and that should fix this issue. If this doesn't fix the issue for you then your distro may use a different path for modprobe files. In that case you have to install that `extra/gsr-nvidia.conf` yourself into that location.
 You have to reboot your computer after installing GPU Screen Recorder for the first time for the fix to have any effect.
+
+Note: this issue doesn't happen when you using the vulkan video encoding option (for example when using `-k h264_vulkan`).
 
 ## TEMPORARY ISSUES
 1) Videos are in variable framerate format. Use MPV to play such videos, otherwise you might experience stuttering in the video if you are using a buggy video player. You can try saving the video into a .mkv file instead as some software may have better support for .mkv files (such as kdenlive). You can use the "-fm cfr" option to to use constant framerate mode.
