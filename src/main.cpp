@@ -1136,8 +1136,8 @@ static RecordingStartResult start_recording_create_streams(const char *filename,
 static bool stop_recording_close_streams(AVFormatContext *av_format_context) {
     bool trailer_written = true;
     if(av_write_trailer(av_format_context) != 0) {
-        fprintf(stderr, "gsr error: end: failed to write trailer\n");
-        trailer_written = false;
+        //fprintf(stderr, "gsr error: end: failed to write trailer\n");
+        //trailer_written = false;
     }
 
     const bool closed = avio_close(av_format_context->pb) == 0;
@@ -4604,7 +4604,7 @@ int main(int argc, char **argv) {
 
     // TODO: Replace this with start_recording_create_steams
     if(!is_replaying && av_write_trailer(av_format_context) != 0) {
-        fprintf(stderr, "Failed to write trailer\n");
+        //fprintf(stderr, "Failed to write trailer\n");
     }
 
     if(!is_replaying) {
