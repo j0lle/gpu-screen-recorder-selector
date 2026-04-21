@@ -19,6 +19,7 @@ typedef struct {
     AVFormatContext *format_context;
     AVStream *stream;
     int64_t start_pts;
+    int64_t first_pts;
     bool has_received_keyframe;
     char *first_frame_ts_filepath;
     bool first_frame_ts_written;
@@ -26,6 +27,7 @@ typedef struct {
 
 typedef struct {
     gsr_replay_buffer *replay_buffer;
+    int64_t first_pts;
 
     pthread_mutex_t file_write_mutex;
     bool file_write_mutex_created;

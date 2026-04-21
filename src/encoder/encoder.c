@@ -38,6 +38,7 @@ bool gsr_encoder_init(gsr_encoder *self, gsr_replay_storage replay_storage, size
     memset(self, 0, sizeof(*self));
     self->num_recording_destinations = 0;
     self->recording_destination_id_counter = 0;
+    self->first_pts = -1;
 
     if(pthread_mutex_init(&self->file_write_mutex, NULL) != 0) {
         fprintf(stderr, "gsr error: gsr_encoder_init: failed to create mutex\n");
@@ -95,6 +96,7 @@ void gsr_encoder_deinit(gsr_encoder *self)  {
 
     self->num_recording_destinations = 0;
     self->recording_destination_id_counter = 0;
+    self->first_pts = -1;
 }
 
 void gsr_encoder_receive_packets(gsr_encoder *self, AVCodecContext *codec_context, int64_t pts, int stream_index) {
@@ -107,9 +109,12 @@ void gsr_encoder_receive_packets(gsr_encoder *self, AVCodecContext *codec_contex
         av_packet->size = 0;
         int res = avcodec_receive_packet(codec_context, av_packet);
         if(res == 0) { // we have a packet, send the packet to the muxer
+            if(self->first_pts == -1)
+                self->first_pts = pts;
+
             av_packet->stream_index = stream_index;
-            av_packet->pts = pts;
-            av_packet->dts = pts;
+            av_packet->pts = pts - self->first_pts;
+            av_packet->dts = av_packet->pts;
 
             if(self->replay_buffer) {
                 pthread_mutex_lock(&self->replay_mutex);
@@ -136,8 +141,11 @@ void gsr_encoder_receive_packets(gsr_encoder *self, AVCodecContext *codec_contex
                     recording_destination->first_frame_ts_written = true;
                 }
 
-                av_packet->pts = pts - recording_destination->start_pts;
-                av_packet->dts = pts - recording_destination->start_pts;
+                if(recording_destination->first_pts == -1)
+                    recording_destination->first_pts = pts;
+
+                av_packet->pts = (pts - recording_destination->first_pts) - recording_destination->start_pts;
+                av_packet->dts = av_packet->pts;
 
                 av_packet_rescale_ts(av_packet, codec_context->time_base, recording_destination->stream->time_base);
                 // TODO: Is av_interleaved_write_frame needed?. Answer: might be needed for mkv but dont use it! it causes frames to be inconsistent, skipping frames and duplicating frames.
@@ -189,6 +197,7 @@ size_t gsr_encoder_add_recording_destination(gsr_encoder *self, AVCodecContext *
     recording_destination->format_context = format_context;
     recording_destination->stream = stream;
     recording_destination->start_pts = start_pts;
+    recording_destination->first_pts = -1;
     recording_destination->has_received_keyframe = false;
     recording_destination->first_frame_ts_filepath = NULL;
     recording_destination->first_frame_ts_written = false;

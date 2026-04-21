@@ -898,6 +898,7 @@ static AVStream* create_stream(AVFormatContext *av_format_context, AVCodecContex
     stream->id = av_format_context->nb_streams - 1;
     stream->time_base = codec_context->time_base;
     stream->avg_frame_rate = codec_context->framerate;
+    //stream->r_frame_rate = codec_context->framerate;
     return stream;
 }
 
@@ -1083,6 +1084,9 @@ struct VideoSource {
 static RecordingStartResult start_recording_create_streams(const char *filename, const args_parser &arg_parser, AVCodecContext *video_codec_context, const std::vector<AudioTrack> &audio_tracks, bool hdr, std::vector<VideoSource> &video_sources) {
     AVFormatContext *av_format_context;
     avformat_alloc_output_context2(&av_format_context, nullptr, arg_parser.container_format, filename);
+
+    av_opt_set(av_format_context->priv_data, "use_editlist", "1", 0);
+    //av_opt_set(av_format_context->priv_data, "movflags", "+frag_keyframe+empty_moov+delay_moov", 0);
 
     AVStream *video_stream = create_stream(av_format_context, video_codec_context);
     avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
@@ -3784,6 +3788,9 @@ int main(int argc, char **argv) {
         }
         _exit(1);
     }
+
+    av_opt_set(av_format_context->priv_data, "use_editlist", "1", 0);
+    //av_opt_set(av_format_context->priv_data, "movflags", "+frag_keyframe+empty_moov+delay_moov", 0);
 
     const AVOutputFormat *output_format = av_format_context->oformat;
 
