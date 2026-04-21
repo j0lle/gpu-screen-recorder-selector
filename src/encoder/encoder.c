@@ -142,9 +142,9 @@ void gsr_encoder_receive_packets(gsr_encoder *self, AVCodecContext *codec_contex
                 }
 
                 if(recording_destination->first_pts == -1)
-                    recording_destination->first_pts = pts;
+                    recording_destination->first_pts = pts - recording_destination->start_pts;
 
-                av_packet->pts = (pts - recording_destination->first_pts) - recording_destination->start_pts;
+                av_packet->pts = pts - recording_destination->start_pts - recording_destination->first_pts;
                 av_packet->dts = av_packet->pts;
 
                 av_packet_rescale_ts(av_packet, codec_context->time_base, recording_destination->stream->time_base);
