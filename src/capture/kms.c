@@ -588,7 +588,7 @@ static int gsr_capture_kms_capture(gsr_capture *cap, gsr_capture_metadata *captu
     (void)capture_metadata;
     gsr_capture_kms *self = cap->priv;
 
-    if(self->params.kms_response->num_items == 0)
+    if(!self->drm_fd || self->params.kms_response->num_items == 0)
         return -1;
 
     vec2i capture_pos = self->capture_pos;
