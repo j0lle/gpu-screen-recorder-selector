@@ -1036,6 +1036,16 @@ static bool add_hdr_metadata_to_video_stream(gsr_capture *cap, AVStream *video_s
     return true;
 }
 
+static void set_format_context_options(AVFormatContext *av_format_context) {
+    av_opt_set(av_format_context->priv_data, "use_editlist", "1", 0);
+    const AVOption *opt = av_opt_find(av_format_context->priv_data, "movflags", NULL, 0, 0);
+    if (opt && opt->unit) {
+        const AVOption *flag = av_opt_find(av_format_context->priv_data, "hybrid_fragmented", opt->unit, 0, 0);
+        if (flag)
+            av_opt_set(av_format_context->priv_data, "movflags", "+hybrid_fragmented", 0);
+    }
+}
+
 struct RecordingStartAudio {
     const AudioTrack *audio_track;
     AVStream *stream;
@@ -1084,9 +1094,7 @@ struct VideoSource {
 static RecordingStartResult start_recording_create_streams(const char *filename, const args_parser &arg_parser, AVCodecContext *video_codec_context, const std::vector<AudioTrack> &audio_tracks, bool hdr, std::vector<VideoSource> &video_sources) {
     AVFormatContext *av_format_context;
     avformat_alloc_output_context2(&av_format_context, nullptr, arg_parser.container_format, filename);
-
-    av_opt_set(av_format_context->priv_data, "use_editlist", "1", 0);
-    av_opt_set(av_format_context->priv_data, "movflags", "+frag_keyframe+empty_moov+delay_moov", 0);
+    set_format_context_options(av_format_context);
 
     AVStream *video_stream = create_stream(av_format_context, video_codec_context);
     avcodec_parameters_from_context(video_stream->codecpar, video_codec_context);
@@ -3789,8 +3797,7 @@ int main(int argc, char **argv) {
         _exit(1);
     }
 
-    av_opt_set(av_format_context->priv_data, "use_editlist", "1", 0);
-    av_opt_set(av_format_context->priv_data, "movflags", "+frag_keyframe+empty_moov+delay_moov", 0);
+    set_format_context_options(av_format_context);
 
     const AVOutputFormat *output_format = av_format_context->oformat;
 
