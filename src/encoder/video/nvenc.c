@@ -1,7 +1,7 @@
 #include "../../../include/encoder/video/nvenc.h"
 #include "../../../include/egl.h"
 #include "../../../include/cuda.h"
-#include "../../../include/window/window.h"
+#include "../../../include/utils.h"
 
 #include <libavcodec/avcodec.h>
 #include <libavutil/hwcontext_cuda.h>
@@ -116,10 +116,7 @@ static void gsr_video_encoder_nvenc_stop(gsr_video_encoder_nvenc *self, AVCodecC
 static bool gsr_video_encoder_nvenc_start(gsr_video_encoder *encoder, AVCodecContext *video_codec_context, AVFrame *frame) {
     gsr_video_encoder_nvenc *self = encoder->priv;
 
-    const bool is_x11 = gsr_window_get_display_server(self->params.egl->window) == GSR_DISPLAY_SERVER_X11;
-    const bool overclock = is_x11 ? self->params.overclock : false;
-    Display *display = is_x11 ? gsr_window_get_display(self->params.egl->window) : NULL;
-    if(!gsr_cuda_load(&self->cuda, display, overclock)) {
+    if(!gsr_cuda_load(&self->cuda)) {
         fprintf(stderr, "gsr error: gsr_video_encoder_nvenc_start: failed to load cuda\n");
         gsr_video_encoder_nvenc_stop(self, video_codec_context);
         return false;

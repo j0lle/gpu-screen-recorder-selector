@@ -1551,7 +1551,6 @@ static gsr_video_encoder* create_video_encoder(gsr_egl *egl, const args_parser &
         case GSR_GPU_VENDOR_NVIDIA: {
             gsr_video_encoder_nvenc_params params;
             params.egl = egl;
-            params.overclock = arg_parser.overclock;
             params.color_depth = color_depth;
             video_encoder = gsr_video_encoder_nvenc_create(&params);
             break;
@@ -3571,6 +3570,10 @@ static void validate_args_with_capture_sources(args_parser &arg_parser, const st
         fprintf(stderr, "gsr info: option '-w portal' was used without '-restore-portal-session yes'. The previous screencast session will be ignored\n");
 }
 
+static void install_cuda_no_stable_perf_limit() {
+
+}
+
 int main(int argc, char **argv) {
     setlocale(LC_ALL, "C"); // Sigh... stupid C
 #ifdef __GLIBC__
@@ -3644,21 +3647,6 @@ int main(int argc, char **argv) {
         _exit(1);
     }
     validate_args_with_capture_sources(arg_parser, capture_sources);
-
-    // TODO: Remove, this isn't true
-    if(arg_parser.overclock) {
-        int driver_major_version = 0;
-        int driver_minor_version = 0;
-        if(get_nvidia_driver_version(&driver_major_version, &driver_minor_version) && (driver_major_version > 580 || (driver_major_version == 580 && driver_minor_version >= 105))) {
-            fprintf(stderr, "gsr info: overclocking was set but has been forcefully disabled since your gpu supports CUDA_DISABLE_PERF_BOOST to workaround driver issue (overclocking is not needed)\n");
-            arg_parser.overclock = false;
-        }
-    }
-
-    if(arg_parser.overclock && video_codec_is_vulkan(arg_parser.video_codec)) {
-        fprintf(stderr, "gsr info: overclocking was set but has been forcefully disabled since you're using vulkan video encoder which doesn't suffer from cuda p2 power level issues\n");
-        arg_parser.overclock = false;
-    }
 
     //av_log_set_level(AV_LOG_TRACE);
 

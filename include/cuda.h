@@ -1,7 +1,6 @@
 #ifndef GSR_CUDA_H
 #define GSR_CUDA_H
 
-#include "overclock.h"
 #include <stddef.h>
 #include <stdbool.h>
 
@@ -75,9 +74,6 @@ typedef struct CUgraphicsResource_st *CUgraphicsResource;
 
 typedef struct gsr_cuda gsr_cuda;
 struct gsr_cuda {
-    gsr_overclock overclock;
-    bool do_overclock;
-
     void *library;
     CUcontext cu_ctx;
 
@@ -102,7 +98,7 @@ struct gsr_cuda {
     CUresult (*cuGraphicsSubResourceGetMappedArray)(CUarray *pArray, CUgraphicsResource resource, unsigned int arrayIndex, unsigned int mipLevel);
 };
 
-bool gsr_cuda_load(gsr_cuda *self, Display *display, bool overclock);
+bool gsr_cuda_load(gsr_cuda *self);
 void gsr_cuda_unload(gsr_cuda *self);
 
 #endif /* GSR_CUDA_H */

@@ -97,7 +97,6 @@ typedef struct {
     bool date_folders;
     bool restore_portal_session;
     bool restart_replay_on_save;
-    bool overclock;
     bool write_first_frame_ts;
     bool is_livestream;
     bool is_output_piped;

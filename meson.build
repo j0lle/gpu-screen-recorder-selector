@@ -32,8 +32,6 @@ src = [
     'src/replay_buffer/replay_buffer_disk.c',
     'src/egl.c',
     'src/cuda.c',
-    'src/xnvctrl.c',
-    'src/overclock.c',
     'src/window_texture.c',
     'src/shader.c',
     'src/color_conversion.c',

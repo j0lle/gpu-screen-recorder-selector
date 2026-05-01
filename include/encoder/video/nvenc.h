@@ -7,7 +7,6 @@ typedef struct gsr_egl gsr_egl;
 
 typedef struct {
     gsr_egl *egl;
-    bool overclock;
     gsr_color_depth color_depth;
 } gsr_video_encoder_nvenc_params;
 

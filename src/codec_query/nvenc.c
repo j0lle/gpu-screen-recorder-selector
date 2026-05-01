@@ -197,7 +197,7 @@ bool gsr_get_supported_video_codecs_nvenc(gsr_supported_video_codecs *video_code
     gsr_cuda cuda;
     memset(&cuda, 0, sizeof(cuda));
 
-    if(!gsr_cuda_load(&cuda, NULL, false)) {
+    if(!gsr_cuda_load(&cuda)) {
         fprintf(stderr, "gsr error: gsr_get_supported_video_codecs_nvenc: failed to load cuda\n");
         goto done;
     }

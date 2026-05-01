@@ -199,7 +199,7 @@ static void usage_header(void) {
     const char *program_name = inside_flatpak ? "flatpak run --command=gpu-screen-recorder com.dec05eba.gpu_screen_recorder" : "gpu-screen-recorder";
     printf("usage: %s -w <window_id|monitor|focused|portal|region|v4l2_device_path> [-c <container_format>] [-s WxH] [-region WxH+X+Y] [-f <fps>] [-a <audio_input>] "
            "[-q <quality>] [-r <replay_buffer_size_sec>] [-replay-storage ram|disk] [-restart-replay-on-save yes|no] "
-           "[-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-oc yes|no] [-fm cfr|vfr|content] "
+           "[-k h264|hevc|av1|vp8|vp9|hevc_hdr|av1_hdr|hevc_10bit|av1_10bit] [-ac aac|opus|flac] [-ab <bitrate>] [-fm cfr|vfr|content] "
            "[-bm auto|qp|vbr|cbr] [-cr limited|full] [-tune performance|quality] [-df yes|no] [-sc <script_path>] [-p <plugin_path>] "
            "[-cursor yes|no] [-keyint <value>] [-restore-portal-session yes|no] [-portal-session-token-filepath filepath] [-encoder gpu|cpu] "
            "[-fallback-cpu-encoding yes|no] [-o <output_file>] [-ro <output_directory>] [-ffmpeg-opts <options>] [--list-capture-options [card_path]] "
@@ -261,7 +261,7 @@ static bool args_parser_set_values(args_parser *self) {
     self->date_folders = args_get_boolean_by_key(self->args, NUM_ARGS, "-df", false);
     self->restore_portal_session = args_get_boolean_by_key(self->args, NUM_ARGS, "-restore-portal-session", false);
     self->restart_replay_on_save = args_get_boolean_by_key(self->args, NUM_ARGS, "-restart-replay-on-save", false);
-    self->overclock = args_get_boolean_by_key(self->args, NUM_ARGS, "-oc", false);
+    const bool overclock = args_get_boolean_by_key(self->args, NUM_ARGS, "-oc", false);
     self->fallback_cpu_encoding = args_get_boolean_by_key(self->args, NUM_ARGS, "-fallback-cpu-encoding", false);
     self->write_first_frame_ts = args_get_boolean_by_key(self->args, NUM_ARGS, "-write-first-frame-ts", false);
     self->low_power = args_get_boolean_by_key(self->args, NUM_ARGS, "-low-power", false);
@@ -270,6 +270,10 @@ static bool args_parser_set_values(args_parser *self) {
     self->audio_bitrate *= 1000LL;
 
     self->keyint = args_get_double_by_key(self->args, NUM_ARGS, "-keyint", 2.0);
+
+    if(overclock) {
+        fprintf(stderr, "gsr info: the overclock option (-oc) is deprecated and no longer has any effect as it's no longer needed (on GPUs that are 12 years old or younger)\n");
+    }
 
     if(self->audio_codec == GSR_AUDIO_CODEC_FLAC) {
         fprintf(stderr, "gsr warning: flac audio codec is temporary disabled, using opus audio codec instead\n");
@@ -688,16 +692,6 @@ bool args_parser_validate_with_gl_info(args_parser *self, gsr_egl *egl) {
     if(self->video_encoder == GSR_VIDEO_ENCODER_HW_CPU && self->bitrate_mode == GSR_BITRATE_MODE_VBR) {
         fprintf(stderr, "gsr warning: bitrate mode has been forcefully set to qp because software encoding option doesn't support vbr option\n");
         self->bitrate_mode = GSR_BITRATE_MODE_QP;
-    }
-
-    if(egl->gpu_info.vendor != GSR_GPU_VENDOR_NVIDIA && self->overclock) {
-        fprintf(stderr, "gsr info: overclock option has no effect on amd/intel, ignoring option\n");
-        self->overclock = false;
-    }
-
-    if(egl->gpu_info.vendor == GSR_GPU_VENDOR_NVIDIA && self->overclock && wayland) {
-        fprintf(stderr, "gsr info: overclocking is not possible on nvidia on wayland, ignoring option\n");
-        self->overclock = false;
     }
 
     if(egl->gpu_info.is_steam_deck) {

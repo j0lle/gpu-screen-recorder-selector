@@ -5,9 +5,8 @@
 #include <dlfcn.h>
 #include <assert.h>
 
-bool gsr_cuda_load(gsr_cuda *self, Display *display, bool do_overclock) {
+bool gsr_cuda_load(gsr_cuda *self) {
     memset(self, 0, sizeof(gsr_cuda));
-    self->do_overclock = do_overclock;
 
     dlerror(); /* clear */
     void *lib = dlopen("libcuda.so.1", RTLD_LAZY);
@@ -83,15 +82,6 @@ bool gsr_cuda_load(gsr_cuda *self, Display *display, bool do_overclock) {
         goto fail;
     }
 
-    if(self->do_overclock && display) {
-        if(gsr_overclock_load(&self->overclock, display))
-            gsr_overclock_start(&self->overclock);
-        else
-            fprintf(stderr, "gsr warning: gsr_cuda_load: failed to load xnvctrl, failed to overclock memory transfer rate\n");
-    } else if(self->do_overclock && !display) {
-        fprintf(stderr, "gsr warning: gsr_cuda_load: overclocking enabled but no X server is running. Overclocking has been disabled\n");
-    }
-
     self->library = lib;
     return true;
 
@@ -102,11 +92,6 @@ bool gsr_cuda_load(gsr_cuda *self, Display *display, bool do_overclock) {
 }
 
 void gsr_cuda_unload(gsr_cuda *self) {
-    if(self->do_overclock && self->overclock.xnvctrl.library) {
-        gsr_overclock_stop(&self->overclock);
-        gsr_overclock_unload(&self->overclock);
-    }
-
     if(self->library) {
         if(self->cu_ctx) {
             self->cuCtxDestroy_v2(self->cu_ctx);

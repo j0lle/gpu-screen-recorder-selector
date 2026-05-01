@@ -89,7 +89,6 @@ There are also additional dependencies needed at runtime depending on your GPU v
 * cuda runtime (libcuda.so.1) (libnvidia-compute)
 * nvenc (libnvidia-encode)
 * nvfbc (libnvidia-fbc1, when recording the screen on x11)
-* xnvctrl (libxnvctrl0, when using the `-oc` option)
 
 # How to use
 Run `gpu-screen-recorder --help` to see all options and run `man gpu-screen-recorder` to see more detailed explanations for the options and also examples.\
