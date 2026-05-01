@@ -3571,7 +3571,43 @@ static void validate_args_with_capture_sources(args_parser &arg_parser, const st
 }
 
 static void install_cuda_no_stable_perf_limit() {
+    const char *home = getenv("HOME");
+    if(!home) {
+        fprintf(stderr, "gsr warning: install_cuda_no_stable_perf_limit: $HOME not set\n");
+        return;
+    }
 
+    char nv_profiles_path[4096];
+    snprintf(nv_profiles_path, sizeof(nv_profiles_path), "%s/.nv/nvidia-application-profiles-rc.d", home);
+
+    if(create_directory_recursive(nv_profiles_path) != 0) {
+        fprintf(stderr, "gsr warning: install_cuda_no_stable_perf_limit: failed to create directory: %s\n", nv_profiles_path);
+        return;
+    }
+
+    snprintf(nv_profiles_path, sizeof(nv_profiles_path), "%s/.nv/nvidia-application-profiles-rc.d/10-gsr-cuda-no-stable-perf-limit", home);
+
+    FILE *f = fopen(nv_profiles_path, "wb");
+    if(!f) {
+        fprintf(stderr, "gsr warning: install_cuda_no_stable_perf_limit: failed to create file: %s\n", nv_profiles_path);
+        return;
+    }
+
+    const char *profile_data =
+        "{\n"
+        "    \"profiles\": [\n"
+        "        {\n"
+        "            \"name\": \"CudaNoStablePerfLimit\",\n"
+        "            \"settings\": [\"0x166c5e\", 0]\n"
+        "        }\n"
+        "    ],\n"
+        "    \"rules\": [\n"
+        "        { \"pattern\": \"gpu-screen-recorder\", \"profile\": \"CudaNoStablePerfLimit\" }\n"
+        "    ]\n"
+        "}\n";
+
+    fwrite(profile_data, 1, strlen(profile_data), f);
+    fclose(f);
 }
 
 int main(int argc, char **argv) {
@@ -3593,6 +3629,7 @@ int main(int argc, char **argv) {
     signal(SIGRTMIN+6, save_replay_30_minutes_handler);
 
     set_display_server_environment_variables();
+    install_cuda_no_stable_perf_limit();
 
     // Linux nvidia driver 580.105.08 added the environment variable CUDA_DISABLE_PERF_BOOST to disable the p2 power level issue,
     // where running cuda (which includes nvenc) causes the gpu to be forcefully set to p2 power level which on many nvidia gpus

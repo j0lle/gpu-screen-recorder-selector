@@ -164,8 +164,10 @@ GPU Screen Recorder has much better performance than OBS Studio even with versio
 It is recommended to save the video to a SSD because of the large file size, which a slow HDD might not be fast enough to handle. Using variable framerate mode (-fm vfr) which is the default is also recommended as this reduces encoding load. Ultra quality is also overkill most of the time, very high (the default) or lower quality is usually enough.\
 Note that for best performance you should close other screen recorders such as OBS Studio when using GPU Screen Recorder even if they are not recording, since they can affect performance even when idle. This is the case with OBS Studio.
 ## Note about optimal performance on NVIDIA
-NVIDIA driver has a "feature" (read: bug) where it will downclock memory transfer rate when a program uses cuda (or nvenc, which uses cuda), such as GPU Screen Recorder.
-This issue doesn't happen with vulkan video encoding so you may have better performance in games when recording with vulkan video.
+NVIDIA driver has a "feature" (read: bug) where it will downclock memory transfer rate when a program uses cuda (or nvenc, which uses cuda), such as GPU Screen Recorder. This can affect game performance.
+GPU Screen Recorder installs an NVIDIA profile on the system (`~/.nv/nvidia-application-profiles-rc.d/10-gsr-cuda-no-stable-perf-limit`) to get around this issue but this requires a relatively
+new NVIDIA driver version (~580). If you have an older NVIDIA driver then you can choose to record with vulkan video encoding instead as it doesn't have this issue.
+
 You can use vulkan video encoding by adding `_vulkan` at the end of the video codec option, for example: `-k h264_vulkan` or a full command example: `gpu-screen-recorder -w screen -k h264_vulkan -o video.mp4`.
 Vulkan video encoding in GPU Screen Recorder supports `h264`, `hevc` and `av1` (along with `hdr` and `10bit` options), assuming your gpu drivers, ffmpeg and vulkan is up to date.
 
