@@ -2446,7 +2446,7 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_win
     color_conversion_params.destination_textures[0] = image_writer.texture;
     color_conversion_params.destination_textures_size[0] = video_size;
     color_conversion_params.num_destination_textures = 1;
-    color_conversion_params.destination_color = GSR_DESTINATION_COLOR_RGB8;
+    color_conversion_params.destination_color = GSR_DESTINATION_COLOR_RGB;
 
     gsr_color_conversion color_conversion;
     if(gsr_color_conversion_init(&color_conversion, &color_conversion_params) != 0) {

@@ -21,7 +21,6 @@ bool gsr_plugins_init(gsr_plugins *self, gsr_plugin_init_params init_params, gsr
     self->init_params = init_params;
     self->egl = egl;
 
-    /* TODO: GL_RGB8? */
     const unsigned int texture = gl_create_texture(egl, init_params.width, init_params.height, color_depth_to_gl_internal_format(init_params.color_depth), GL_RGBA, GL_LINEAR);
     if(texture == 0) {
         fprintf(stderr, "gsr error: gsr_plugins_init failed to create texture\n");
@@ -31,7 +30,7 @@ bool gsr_plugins_init(gsr_plugins *self, gsr_plugin_init_params init_params, gsr
 
     gsr_color_conversion_params color_conversion_params = {
         .egl = egl,
-        .destination_color = GSR_DESTINATION_COLOR_RGB8, /* TODO: Support 10-bits, use init_params.color_depth */
+        .destination_color = GSR_DESTINATION_COLOR_RGB,
         .destination_textures[0] = self->texture,
         .destination_textures_size[0] = (vec2i){ init_params.width, init_params.height },
         .num_destination_textures = 1,

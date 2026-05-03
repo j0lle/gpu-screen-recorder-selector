@@ -65,7 +65,7 @@ static const char* color_format_range_get_transform_matrix(gsr_destination_color
             }
             break;
         }
-        case GSR_DESTINATION_COLOR_RGB8:
+        case GSR_DESTINATION_COLOR_RGB:
             return "";
         default:
             return NULL;
@@ -534,7 +534,7 @@ static bool gsr_color_conversion_load_graphics_shaders(gsr_color_conversion *sel
             }
             break;
         }
-        case GSR_DESTINATION_COLOR_RGB8: {
+        case GSR_DESTINATION_COLOR_RGB: {
             if(load_graphics_shader_rgb(&self->graphics_shaders[GRAPHICS_SHADER_INDEX_RGB], self->params.egl, &self->graphics_uniforms[GRAPHICS_SHADER_INDEX_RGB], false) != 0) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load RGB graphics shader\n");
                 return false;
@@ -575,7 +575,7 @@ static bool gsr_color_conversion_load_external_graphics_shaders(gsr_color_conver
             }
             break;
         }
-        case GSR_DESTINATION_COLOR_RGB8: {
+        case GSR_DESTINATION_COLOR_RGB: {
             if(load_graphics_shader_rgb(&self->graphics_shaders[GRAPHICS_SHADER_INDEX_RGB_EXTERNAL], self->params.egl, &self->graphics_uniforms[GRAPHICS_SHADER_INDEX_RGB_EXTERNAL], true) != 0) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: failed to load RGB graphics shader (external)\n");
                 return false;
@@ -607,7 +607,7 @@ int gsr_color_conversion_init(gsr_color_conversion *self, const gsr_color_conver
             }
             break;
         }
-        case GSR_DESTINATION_COLOR_RGB8: {
+        case GSR_DESTINATION_COLOR_RGB: {
             if(self->params.num_destination_textures != 1) {
                 fprintf(stderr, "gsr error: gsr_color_conversion_init: expected 1 destination textures for destination color RGB8, got %d destination texture(s)\n", self->params.num_destination_textures);
                 goto err;
@@ -808,7 +808,7 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
                     }
                     break;
                 }
-                case GSR_DESTINATION_COLOR_RGB8: {
+                case GSR_DESTINATION_COLOR_RGB: {
                     self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, self->framebuffers[0]);
                     //cap_xcomp->params.egl->glClear(GL_COLOR_BUFFER_BIT); // TODO: Do this in a separate clear_ function. We want to do that when using multiple drm to create the final image (multiple monitors for example)
 
@@ -847,7 +847,7 @@ static void gsr_color_conversion_draw_graphics(gsr_color_conversion *self, unsig
                     }
                     break;
                 }
-                case GSR_DESTINATION_COLOR_RGB8: {
+                case GSR_DESTINATION_COLOR_RGB: {
                     self->params.egl->glBindFramebuffer(GL_FRAMEBUFFER, self->framebuffers[0]);
                     //cap_xcomp->params.egl->glClear(GL_COLOR_BUFFER_BIT); // TODO: Do this in a separate clear_ function. We want to do that when using multiple drm to create the final image (multiple monitors for example)
 
@@ -913,7 +913,7 @@ void gsr_color_conversion_clear(gsr_color_conversion *self) {
             color2[3] = 1.0f;
             break;
         }
-        case GSR_DESTINATION_COLOR_RGB8: {
+        case GSR_DESTINATION_COLOR_RGB: {
             color2[0] = 0.0f;
             color2[1] = 0.0f;
             color2[2] = 0.0f;

@@ -166,7 +166,7 @@ Note that for best performance you should close other screen recorders such as O
 ## Note about optimal performance on NVIDIA
 NVIDIA driver has a "feature" (read: bug) where it will downclock memory transfer rate when a program uses cuda (or nvenc, which uses cuda), such as GPU Screen Recorder. This can affect game performance.
 GPU Screen Recorder installs an NVIDIA profile on the system (`~/.nv/nvidia-application-profiles-rc.d/10-gsr-cuda-no-stable-perf-limit`) to get around this issue but this requires a relatively
-new NVIDIA driver version (~580). If you have an older NVIDIA driver then you can choose to record with vulkan video encoding instead as it doesn't have this issue.
+new NVIDIA driver version (580+). If you have an older NVIDIA driver then you can choose to record with vulkan video encoding instead as it doesn't have this issue.
 
 You can use vulkan video encoding by adding `_vulkan` at the end of the video codec option, for example: `-k h264_vulkan` or a full command example: `gpu-screen-recorder -w screen -k h264_vulkan -o video.mp4`.
 Vulkan video encoding in GPU Screen Recorder supports `h264`, `hevc` and `av1` (along with `hdr` and `10bit` options), assuming your gpu drivers, ffmpeg and vulkan is up to date.
