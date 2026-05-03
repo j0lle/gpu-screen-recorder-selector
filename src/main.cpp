@@ -2421,6 +2421,32 @@ static void gsr_capture_kms_cleanup_kms_fds() {
     kms_response.num_items = 0;
 }
 
+static void load_plugins(gsr_plugins *plugins, args_parser &arg_parser, gsr_egl *egl, vec2i video_size) {
+    const Arg *plugin_arg = args_parser_get_arg(&arg_parser, "-p");
+    assert(plugin_arg);
+
+    if(plugin_arg->num_values > 0) {
+        const gsr_color_depth color_depth = video_codec_to_bit_depth(arg_parser.video_codec);
+        assert(color_depth == GSR_COLOR_DEPTH_8_BITS || color_depth == GSR_COLOR_DEPTH_10_BITS);
+
+        const gsr_plugin_init_params plugin_init_params = {
+            (unsigned int)video_size.x,
+            (unsigned int)video_size.y,
+            (unsigned int)arg_parser.fps,
+            color_depth == GSR_COLOR_DEPTH_8_BITS ? GSR_PLUGIN_COLOR_DEPTH_8_BITS : GSR_PLUGIN_COLOR_DEPTH_10_BITS,
+            egl->context_type == GSR_GL_CONTEXT_TYPE_GLX ? GSR_PLUGIN_GRAPHICS_API_GLX : GSR_PLUGIN_GRAPHICS_API_EGL_ES,
+        };
+
+        if(!gsr_plugins_init(plugins, plugin_init_params, egl))
+            _exit(1);
+
+        for(int i = 0; i < plugin_arg->num_values; ++i) {
+            if(!gsr_plugins_load_plugin(plugins, plugin_arg->values[i]))
+                _exit(1);
+        }
+    }
+}
+
 // TODO: 10-bit and hdr.
 static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_window *window, gsr_image_format image_format, std::vector<CaptureSource> &capture_sources) {
     const int image_quality = video_quality_to_image_quality_value(arg_parser.video_quality);
@@ -2430,6 +2456,15 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_win
     vec2i video_size = {0, 0};
     std::vector<VideoSource> video_sources = create_video_sources(arg_parser, egl, true, capture_sources, video_size);
     video_sources_update_with_real_video_size(capture_sources, video_sources, video_size);
+
+    const Arg *plugin_arg = args_parser_get_arg(&arg_parser, "-p");
+    assert(plugin_arg);
+
+    gsr_plugins plugins;
+    memset(&plugins, 0, sizeof(plugins));
+
+    if(plugin_arg->num_values > 0)
+        load_plugins(&plugins, arg_parser, egl, video_size);
 
     gsr_image_writer image_writer;
     if(!gsr_image_writer_init_opengl(&image_writer, egl, video_size.x, video_size.y)) {
@@ -2455,6 +2490,8 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_win
     }
 
     gsr_color_conversion_clear(&color_conversion);
+
+    gsr_color_conversion *output_color_conversion = plugins.num_plugins > 0 ? &plugins.color_conversion : &color_conversion;
 
     bool should_stop_error = false;
     egl->glClear(0);
@@ -2490,19 +2527,19 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_win
 
         for(VideoSource &video_source : video_sources) {
             if(video_source.capture->pre_capture)
-                video_source.capture->pre_capture(video_source.capture, &video_source.metadata, &color_conversion);
+                video_source.capture->pre_capture(video_source.capture, &video_source.metadata, output_color_conversion);
         }
 
-        if(color_conversion.schedule_clear) {
-            color_conversion.schedule_clear = false;
-            gsr_color_conversion_clear(&color_conversion);
+        if(output_color_conversion->schedule_clear) {
+            output_color_conversion->schedule_clear = false;
+            gsr_color_conversion_clear(output_color_conversion);
         }
 
         bool all_sources_captured = true;
         for(VideoSource &video_source : video_sources) {
             // It can fail, for example when capturing portal and the target is a monitor that hasn't been updated.
             // This can also happen for example if the system suspends and the monitor to capture's framebuffer is gone, or if the target window disappeared.
-            if(gsr_capture_capture(video_source.capture, &video_source.metadata, &color_conversion) != 0)
+            if(gsr_capture_capture(video_source.capture, &video_source.metadata, output_color_conversion) != 0)
                 all_sources_captured = false;
         }
 
@@ -2513,6 +2550,14 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_win
 
         if(running)
             usleep(30 * 1000); // 30 ms
+    }
+
+    if(plugins.num_plugins > 0) {
+        gsr_plugins_draw(&plugins);
+        gsr_color_conversion_draw(&color_conversion, plugins.texture,
+            {0, 0}, video_size,
+            {0, 0}, video_size,
+            video_size, GSR_ROT_0, GSR_FLIP_NONE, GSR_SOURCE_COLOR_RGB, false);
     }
 
     gsr_egl_swap_buffers(egl);
@@ -2527,6 +2572,7 @@ static void capture_image_to_file(args_parser &arg_parser, gsr_egl *egl, gsr_win
             run_recording_saved_script_async(arg_parser.recording_saved_script, arg_parser.filename, "screenshot");
     }
 
+    gsr_plugins_deinit(&plugins);
     gsr_image_writer_deinit(&image_writer);
     for(VideoSource &video_source : video_sources) {
         gsr_capture_destroy(video_source.capture);
@@ -3915,26 +3961,8 @@ int main(int argc, char **argv) {
     gsr_plugins plugins;
     memset(&plugins, 0, sizeof(plugins));
 
-    if(plugin_arg->num_values > 0) {
-        const gsr_color_depth color_depth = video_codec_to_bit_depth(arg_parser.video_codec);
-        assert(color_depth == GSR_COLOR_DEPTH_8_BITS || color_depth == GSR_COLOR_DEPTH_10_BITS);
-
-        const gsr_plugin_init_params plugin_init_params = {
-            (unsigned int)video_size.x,
-            (unsigned int)video_size.y,
-            (unsigned int)arg_parser.fps,
-            color_depth == GSR_COLOR_DEPTH_8_BITS ? GSR_PLUGIN_COLOR_DEPTH_8_BITS : GSR_PLUGIN_COLOR_DEPTH_10_BITS,
-            egl.context_type == GSR_GL_CONTEXT_TYPE_GLX ? GSR_PLUGIN_GRAPHICS_API_GLX : GSR_PLUGIN_GRAPHICS_API_EGL_ES,
-        };
-
-        if(!gsr_plugins_init(&plugins, plugin_init_params, &egl))
-            _exit(1);
-
-        for(int i = 0; i < plugin_arg->num_values; ++i) {
-            if(!gsr_plugins_load_plugin(&plugins, plugin_arg->values[i]))
-                _exit(1);
-        }
-    }
+    if(plugin_arg->num_values > 0)
+        load_plugins(&plugins, arg_parser, &egl, video_size);
 
     gsr_color_conversion_params color_conversion_params;
     memset(&color_conversion_params, 0, sizeof(color_conversion_params));
@@ -4405,12 +4433,12 @@ int main(int argc, char **argv) {
 
             for(VideoSource &video_source : video_sources) {
                 if(video_source.capture->pre_capture)
-                    video_source.capture->pre_capture(video_source.capture, &video_source.metadata, &color_conversion);
+                    video_source.capture->pre_capture(video_source.capture, &video_source.metadata, output_color_conversion);
             }
 
-            if(color_conversion.schedule_clear) {
-                color_conversion.schedule_clear = false;
-                gsr_color_conversion_clear(&color_conversion);
+            if(output_color_conversion->schedule_clear) {
+                output_color_conversion->schedule_clear = false;
+                gsr_color_conversion_clear(output_color_conversion);
             }
 
             for(VideoSource &video_source : video_sources) {
