@@ -8,7 +8,7 @@
 const char vertex_shader_source[] =
     "attribute vec4 vertex_pos;   \n"
     "void main() {                \n"
-    "   gl_Position = vertex_pos; \n"
+    "   gl_Position = vec4(vertex_pos.x, -vertex_pos.y, vertex_pos.z, vertex_pos.w); \n"
     "}";
 
 const char fragment_shader_source[] =
