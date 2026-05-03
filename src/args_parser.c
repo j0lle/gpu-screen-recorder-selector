@@ -243,6 +243,13 @@ static bool is_livestream_path(const char *str) {
         return false;
 }
 
+static bool file_is_pipe_or_char_device(const char *filepath) {
+    struct stat st;
+    if(stat(filepath, &st) == -1)
+        return false;
+    return S_ISFIFO(st.st_mode) || S_ISCHR(st.st_mode);
+}
+
 static bool args_parser_set_values(args_parser *self) {
     self->video_encoder = (gsr_video_encoder_hardware)args_get_enum_by_key(self->args, NUM_ARGS, "-encoder", GSR_VIDEO_ENCODER_HW_GPU);
     self->pixel_format = (gsr_pixel_format)args_get_enum_by_key(self->args, NUM_ARGS, "-pixfmt", GSR_PIXEL_FORMAT_YUV420);
@@ -443,7 +450,7 @@ static bool args_parser_set_values(args_parser *self) {
         }
     }
 
-    self->is_output_piped = strcmp(self->filename, "/dev/stdout") == 0;
+    self->is_output_piped = file_is_pipe_or_char_device(self->filename);
     self->low_latency_recording = self->is_livestream || self->is_output_piped;
     if(self->write_first_frame_ts && (self->is_livestream || self->is_output_piped)) {
         fprintf(stderr, "gsr warning: -write-first-frame-ts is ignored for livestreaming or when output is piped\n");
