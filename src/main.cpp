@@ -3018,11 +3018,10 @@ static gsr_audio_codec select_audio_codec_with_fallback(gsr_audio_codec audio_co
             break;
         }
         case GSR_AUDIO_CODEC_OPUS: {
-            // TODO: Also check mpegts?
-            if(file_extension != "mp4" && file_extension != "mkv" && file_extension != "webm") {
+            if(file_extension != "mp4" && file_extension != "mkv" && file_extension != "webm" && file_extension != "ts") {
                 //audio_codec_to_use = "aac";
                 audio_codec = GSR_AUDIO_CODEC_AAC;
-                fprintf(stderr, "gsr warning: opus audio codec is only supported by .mp4, .mkv and .webm files, falling back to aac instead\n");
+                fprintf(stderr, "gsr warning: opus audio codec is only supported by .mp4, .mkv, .webm and .ts files, falling back to aac instead\n");
             }
             break;
         }
