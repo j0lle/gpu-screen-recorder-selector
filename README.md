@@ -225,7 +225,7 @@ Alternatively you can record with h264 codec (-k h264, which is also the default
 ## The video doesn't display or has a green/yellow overlay
 This can happen if your video player is missing the H264/HEVC video codecs. Either install the codecs or use mpv.
 ## I get stutter in the video
-Try recording to an SSD and make sure it's not using NTFS file system. Also record in variable framerate format.
+Try recording to an SSD and make sure it's not using NTFS file system. Also try recording with "content" framerate mode (`-fm content`).
 ## The colors look washed out when recording a monitor with HDR enabled
 You have to either record in hdr mode (-k `hevc_hdr` or -k `av1_hdr` option) to record a HDR video or record with desktop portal option (`-w portal`) to turn the HDR recording into SDR.
 ## GPU Screen Recorder records night light when recording in HDR mode
@@ -269,3 +269,5 @@ GPU usage on battery powered devices is misleading. For example Intel iGPUs has 
 The performance level changes depending on the GPU load, so it may say that GPU usage is 80%, but the actual GPU usage may be 5%.
 ## The video is too dark when capturing full-range video or 10-bit video
 This is an issue in some broken video players such as vlc. Play the video with a video player such as mpv (or a mpv frontend such as celluloid) or a browser instead.
+## The video has glitches
+This may be caused by buggy GPU drivers. Try recording with HEVC video codec instead (`-k hevc`).
