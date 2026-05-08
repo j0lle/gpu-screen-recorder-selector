@@ -418,3 +418,5 @@ Fix webcam capture on nvidia x11. It doesn't work when capturing a webcam at the
     while v4l2 requires egl. All other capture methods require egl so they cant be used together with nvfbc.
 
 Make -fm content the default, but first make it record at no lower than 2 fps if nothing updates. This is to make sure live streaming works and seeking in video player doesn't get messed up.
+
+Fix camera capture on nvidia x11. It doesn't work with mjpeg either now because external shader compilation fails.
