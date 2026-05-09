@@ -3776,7 +3776,9 @@ int main(int argc, char **argv) {
 
     bool wayland = false;
     Display *dpy = XOpenDisplay(nullptr);
-    if (!dpy) {
+    if(dpy) {
+        XSelectInput(dpy, DefaultRootWindow(dpy), PropertyChangeMask);
+    } else {
         wayland = true;
         fprintf(stderr, "gsr warning: failed to connect to the X server. Assuming wayland is running without Xwayland\n");
     }

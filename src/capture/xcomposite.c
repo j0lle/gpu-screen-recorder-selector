@@ -85,9 +85,6 @@ static int gsr_capture_xcomposite_start(gsr_capture *cap, gsr_capture_metadata *
     self->window_size.x = max_int(attr.width, 0);
     self->window_size.y = max_int(attr.height, 0);
 
-    if(self->params.follow_focused)
-        XSelectInput(self->display, DefaultRootWindow(self->display), PropertyChangeMask);
-
     // TODO: Get select and add these on top of it and then restore at the end. Also do the same in other xcomposite
     XSelectInput(self->display, self->window, StructureNotifyMask | ExposureMask);
 

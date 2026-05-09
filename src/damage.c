@@ -394,6 +394,9 @@ static void gsr_damage_on_tick_cursor(gsr_damage *self) {
         return;
 
     self->cursor_pos = self->cursor->position;
+    if(self->damaged)
+        return;
+
     const gsr_rectangle cursor_region = { self->cursor->position, self->cursor->size };
 
     if(self->all_monitors_tracked_refcount > 0)
@@ -462,7 +465,7 @@ void gsr_damage_tick(gsr_damage *self) {
     if(self->damage_event == 0)
         return;
 
-    if(self->track_cursor && self->cursor->visible && !self->damaged)
+    if(self->track_cursor && self->cursor->visible)
         gsr_damage_on_tick_cursor(self);
 }
 
