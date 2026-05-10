@@ -91,10 +91,12 @@ static int load_graphics_shader_y(gsr_shader *shader, gsr_egl *egl, gsr_color_gr
         "  gl_Position = vec4(offset.x, offset.y, 0.0, 0.0) + vec4(pos.x, pos.y, 0.0, 1.0);    \n"
         "}                                                 \n");
 
-    const char *main_code =
-            "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
-            "  FragColor.x = (RGBtoYUV * vec4(pixel.rgb, 1.0)).x;                            \n"
-            "  FragColor.w = pixel.a;                                                        \n";
+    const char *brightness = color_format == GSR_DESTINATION_COLOR_NV12 ? "1.007049345" : "1.0";
+    char main_code[512];
+    snprintf(main_code, sizeof(main_code),
+        "  vec4 pixel = texture(tex1, texcoords_out);                                    \n"
+        "  FragColor.x = (RGBtoYUV * vec4(pixel.rgb, 1.0)).x*%s;                         \n"
+        "  FragColor.w = pixel.a;                                                        \n", brightness);
 
     char fragment_shader[2048];
     if(external_texture) {
