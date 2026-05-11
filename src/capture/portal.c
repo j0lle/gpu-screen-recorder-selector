@@ -201,7 +201,7 @@ static int gsr_capture_portal_setup_dbus(gsr_capture_portal *self, int *pipewire
     }
 
     fprintf(stderr, "gsr info: gsr_capture_portal_setup_dbus: SelectSources\n");
-    response_status = gsr_dbus_screencast_select_sources(&self->dbus, self->session_handle, GSR_PORTAL_CAPTURE_TYPE_ALL, self->params.record_cursor ? GSR_PORTAL_CURSOR_MODE_EMBEDDED : GSR_PORTAL_CURSOR_MODE_HIDDEN);
+    response_status = gsr_dbus_screencast_select_sources(&self->dbus, self->session_handle, GSR_PORTAL_CAPTURE_TYPE_ALL, self->params.record_cursor ? GSR_PORTAL_CURSOR_MODE_METADATA : GSR_PORTAL_CURSOR_MODE_HIDDEN);
     if(response_status != 0) {
         fprintf(stderr, "gsr error: gsr_capture_portal_setup_dbus: SelectSources failed\n");
         return response_status;
@@ -347,8 +347,6 @@ static void gsr_capture_portal_pre_capture(gsr_capture *cap, gsr_capture_metadat
                 self->capture_size.y = self->pipewire_data.region.height;
                 color_conversion->schedule_clear = true;
             }
-        } else {
-            return;
         }
     }
 
