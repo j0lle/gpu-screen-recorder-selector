@@ -163,6 +163,7 @@ static AVVulkanDeviceContext* video_codec_context_get_vulkan_data(AVCodecContext
 }
 
 static int get_graphics_queue_family(AVVulkanDeviceContext *vv) {
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(59, 39, 100)
     for(int i = 0; i < vv->nb_qf; i++) {
         if(vv->qf[i].flags & VK_QUEUE_GRAPHICS_BIT)
             return vv->qf[i].idx;
@@ -173,6 +174,13 @@ static int get_graphics_queue_family(AVVulkanDeviceContext *vv) {
             return vv->qf[i].idx;
     }
     return -1;
+#else
+    if(vv->queue_family_index >= 0)
+        return vv->queue_family_index;
+    if(vv->queue_family_tx_index >= 0)
+        return vv->queue_family_tx_index;
+    return -1;
+#endif
 }
 
 static uint32_t get_memory_type_idx(VkPhysicalDevice pdev, const VkMemoryRequirements *mem_reqs, VkMemoryPropertyFlagBits prop_flags, PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties) {
