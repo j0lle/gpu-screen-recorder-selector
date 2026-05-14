@@ -446,7 +446,6 @@ bool gsr_egl_load(gsr_egl *self, gsr_window *window, bool is_monitor_capture, bo
     /* Nvfbc requires glx */
     if(gsr_window_get_display_server(self->window) == GSR_DISPLAY_SERVER_X11 && is_monitor_capture && self->gpu_info.vendor == GSR_GPU_VENDOR_NVIDIA) {
         self->context_type = GSR_GL_CONTEXT_TYPE_GLX;
-        self->dri_card_path = NULL;
         if(!gsr_egl_switch_to_glx_context(self))
             goto fail;
     }

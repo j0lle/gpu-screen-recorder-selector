@@ -1912,6 +1912,8 @@ static WindowingSetup setup_windowing(bool setup_egl) {
                 fprintf(stderr, "gsr error: no /dev/dri/cardX device found. Make sure that you have at least one monitor connected\n");
                 setup.list_monitors = false;
             }
+        } else {
+            gsr_get_valid_card_path(&setup.egl, setup.egl.card_path, false);
         }
     }
 
@@ -3836,6 +3838,8 @@ int main(int argc, char **argv) {
             fprintf(stderr, "gsr error: no /dev/dri/cardX device found. Make sure that you have at least one monitor connected or record a single window instead on X11 or record with the -w portal option\n");
             _exit(2);
         }
+    } else {
+        gsr_get_valid_card_path(&egl, egl.card_path, false);
     }
 
     memset(&x11_cursor, 0, sizeof(x11_cursor));
