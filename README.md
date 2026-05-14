@@ -266,8 +266,9 @@ If GPU Screen Recorder is installed with -Dcapabilities=true (which is the defau
 This removes a password prompt when recording a monitor with the `-w monitor` option (for example `-w screen`). However if the root user is disabled on the system then the password prompt will show up anyways.
 If the root user is disabled on your system then you can instead record with `-w focused` or `-w window_id` on X11 or `-w portal` on Wayland.
 ## CPU/GPU usage is high
-CPU/GPU usage can be misleading. For example Intel iGPUs has multiple performance levels and the CPU/GPU usage reported on the system is the CPU/GPU usage at the current performance level.
-The performance level changes depending on the CPU/GPU load, so it may say that CPU/GPU usage is 80%, but the actual CPU/GPU usage may be 5%.
+CPU/GPU usage can be misleading. CPUs/GPUs have multiple power/performance levels and the CPU/GPU usage reported on the system may be the CPU/GPU usage at the current performance level.
+The performance level changes depending on the CPU/GPU load, so it may say that CPU/GPU usage is 80%, but the actual total CPU/GPU usage may be 5%.
+The only way to properly test the performance of GPU Screen Recorder is to use it while recording a game and seeing the effect on the games framerate.
 ## The video is too dark when capturing full-range video or 10-bit video
 This is an issue in some broken video players such as vlc. Play the video with a video player such as mpv (or a mpv frontend such as celluloid) or a browser instead.
 ## The video has glitches
