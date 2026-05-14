@@ -273,3 +273,5 @@ The only way to properly test the performance of GPU Screen Recorder is to use i
 This is an issue in some broken video players such as vlc. Play the video with a video player such as mpv (or a mpv frontend such as celluloid) or a browser instead.
 ## The video has glitches
 This may be caused by buggy GPU drivers. Try recording with HEVC video codec instead (`-k hevc`).
+## The quality is low when recording my desktop
+Color gradients encode badly, especially with h264 video codec. You can increase the bitrate, for example by using `-bm cbr -q 30000` or by using hevc (`-k hevc`) and increasing the quality (`-q ultra`).
