@@ -48,7 +48,7 @@ Here are some known unofficial packages:
 * Solus: [gpu-screen-recorder](https://github.com/getsolus/packages/tree/main/packages/g/gpu-screen-recorder)
 * Nobara: [Nobara wiki](https://wiki.nobaraproject.org/en/general-usage/additional-software/GPU-Screen-Recorder)
 * AppImage [AppImage GitHub releases](https://github.com/pkgforge-dev/gpu-screen-recorder-AppImage/releases)
-* Void Linux: [gpu-screen-recorder](https://voidlinux.org/packages/?arch=x86_64&q=gpu-screen-recorder) (Make sure to read the README in the package)
+* Void Linux: [gpu-screen-recorder](https://github.com/cherrybtw/gsr4xbps)
 
 # Dependencies
 GPU Screen Recorder uses meson build system so you need to install `meson` to build GPU Screen Recorder.
