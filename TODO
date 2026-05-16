@@ -420,3 +420,5 @@ Fix webcam capture on nvidia x11. It doesn't work when capturing a webcam at the
 Make -fm content the default, but first make it record at no lower than 2 fps if nothing updates. This is to make sure live streaming works and seeking in video player doesn't get messed up.
 
 Fix camera capture on nvidia x11. It doesn't work with mjpeg either now because external shader compilation fails.
+
+Revert the revert of improving pipewire capture, for better cursor capture. It caused glitches for some, especially in kde plasma when hdr is enabled. Try marking test and moving the cursor and see.
