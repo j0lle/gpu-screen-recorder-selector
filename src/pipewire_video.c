@@ -138,6 +138,43 @@ static void on_process_cb(void *user_data) {
 
     pthread_mutex_lock(&self->mutex);
 
+    bool buffer_updated = false;
+    if(has_buffer && buffer->datas[0].type == SPA_DATA_DmaBuf) {
+        for(size_t i = 0; i < self->dmabuf_num_planes; ++i) {
+            if(self->dmabuf_data[i].fd > 0) {
+                close(self->dmabuf_data[i].fd);
+                self->dmabuf_data[i].fd = -1;
+            }
+        }
+
+        self->dmabuf_num_planes = buffer->n_datas;
+        if(self->dmabuf_num_planes > GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES)
+            self->dmabuf_num_planes = GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES;
+
+        for(size_t i = 0; i < self->dmabuf_num_planes; ++i) {
+            self->dmabuf_data[i].fd = dup(buffer->datas[i].fd);
+            self->dmabuf_data[i].offset = buffer->datas[i].chunk->offset;
+            self->dmabuf_data[i].stride = buffer->datas[i].chunk->stride;
+        }
+
+        buffer_updated = true;
+    }
+
+    // TODO: Move down to read_metadata
+    struct spa_meta_region *region = spa_buffer_find_meta_data(buffer, SPA_META_VideoCrop, sizeof(*region));
+    if(region && spa_meta_region_is_valid(region)) {
+        // fprintf(stderr, "gsr info: pipewire: crop Region available (%dx%d+%d+%d)\n",
+        //      region->region.position.x, region->region.position.y,
+        //      region->region.size.width, region->region.size.height);
+        self->crop.x = region->region.position.x;
+        self->crop.y = region->region.position.y;
+        self->crop.width = region->region.size.width;
+        self->crop.height = region->region.size.height;
+        self->crop.valid = true;
+    } else {
+        self->crop.valid = false;
+    }
+
     struct spa_meta_videotransform *video_transform = spa_buffer_find_meta_data(buffer, SPA_META_VideoTransform, sizeof(*video_transform));
     enum spa_meta_videotransform_value transform = SPA_META_TRANSFORMATION_None;
     if(video_transform)
@@ -159,7 +196,6 @@ static void on_process_cb(void *user_data) {
             break;
     }
 
-    bool this_frame_damaged = false;
     const struct spa_meta *video_damage = spa_buffer_find_meta(buffer, SPA_META_VideoDamage);
     if(video_damage) {
         struct spa_meta_region *meta_region = NULL;
@@ -168,45 +204,10 @@ static void on_process_cb(void *user_data) {
                 continue;
 
             self->damaged = true;
-            this_frame_damaged = true;
             break;
         }
-    } else {
+    } else if(buffer_updated) {
         self->damaged = true;
-        this_frame_damaged = true;
-    }
-
-    if(this_frame_damaged && has_buffer && buffer->datas[0].type == SPA_DATA_DmaBuf) {
-        for(size_t i = 0; i < self->dmabuf_num_planes; ++i) {
-            if(self->dmabuf_data[i].fd > 0) {
-                close(self->dmabuf_data[i].fd);
-                self->dmabuf_data[i].fd = -1;
-            }
-        }
-
-        self->dmabuf_num_planes = buffer->n_datas;
-        if(self->dmabuf_num_planes > GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES)
-            self->dmabuf_num_planes = GSR_PIPEWIRE_VIDEO_DMABUF_MAX_PLANES;
-
-        for(size_t i = 0; i < self->dmabuf_num_planes; ++i) {
-            self->dmabuf_data[i].fd = dup(buffer->datas[i].fd);
-            self->dmabuf_data[i].offset = buffer->datas[i].chunk->offset;
-            self->dmabuf_data[i].stride = buffer->datas[i].chunk->stride;
-        }
-    }
-
-    struct spa_meta_region *region = spa_buffer_find_meta_data(buffer, SPA_META_VideoCrop, sizeof(*region));
-    if(region && spa_meta_region_is_valid(region)) {
-        // fprintf(stderr, "gsr info: pipewire: crop Region available (%dx%d+%d+%d)\n",
-        //      region->region.position.x, region->region.position.y,
-        //      region->region.size.width, region->region.size.height);
-        self->crop.x = region->region.position.x;
-        self->crop.y = region->region.position.y;
-        self->crop.width = region->region.size.width;
-        self->crop.height = region->region.size.height;
-        self->crop.valid = true;
-    } else {
-        self->crop.valid = false;
     }
 
     const struct spa_meta_cursor *cursor = spa_buffer_find_meta_data(buffer, SPA_META_Cursor, sizeof(*cursor));
@@ -220,8 +221,8 @@ static void on_process_cb(void *user_data) {
         // TODO: Maybe check if the cursor is actually visible by checking if there are visible pixels
         if (bitmap && bitmap->size.width > 0 && bitmap->size.height > 0 && is_cursor_format_supported(bitmap->format)) {
             const uint8_t *bitmap_data = SPA_MEMBER(bitmap, bitmap->offset, uint8_t);
-            //fprintf(stderr, "gsr info: pipewire: cursor bitmap update, size: %dx%d, format: %s\n",
-            //    (int)bitmap->size.width, (int)bitmap->size.height, spa_debug_type_find_name(spa_type_video_format, bitmap->format));
+            fprintf(stderr, "gsr info: pipewire: cursor bitmap update, size: %dx%d, format: %s\n",
+                (int)bitmap->size.width, (int)bitmap->size.height, spa_debug_type_find_name(spa_type_video_format, bitmap->format));
 
             const size_t bitmap_size = bitmap->size.width * bitmap->size.height * 4;
             uint8_t *new_bitmap_data = realloc(self->cursor.data, bitmap_size);
@@ -858,20 +859,7 @@ bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map te
     output->rotation = GSR_MONITOR_ROT_0;
     pthread_mutex_lock(&self->mutex);
 
-    if(!self->negotiated || !self->streaming) {
-        pthread_mutex_unlock(&self->mutex);
-        return false;
-    }
-
-    gsr_pipewire_video_update_cursor_texture(self, texture_map);
-
-    output->cursor_region.x = self->cursor.x - self->cursor.hotspot_x;
-    output->cursor_region.y = self->cursor.y - self->cursor.hotspot_y;
-
-    output->cursor_region.width = self->cursor.width;
-    output->cursor_region.height = self->cursor.height;
-
-    if(self->dmabuf_data[0].fd <= 0) {
+    if(!self->negotiated || !self->streaming || self->dmabuf_data[0].fd <= 0) {
         pthread_mutex_unlock(&self->mutex);
         return false;
     }
@@ -885,6 +873,8 @@ bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map te
     gsr_pipewire_video_bind_image_to_texture_with_fallback(self, texture_map, image);
     output->using_external_image = self->external_texture_fallback;
     self->egl->eglDestroyImage(self->egl->egl_display, image);
+
+    gsr_pipewire_video_update_cursor_texture(self, texture_map);
 
     output->texture_width = self->format.info.raw.size.width;
     output->texture_height = self->format.info.raw.size.height;
@@ -909,6 +899,13 @@ bool gsr_pipewire_video_map_texture(gsr_pipewire_video *self, gsr_texture_map te
         output->region.width = output->region.height;
         output->region.height = temp;
     }
+
+    /* TODO: Test if cursor hotspot is correct */
+    output->cursor_region.x = self->cursor.x - self->cursor.hotspot_x;
+    output->cursor_region.y = self->cursor.y - self->cursor.hotspot_y;
+
+    output->cursor_region.width = self->cursor.width;
+    output->cursor_region.height = self->cursor.height;
 
     for(size_t i = 0; i < self->dmabuf_num_planes; ++i) {
         output->dmabuf_data[i] = self->dmabuf_data[i];
