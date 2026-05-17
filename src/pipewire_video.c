@@ -514,19 +514,15 @@ static bool spa_video_format_get_modifiers(gsr_pipewire_video *self, const enum 
 
     if(!self->egl->eglQueryDmaBufModifiersEXT(self->egl->egl_display, drm_format, max_modifiers, modifiers, NULL, num_modifiers)) {
         fprintf(stderr, "gsr error: spa_video_format_get_modifiers: eglQueryDmaBufModifiersEXT failed with drm format %d, %" PRIi64 "\n", (int)format, drm_format);
-        //modifiers[0] = DRM_FORMAT_MOD_LINEAR;
-        //modifiers[1] = DRM_FORMAT_MOD_INVALID;
-        //*num_modifiers = 2;
         modifiers[0] = DRM_FORMAT_MOD_INVALID;
         *num_modifiers = 1;
         return false;
     }
 
-    // if(*num_modifiers + 2 <= max_modifiers) {
-    //     modifiers[*num_modifiers + 0] = DRM_FORMAT_MOD_LINEAR;
-    //     modifiers[*num_modifiers + 1] = DRM_FORMAT_MOD_INVALID;
-    //     *num_modifiers += 2;
-    // }
+    if(*num_modifiers < max_modifiers) {
+        modifiers[*num_modifiers] = DRM_FORMAT_MOD_INVALID;
+        *num_modifiers += 1;
+    }
     return true;
 }
 
