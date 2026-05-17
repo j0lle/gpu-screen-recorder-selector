@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <poll.h>
 
 #include <xf86drm.h>
 #include <drm_fourcc.h>
@@ -274,6 +275,31 @@ static vec2i swap_vec2i(vec2i value) {
     return value;
 }
 
+/* Wait for any pending writer fences on the dma-buf so we don't sample a
+   partially-written buffer. POLLIN on a dma-buf fd is the kernel's portable
+   way to wait on all attached writer fences (works across drivers, unlike
+   relying on Mesa's implicit-sync to honor a fence from another driver).
+   Without this, KMS capture can produce glitched frames in hybrid GPU setups
+   where the buffer on the captured plane is being written by a different
+   GPU/driver than the one gsr is encoding on (e.g. an iGPU client surface
+   shown on a dGPU monitor). The wait is normally a no-op because the fence
+   has already signaled by the time we get here; the timeout is just a guard. */
+static void gsr_capture_kms_wait_for_buffer_fence(const int *fds, int num_fds) {
+    struct pollfd pfds[GSR_KMS_MAX_DMA_BUFS];
+    int num_pfds = 0;
+    for(int i = 0; i < num_fds && num_pfds < GSR_KMS_MAX_DMA_BUFS; ++i) {
+        if(fds[i] <= 0)
+            continue;
+        pfds[num_pfds].fd = fds[i];
+        pfds[num_pfds].events = POLLIN;
+        pfds[num_pfds].revents = 0;
+        ++num_pfds;
+    }
+    if(num_pfds == 0)
+        return;
+    (void)poll(pfds, num_pfds, 100);
+}
+
 static EGLImage gsr_capture_kms_create_egl_image(gsr_capture_kms *self, const gsr_kms_response_item *drm_fd, const int *fds, const uint32_t *offsets, const uint32_t *pitches, const uint64_t *modifiers, bool use_modifiers) {
     intptr_t img_attr[44];
     setup_dma_buf_attrs(img_attr, drm_fd->pixel_format, drm_fd->width, drm_fd->height, fds, offsets, pitches, modifiers, drm_fd->num_dma_bufs, use_modifiers);
@@ -318,6 +344,8 @@ static EGLImage gsr_capture_kms_create_egl_image_with_fallback(gsr_capture_kms *
         pitches[i] = drm_fd->dma_buf[i].pitch;
         modifiers[i] = drm_fd->modifier;
     }
+
+    gsr_capture_kms_wait_for_buffer_fence(fds, drm_fd->num_dma_bufs);
 
     EGLImage image = NULL;
     if(self->no_modifiers_fallback) {
@@ -451,6 +479,8 @@ static void render_drm_cursor(gsr_capture_kms *self, gsr_color_conversion *color
         pitches[i] = cursor_drm_fd->dma_buf[i].pitch;
         modifiers[i] = cursor_drm_fd->modifier;
     }
+
+    gsr_capture_kms_wait_for_buffer_fence(fds, cursor_drm_fd->num_dma_bufs);
 
     intptr_t img_attr_cursor[44];
     setup_dma_buf_attrs(img_attr_cursor, cursor_drm_fd->pixel_format, cursor_drm_fd->width, cursor_drm_fd->height,
