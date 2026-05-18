@@ -553,12 +553,8 @@ static size_t gsr_pipewire_video_format_remove_modifier(gsr_pipewire_video *self
 }
 
 static void gsr_pipewire_video_remove_modifier(gsr_pipewire_video *self, uint64_t modifier) {
-    self->num_modifiers = 0;
     for(size_t i = 0; i < GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS; i++) {
-        gsr_video_format *video_format = &self->supported_video_formats[i];
-        const size_t num_modifiers_video_format = gsr_pipewire_video_format_remove_modifier(self, video_format, modifier);
-        video_format->modifiers_index = self->num_modifiers;
-        self->num_modifiers += num_modifiers_video_format;
+        gsr_pipewire_video_format_remove_modifier(self, &self->supported_video_formats[i], modifier);
     }
 }
 
