@@ -275,3 +275,5 @@ This is an issue in some broken video players such as vlc. Play the video with a
 This may be caused by buggy GPU drivers. Try recording with HEVC video codec instead (`-k hevc`).
 ## The quality is low when recording my desktop
 Color gradients encode badly, especially with h264 video codec. You can increase the bitrate, for example by using `-bm cbr -q 30000` or by using hevc (`-k hevc`) and increasing the quality (`-q ultra`).
+## My system stutters sometimes while recording on nvidia
+This is an nvidia power management driver bug which can happen when the system is idle. You can change the gpu power performance level to "performance" in nvidia settings to fix this.
