@@ -456,6 +456,8 @@ static bool gsr_pipewire_video_build_format_params(gsr_pipewire_video *self, str
         return false;
 
     for(size_t i = 0; i < GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS; i++) {
+        if(self->supported_video_formats[i].modifiers_size == 0)
+            continue;
         params[*num_params] = build_format(pod_builder, &self->video_info, self->supported_video_formats[i].format, self->modifiers + self->supported_video_formats[i].modifiers_index, self->supported_video_formats[i].modifiers_size);
         ++(*num_params);
     }
@@ -517,10 +519,10 @@ static bool spa_video_format_get_modifiers(gsr_pipewire_video *self, const enum 
         return false;
     }
 
-    // if(*num_modifiers < max_modifiers) {
-    //     modifiers[*num_modifiers] = DRM_FORMAT_MOD_INVALID;
-    //     *num_modifiers += 1;
-    // }
+    if(*num_modifiers < max_modifiers) {
+        modifiers[*num_modifiers] = DRM_FORMAT_MOD_INVALID;
+        *num_modifiers += 1;
+    }
     return true;
 }
 
