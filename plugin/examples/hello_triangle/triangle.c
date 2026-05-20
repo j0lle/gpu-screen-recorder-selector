@@ -62,6 +62,14 @@ static void draw(const gsr_plugin_draw_params *params, void *userdata) {
     ++triangle->counter;
 }
 
+static bool is_damaged(void *userdata) {
+    return true;
+}
+
+static void clear_damage(void *userdata) {
+    
+}
+
 bool gsr_plugin_init(const gsr_plugin_init_params *params, gsr_plugin_init_return *ret) {
     Triangle *triangle = calloc(1, sizeof(Triangle));
     if(!triangle)
@@ -98,6 +106,8 @@ bool gsr_plugin_init(const gsr_plugin_init_params *params, gsr_plugin_init_retur
     ret->version = 1;
     ret->userdata = triangle;
     ret->draw = draw;
+    ret->is_damaged = is_damaged;
+    ret->clear_damage = clear_damage;
     return true;
 }
 

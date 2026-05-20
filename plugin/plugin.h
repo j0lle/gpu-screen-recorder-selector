@@ -43,6 +43,12 @@ typedef struct {
 
     /* Optional, called when the plugin is expected to draw something to the current framebuffer */
     void (*draw)(const gsr_plugin_draw_params *params, void *userdata);
+    /* Optional, returns false if this function is NULL. If this function is defined then this should return true
+       if there is an update visually that the plugin wants to display. This is useful when used with the "content" framerate mode
+       which only captures a frame when the frame has changed */
+    bool (*is_damaged)(void *userdata);
+    /* Optional */
+    void (*clear_damage)(void *userdata);
 } gsr_plugin_init_return;
 
 /* The plugin is expected to implement these functions and export them: */

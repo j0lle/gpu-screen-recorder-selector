@@ -34,5 +34,7 @@ void gsr_plugins_deinit(gsr_plugins *self);
 
 bool gsr_plugins_load_plugin(gsr_plugins *self, const char *plugin_filepath);
 void gsr_plugins_draw(gsr_plugins *self);
+bool gsr_plugins_is_damaged(gsr_plugins *self);
+void gsr_plugins_clear_damage(gsr_plugins *self);
 
 #endif /* GSR_PLUGINS_H */

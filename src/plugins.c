@@ -135,3 +135,21 @@ void gsr_plugins_draw(gsr_plugins *self) {
 
     self->egl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
+bool gsr_plugins_is_damaged(gsr_plugins *self) {
+    bool damaged = false;
+    for(int i = 0; i < self->num_plugins; ++i) {
+        const gsr_plugin *plugin = &self->plugins[i];
+        if(plugin->data.is_damaged)
+            damaged |= plugin->data.is_damaged(plugin->data.userdata);
+    }
+    return damaged;
+}
+
+void gsr_plugins_clear_damage(gsr_plugins *self) {
+    for(int i = 0; i < self->num_plugins; ++i) {
+        const gsr_plugin *plugin = &self->plugins[i];
+        if(plugin->data.clear_damage)
+            plugin->data.clear_damage(plugin->data.userdata);
+    }
+}

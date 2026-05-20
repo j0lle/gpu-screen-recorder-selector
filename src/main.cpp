@@ -4388,6 +4388,8 @@ int main(int argc, char **argv) {
                 damaged = true;
         }
 
+        damaged |= gsr_plugins_is_damaged(&plugins);
+
         // TODO: Readd wayland sync warning when removing this
         if(arg_parser.framerate_mode != GSR_FRAMERATE_MODE_CONTENT)
             damaged = true;
@@ -4417,6 +4419,7 @@ int main(int argc, char **argv) {
             egl.glClear(0);
 
             gsr_damage_clear(&damage);
+            gsr_plugins_clear_damage(&plugins);
             gsr_capture_kms_cleanup_kms_fds();
 
             if(kms_client_initialized) {
