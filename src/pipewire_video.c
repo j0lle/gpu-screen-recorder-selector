@@ -558,6 +558,14 @@ static void gsr_pipewire_video_remove_modifier(gsr_pipewire_video *self, uint64_
     }
 }
 
+static size_t gsr_pipewire_video_num_modifiers_in_format(gsr_pipewire_video *self, enum spa_video_format format) {
+    for(size_t i = 0; i < GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS; i++) {
+        if(self->supported_video_formats[i].format == format)
+            return self->supported_video_formats[i].modifiers_size;
+    }
+    return 0;
+}
+
 static bool gsr_pipewire_video_setup_stream(gsr_pipewire_video *self) {
     struct spa_pod *params[GSR_PIPEWIRE_VIDEO_NUM_VIDEO_FORMATS];
     uint32_t num_video_formats = 0;
@@ -786,18 +794,22 @@ static EGLImage gsr_pipewire_video_create_egl_image_with_fallback(gsr_pipewire_v
     } else {
         image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, true);
         if(!image) {
+            pw_thread_loop_lock(self->thread_loop);
             if(self->format.info.raw.modifier == DRM_FORMAT_MOD_INVALID) {
                 fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers, trying without modifiers\n");
+                self->no_modifiers_fallback = true;
+                image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
+            } else if(gsr_pipewire_video_num_modifiers_in_format(self, self->format.info.raw.format) <= 1) {
+                fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifiers and ran out of modifiers to try with, trying without modifiers\n");
                 self->no_modifiers_fallback = true;
                 image = gsr_pipewire_video_create_egl_image(self, fds, offsets, pitches, modifiers, false);
             } else {
                 fprintf(stderr, "gsr error: gsr_pipewire_video_create_egl_image_with_fallback: failed to create egl image with modifier 0x%" PRIx64 ", renegotiating with a different modifier\n", self->format.info.raw.modifier);
                 self->negotiated = false;
-                pw_thread_loop_lock(self->thread_loop);
                 gsr_pipewire_video_remove_modifier(self, self->format.info.raw.modifier);
                 pw_loop_signal_event(pw_thread_loop_get_loop(self->thread_loop), self->reneg);
-                pw_thread_loop_unlock(self->thread_loop);
             }
+            pw_thread_loop_unlock(self->thread_loop);
         }
     }
     return image;
