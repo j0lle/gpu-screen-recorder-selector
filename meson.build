@@ -14,6 +14,7 @@ src = [
     'src/capture/xcomposite.c',
     'src/capture/ximage.c',
     'src/capture/kms.c',
+    'src/capture/wayland_window.c',
     'src/capture/v4l2.c',
     'src/encoder/encoder.c',
     'src/encoder/video/video.c',

@@ -53,13 +53,23 @@ Minimal performance impact compared to traditional screen recorders
 .SH OPTIONS
 .SS Capture Options
 .TP
-.BI \-w " window_id|monitor|focused|portal|region|v4l2_device_path"
+.BI \-w " window_id|window:id=ID|window:app_id=APP_ID|window:title=TITLE|monitor|focused|portal[:window|monitor|virtual|all]|region|v4l2_device_path"
 Specify what to record.
 Formats:
 .RS
 .IP \(bu 3
 .B window
-- Record a specific window (use window ID) (X11 only)
+- Record a specific window. Use a numeric window ID on X11 and for XWayland windows. For native Wayland windows use
+.BR window:id=ID ,
+.BR window:app_id=APP_ID ,
+or
+.BR window:title=TITLE .
+The Wayland
+.B title
+selector is a case-insensitive substring match. Add
+.BR ;wait=SECONDS
+to wait for a matching window to appear, for example
+.BR "window:app_id=mpv;wait=60" .
 .IP \(bu 3
 .B screen
 - Record the first monitor found
@@ -71,7 +81,15 @@ Formats:
 - Record the currently focused window (X11 only) (use with -s option)
 .IP \(bu 3
 .B portal
-- Use xdg-desktop-portal with PipeWire (Wayland only)
+- Use xdg-desktop-portal with PipeWire (Wayland only). Use
+.BR portal:window ,
+.BR portal:monitor ,
+.BR portal:virtual ,
+or
+.BR portal:all
+to limit the portal source picker. Plain
+.B portal
+allows all supported source types.
 .IP \(bu 3
 .B region
 - Record a specific region (use with
@@ -472,11 +490,35 @@ gpu-screen-recorder -w screen -f 60 -a "default_output|default_input" -o video.m
 .RE
 .fi
 .PP
-Record specific window (X11 only):
+Record specific window (X11):
 .PP
 .nf
 .RS
 gpu-screen-recorder -w $(xdotool selectwindow) -f 60 -o video.mp4
+.RE
+.fi
+.PP
+Record specific window (Wayland):
+.PP
+.nf
+.RS
+gpu-screen-recorder -w "window:app_id=mpv;wait=60" -f 60 -o video.mp4
+.RE
+.fi
+.PP
+Record specific window through xdg-desktop-portal/PipeWire:
+.PP
+.nf
+.RS
+gpu-screen-recorder -w portal:window -f 60 -o video.mp4
+.RE
+.fi
+.PP
+Record specific XWayland window by numeric ID:
+.PP
+.nf
+.RS
+gpu-screen-recorder -w 12345678 -f 60 -o video.mp4
 .RE
 .fi
 .PP

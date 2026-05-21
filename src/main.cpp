@@ -4,6 +4,7 @@ extern "C" {
 #include "../include/capture/ximage.h"
 #include "../include/capture/kms.h"
 #include "../include/capture/v4l2.h"
+#include "../include/capture/wayland_window.h"
 #ifdef GSR_PORTAL
 #include "../include/capture/portal.h"
 #include "../include/dbus.h"
@@ -1076,6 +1077,11 @@ typedef struct {
     vvec2i_type y_type;
 } vvec2i;
 
+static constexpr uint32_t PORTAL_CAPTURE_TYPE_MONITOR = 1 << 0;
+static constexpr uint32_t PORTAL_CAPTURE_TYPE_WINDOW = 1 << 1;
+static constexpr uint32_t PORTAL_CAPTURE_TYPE_VIRTUAL = 1 << 2;
+static constexpr uint32_t PORTAL_CAPTURE_TYPE_ALL = PORTAL_CAPTURE_TYPE_MONITOR | PORTAL_CAPTURE_TYPE_WINDOW | PORTAL_CAPTURE_TYPE_VIRTUAL;
+
 struct CaptureSource {
     std::string name;
     CaptureSourceType type = GSR_CAPTURE_SOURCE_TYPE_WINDOW;
@@ -1089,6 +1095,10 @@ struct CaptureSource {
     vec2i region_size = {0, 0};
     bool region_set = false;
     int64_t window_id = 0;
+    uint32_t portal_capture_type = 0;
+    gsr_wayland_window_match_type wayland_window_match_type = GSR_WAYLAND_WINDOW_MATCH_TYPE_NONE;
+    std::string wayland_window_match_value;
+    int wayland_window_wait_sec = 0;
     int camera_fps = 0;
     vec2i camera_resolution = {0, 0};
 };
@@ -1821,11 +1831,41 @@ static int list_monitors(const gsr_window *window, const char *card_path) {
     return options.num_monitors;
 }
 
+static void print_capture_option_field(const char *str) {
+    if(!str)
+        return;
+
+    for(const char *p = str; *p; ++p) {
+        const unsigned char c = *(const unsigned char*)p;
+        if(c < 32 || c == 127 || c == '|')
+            putchar('_');
+        else
+            putchar(c);
+    }
+}
+
+static void list_wayland_window_callback(const gsr_wayland_window_info *info, void *userdata) {
+    (void)userdata;
+    if(!info->identifier || !info->identifier[0])
+        return;
+
+    printf("window:id=");
+    print_capture_option_field(info->identifier);
+    printf("|app_id=");
+    print_capture_option_field(info->app_id);
+    printf("|title=");
+    print_capture_option_field(info->title);
+    putchar('\n');
+}
+
 static void list_supported_capture_options(const gsr_window *window, const char *card_path, bool do_list_monitors) {
     const bool wayland = gsr_window_get_display_server(window) == GSR_DISPLAY_SERVER_WAYLAND;
     if(!wayland) {
         puts("window");
         puts("focused");
+    } else if(gsr_capture_wayland_window_supported((gsr_window*)window)) {
+        puts("window");
+        gsr_capture_wayland_window_list((gsr_window*)window, list_wayland_window_callback, NULL);
     }
 
     int num_monitors = 0;
@@ -1847,8 +1887,13 @@ static void list_supported_capture_options(const gsr_window *window, const char 
         return;
 
     char *session_handle = NULL;
-    if(gsr_dbus_screencast_create_session(&dbus, &session_handle) == 0)
+    if(gsr_dbus_screencast_create_session(&dbus, &session_handle) == 0) {
         puts("portal");
+        puts("portal:window");
+        puts("portal:monitor");
+        puts("portal:virtual");
+        puts("portal:all");
+    }
 
     gsr_dbus_deinit(&dbus);
 #endif
@@ -2236,6 +2281,7 @@ static gsr_capture* create_capture_impl(const args_parser &arg_parser, gsr_egl *
         portal_params.egl = egl;
         portal_params.record_cursor = arg_parser.record_cursor;
         portal_params.restore_portal_session = arg_parser.restore_portal_session;
+        portal_params.capture_type = capture_source.portal_capture_type;
         portal_params.portal_session_token_filepath = arg_parser.portal_session_token_filepath;
         portal_params.output_resolution = arg_parser.output_resolution;
         capture = gsr_capture_portal_create(&portal_params);
@@ -2270,7 +2316,24 @@ static gsr_capture* create_capture_impl(const args_parser &arg_parser, gsr_egl *
             _exit(1);
     } else {
         if(wayland) {
-            fprintf(stderr, "gsr error: GPU Screen Recorder window capture only works in a pure X11 session. Xwayland is not supported. You can record a monitor instead on wayland or use -w portal option which supports window capture if your wayland compositor supports window capture\n");
+            if(capture_source.wayland_window_match_type == GSR_WAYLAND_WINDOW_MATCH_TYPE_NONE) {
+                fprintf(stderr, "gsr error: native Wayland window capture requires a selector, for example -w \"window:app_id=mpv;wait=60\" or -w \"window:title=Example;wait=60\". Numeric window ids require an X11/XWayland window\n");
+                _exit(2);
+            }
+
+            gsr_capture_wayland_window_params wayland_window_params;
+            memset(&wayland_window_params, 0, sizeof(wayland_window_params));
+            wayland_window_params.egl = egl;
+            wayland_window_params.match_type = capture_source.wayland_window_match_type;
+            wayland_window_params.match_value = capture_source.wayland_window_match_value.c_str();
+            wayland_window_params.wait_timeout_sec = capture_source.wayland_window_wait_sec;
+            wayland_window_params.record_cursor = arg_parser.record_cursor;
+            wayland_window_params.output_resolution = arg_parser.output_resolution;
+            capture = gsr_capture_wayland_window_create(&wayland_window_params);
+            if(!capture)
+                _exit(1);
+        } else if(capture_source.wayland_window_match_type != GSR_WAYLAND_WINDOW_MATCH_TYPE_NONE) {
+            fprintf(stderr, "gsr error: window:id=, window:app_id= and window:title= selectors are only supported on Wayland. Use a numeric window id on X11\n");
             _exit(2);
         }
     }
@@ -2708,6 +2771,24 @@ static bool string_to_int(const char *str, size_t len, T *number) {
     return errno == 0;
 }
 
+template <typename T>
+static bool string_to_int_strict(const char *str, size_t len, T *number) {
+    char number_str[32];
+    if(len == 0 || len >= sizeof(number_str))
+        return false;
+
+    snprintf(number_str, sizeof(number_str), "%.*s", (int)len, str);
+
+    char *endptr = NULL;
+    errno = 0;
+    long value = strtol(number_str, &endptr, 0);
+    if(errno != 0 || endptr == number_str || *endptr != '\0')
+        return false;
+
+    *number = (T)value;
+    return true;
+}
+
 static void capture_source_type_from_string(const char *capture_source_str, size_t size, CaptureSource &capture_source) {
     char capture_source_str_n[64];
     snprintf(capture_source_str_n, sizeof(capture_source_str_n), "%.*s", (int)size, capture_source_str);
@@ -2728,6 +2809,45 @@ static void capture_source_type_from_string(const char *capture_source_str, size
     } else {
         capture_source.type = GSR_CAPTURE_SOURCE_TYPE_WINDOW;
     }
+}
+
+static bool parse_wayland_window_match(const char *str, size_t len, CaptureSource &capture_source) {
+    if(string_starts_with(str, len, "id=")) {
+        capture_source.wayland_window_match_type = GSR_WAYLAND_WINDOW_MATCH_TYPE_IDENTIFIER;
+        capture_source.wayland_window_match_value.assign(str + 3, len - 3);
+        return !capture_source.wayland_window_match_value.empty();
+    } else if(string_starts_with(str, len, "app_id=")) {
+        capture_source.wayland_window_match_type = GSR_WAYLAND_WINDOW_MATCH_TYPE_APP_ID;
+        capture_source.wayland_window_match_value.assign(str + 7, len - 7);
+        return !capture_source.wayland_window_match_value.empty();
+    } else if(string_starts_with(str, len, "title=")) {
+        capture_source.wayland_window_match_type = GSR_WAYLAND_WINDOW_MATCH_TYPE_TITLE;
+        capture_source.wayland_window_match_value.assign(str + 6, len - 6);
+        return !capture_source.wayland_window_match_value.empty();
+    }
+
+    return false;
+}
+
+static bool parse_portal_capture_type(const char *str, size_t len, CaptureSource &capture_source) {
+    if(len == 6 && memcmp(str, "portal", 6) == 0) {
+        capture_source.portal_capture_type = 0;
+        return true;
+    } else if(len == 6 && memcmp(str, "window", 6) == 0) {
+        capture_source.portal_capture_type = PORTAL_CAPTURE_TYPE_WINDOW;
+        return true;
+    } else if(len == 7 && memcmp(str, "monitor", 7) == 0) {
+        capture_source.portal_capture_type = PORTAL_CAPTURE_TYPE_MONITOR;
+        return true;
+    } else if(len == 7 && memcmp(str, "virtual", 7) == 0) {
+        capture_source.portal_capture_type = PORTAL_CAPTURE_TYPE_VIRTUAL;
+        return true;
+    } else if(len == 3 && memcmp(str, "all", 3) == 0) {
+        capture_source.portal_capture_type = PORTAL_CAPTURE_TYPE_ALL;
+        return true;
+    }
+
+    return false;
 }
 
 static bool string_to_capture_alignment(const char *str, size_t len, gsr_capture_alignment *alignment) {
@@ -2882,8 +3002,15 @@ static void parse_capture_source_options(const std::string &capture_source_str, 
                 fprintf(stderr, "gsr error: invalid capture target value for option camera_height: \"%.*s\", expected a number\n", (int)size, sub);
                 _exit(1);
             }
+        } else if(string_starts_with(sub, size, "wait=")) {
+            sub += 5;
+            size -= 5;
+            if(!string_to_int_strict(sub, size, &capture_source.wayland_window_wait_sec) || capture_source.wayland_window_wait_sec < 0 || capture_source.wayland_window_wait_sec > 300) {
+                fprintf(stderr, "gsr error: invalid capture target value for option wait: \"%.*s\", expected a number between 0 and 300\n", (int)size, sub);
+                _exit(1);
+            }
         } else {
-            fprintf(stderr, "gsr error: invalid capture target option \"%.*s\", expected x, y, width, height, halign, valign, pixfmt, hflip, vflip, camera_fps, camera_width or camera_height\n", (int)size, sub);
+            fprintf(stderr, "gsr error: invalid capture target option \"%.*s\", expected x, y, width, height, halign, valign, pixfmt, hflip, vflip, camera_fps, camera_width, camera_height or wait\n", (int)size, sub);
             _exit(1);
         }
 
@@ -2921,6 +3048,10 @@ static std::vector<CaptureSource> parse_capture_source_arg(const char *capture_s
             capture_source.type = GSR_CAPTURE_SOURCE_TYPE_V4L2;
             sub += 5;
             capture_source_size -= 5;
+        } else if(string_starts_with(sub, capture_source_size, "portal:")) {
+            capture_source.type = GSR_CAPTURE_SOURCE_TYPE_PORTAL;
+            sub += 7;
+            capture_source_size -= 7;
         } else {
             capture_source_type_from_string(sub, capture_source_size, capture_source);
         }
@@ -2928,8 +3059,16 @@ static std::vector<CaptureSource> parse_capture_source_arg(const char *capture_s
         capture_source.name.assign(sub, capture_source_size);
 
         if(capture_source.type == GSR_CAPTURE_SOURCE_TYPE_WINDOW) {
-            if(!string_to_int(capture_source.name.c_str(), capture_source.name.size(), &capture_source.window_id)) {
-                fprintf(stderr, "gsr error: invalid window number %s\n", capture_source.name.c_str());
+            if(!string_to_int_strict(capture_source.name.c_str(), capture_source.name.size(), &capture_source.window_id)) {
+                if(!parse_wayland_window_match(capture_source.name.c_str(), capture_source.name.size(), capture_source)) {
+                    fprintf(stderr, "gsr error: invalid window target %s, expected a window number for X11 or id=, app_id= or title= for Wayland\n", capture_source.name.c_str());
+                    args_parser_print_usage();
+                    _exit(1);
+                }
+            }
+        } else if(capture_source.type == GSR_CAPTURE_SOURCE_TYPE_PORTAL) {
+            if(!parse_portal_capture_type(capture_source.name.c_str(), capture_source.name.size(), capture_source)) {
+                fprintf(stderr, "gsr error: invalid portal target %s, expected portal, portal:window, portal:monitor, portal:virtual or portal:all\n", capture_source.name.c_str());
                 args_parser_print_usage();
                 _exit(1);
             }
@@ -3569,6 +3708,18 @@ static bool is_capturing_type(const std::vector<CaptureSource> &capture_sources,
     return false;
 }
 
+static bool is_numeric_window_capture_source(const CaptureSource &capture_source) {
+    return capture_source.type == GSR_CAPTURE_SOURCE_TYPE_WINDOW && capture_source.wayland_window_match_type == GSR_WAYLAND_WINDOW_MATCH_TYPE_NONE;
+}
+
+static bool is_capturing_numeric_window(const std::vector<CaptureSource> &capture_sources) {
+    for(const CaptureSource &capture_source : capture_sources) {
+        if(is_numeric_window_capture_source(capture_source))
+            return true;
+    }
+    return false;
+}
+
 static bool has_capture_source_with_region_set(const std::vector<CaptureSource> &capture_sources) {
     for(const CaptureSource &capture_source : capture_sources) {
         if(capture_source.type == GSR_CAPTURE_SOURCE_TYPE_REGION && capture_source.region_set)
@@ -3801,7 +3952,11 @@ int main(int argc, char **argv) {
         disable_prime_run();
     }
 
-    gsr_window *window = gsr_window_create(dpy, wayland);
+    const bool xwayland_numeric_window_capture = wayland && dpy && is_capturing_numeric_window(capture_sources);
+    if(xwayland_numeric_window_capture)
+        fprintf(stderr, "gsr info: using XComposite capture for XWayland numeric window id\n");
+
+    gsr_window *window = gsr_window_create(dpy, wayland && !xwayland_numeric_window_capture);
     if(!window) {
         fprintf(stderr, "gsr error: failed to create window\n");
         _exit(1);

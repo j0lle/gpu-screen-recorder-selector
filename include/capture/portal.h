@@ -7,6 +7,8 @@ typedef struct {
     gsr_egl *egl;
     bool record_cursor;
     bool restore_portal_session;
+    /* 0 means all supported source types */
+    uint32_t capture_type;
     /* If this is set to NULL then this defaults to $XDG_CONFIG_HOME/gpu-screen-recorder/restore_token ($XDG_CONFIG_HOME defaults to $HOME/.config) */
     const char *portal_session_token_filepath;
     vec2i output_resolution;

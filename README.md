@@ -1,5 +1,26 @@
 ![](https://dec05eba.com/images/gpu_screen_recorder_logo_small.png)
 
+# gpu-screen-recorder-selector build
+This fork is a selector-focused build of GPU Screen Recorder. It adds native Wayland window selectors when the compositor supports the toplevel capture protocols, plus `portal:window` for OBS-style PipeWire window picking through xdg-desktop-portal.
+
+Build locally:
+```sh
+git clone https://github.com/j0lle/gpu-screen-recorder-selector.git
+cd gpu-screen-recorder-selector
+meson setup build --buildtype=release -Dportal=true
+meson compile -C build
+```
+
+Run without installing:
+```sh
+./build/gpu-screen-recorder -w portal:window -f 60 -a default_output -c mkv -o "$HOME/Videos/window-test.mkv"
+```
+
+Native Wayland selectors are also available when supported, for example:
+```sh
+./build/gpu-screen-recorder -w "window:title=Example;wait=60" -f 60 -c mkv -o "$HOME/Videos/window-selector.mkv"
+```
+
 # GPU Screen Recorder
 This is a screen recorder that has minimal impact on system performance by recording your monitor using the GPU only,
 similar to shadowplay on windows. This is the fastest screen recording tool for Linux.
@@ -104,6 +125,7 @@ You can see a list of capture options to record if you run `gpu-screen-recorder 
   DP-1|1920x1080
 ```
 in this case you could record a window or a monitor with the name `DP-1`.\
+On Wayland, native Wayland windows can be recorded by selector if your compositor supports the required toplevel capture protocols, for example `gpu-screen-recorder -w "window:app_id=mpv;wait=60" -f 60 -o video.mp4` or `gpu-screen-recorder -w "window:title=Example;wait=60" -f 60 -o video.mp4`. XWayland windows can also be recorded by numeric window ID, the same as on X11. Use `-w portal:window` to pick a window through xdg-desktop-portal/PipeWire.\
 To list available audio devices that you can use you can run `gpu-screen-recorder --list-audio-devices` and the name to use is on the left size of the `|`.\
 To list available audio application names that you can use you can run `gpu-screen-recorder --list-application-audio`.\
 You can run `gpu-screen-recorder --info` to list more information about the system, such as the device that is used for capture and video encoding and supported codecs. These commands can be parsed by scripts/programs.
