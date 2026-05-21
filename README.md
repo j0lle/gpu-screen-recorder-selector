@@ -16,6 +16,8 @@ Run without installing:
 ./build/gpu-screen-recorder -w portal:window -f 60 -a default_output -c mkv -o "$HOME/Videos/window-test.mkv"
 ```
 
+`portal:window` uses the same xdg-desktop-portal/PipeWire window picker family as OBS. It should work when the compositor and portal backend expose window capture, but not every Wayland setup supports that yet. If OBS can pick and record a specific window on the same system, this mode should usually work too.
+
 Native Wayland selectors are also available when supported, for example:
 ```sh
 ./build/gpu-screen-recorder -w "window:title=Example;wait=60" -f 60 -c mkv -o "$HOME/Videos/window-selector.mkv"
