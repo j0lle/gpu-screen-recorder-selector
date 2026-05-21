@@ -277,3 +277,6 @@ This may be caused by buggy GPU drivers. Try recording with HEVC video codec ins
 Color gradients encode badly, especially with h264 video codec. You can increase the bitrate, for example by using `-bm cbr -q 30000` or by using hevc (`-k hevc`) and increasing the quality (`-q ultra`).
 ## My system stutters sometimes while recording on nvidia
 This is an nvidia power management driver bug which can happen when the system is idle. You can change the gpu power performance level to "performance" in nvidia settings to fix this.
+## Recording fails when using webcam on nvidia X11
+This is a known issue. The issue is that nvfbc which is used for screen capture only supports glx on older systems and glx is not compatible with the webcam capture method used in GPU Screen Recorder.
+This will be fixed in the future.
